@@ -2047,18 +2047,21 @@ function App(){
   const [weekWeather,setWeekWeather]=useState(null);
   const [showWeeklyPopup,setShowWeeklyPopup]=useState(false);
 
-  // Mostra o popup de resumo semanal uma vez por dia (controlado via
-  // localStorage), evitando que o usuário veja o mesmo aviso toda vez
-  // que reabrir o app no mesmo dia.
+  // Mostra o popup de resumo semanal uma vez por dia, por empresa — a
+  // chave do localStorage inclui o empresa_id porque, sem isso, trocar de
+  // conta no mesmo navegador (ex: o master testando múltiplas empresas)
+  // faria o app pensar "já mostrei hoje" mesmo sendo uma empresa diferente,
+  // já que o localStorage é vinculado ao navegador, não à conta logada.
   useEffect(()=>{
-    if(!weekWeather)return;
+    if(!weekWeather||!profile?.empresa_id)return;
     const hoje=new Date().toISOString().split("T")[0];
-    const ultimaVez=localStorage.getItem("weeklyWeatherPopupDate");
+    const chave=`weeklyWeatherPopupDate_${profile.empresa_id}`;
+    const ultimaVez=localStorage.getItem(chave);
     if(ultimaVez!==hoje){
       setShowWeeklyPopup(true);
-      localStorage.setItem("weeklyWeatherPopupDate",hoje);
+      localStorage.setItem(chave,hoje);
     }
-  },[weekWeather]);
+  },[weekWeather,profile]);
 
   // Auth listener
   useEffect(()=>{
