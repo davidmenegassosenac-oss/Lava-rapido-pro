@@ -193,9 +193,11 @@ function WeatherBanner({onWeekForecast}){
   const [weekly,setWeekly]=useState(null);
   const [status,setStatus]=useState("loading"); // loading | ok | denied | error
   const [dismissed,setDismissed]=useState(false);
+  const [retryCount,setRetryCount]=useState(0);
 
   useEffect(()=>{
     if(!navigator.geolocation){setStatus("error");return;}
+    setStatus("loading");
     navigator.geolocation.getCurrentPosition(
       async(pos)=>{
         try{
@@ -223,12 +225,24 @@ function WeatherBanner({onWeekForecast}){
             setWeekly(week);
             if(onWeekForecast)onWeekForecast(week);
           }
-        }catch(e){setStatus("error");}
+        }catch(e){
+          // Falha de rede/API costuma ser temporária — tenta de novo
+          // automaticamente até 2 vezes antes de desistir e esconder o
+          // banner. Sem isso, uma instabilidade momentânea de conexão
+          // fazia o banner que já tinha começado a carregar simplesmente
+          // desaparecer, sem dar nenhuma chance de recuperação.
+          if(retryCount<2){
+            setTimeout(()=>setRetryCount(c=>c+1),2000);
+          }else{
+            setStatus("error");
+          }
+        }
       },
       ()=>setStatus("denied"),
       {timeout:8000}
     );
-  },[]);
+  },[retryCount]);
+
 
   if(dismissed||status==="denied"||status==="error")return null;
 
