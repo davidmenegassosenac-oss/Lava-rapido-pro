@@ -691,7 +691,6 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
     ["historico","📊 Histórico",true],
     ["relatorios","📈 Relatórios",isOwner],
     ["equipe","👥 Equipe",isOwner],
-    ["suporte","🎧 Suporte",true],
   ].filter(([,,show])=>show);
 
   return(
@@ -889,7 +888,6 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
       {tab==="historico"&&<HistoryScreen empresaId={empresaId} embedded isOwner/>}
       {tab==="relatorios"&&isOwner&&<RelatoriosScreen empresaId={empresaId} embedded/>}
       {tab==="equipe"&&isOwner&&<AdminScreen empresaId={empresaId} currentUser={currentUser} embedded/>}
-      {tab==="suporte"&&<SupportScreen embedded/>}
     </div>
   );
 }
@@ -2060,6 +2058,7 @@ function App(){
   const [authReady,setAuthReady]=useState(false);
   const [weekWeather,setWeekWeather]=useState(null);
   const [showWeeklyPopup,setShowWeeklyPopup]=useState(false);
+  const [showSupport,setShowSupport]=useState(false);
 
   // Mostra o popup de resumo semanal uma vez por dia, por empresa — a
   // chave do localStorage inclui o empresa_id porque, sem isso, trocar de
@@ -2259,6 +2258,9 @@ function App(){
           <div style={{width:36,height:36,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(14,165,233,.4)"}}>
             <Icon name="Droplets" size={17} color="#fff"/>
           </div>
+          <button onClick={()=>setShowSupport(true)} style={{width:36,height:36,borderRadius:12,background:"rgba(56,189,248,.12)",border:"1px solid rgba(56,189,248,.25)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+            <Icon name="Headphones" size={15} color="#38bdf8"/>
+          </button>
           <button onClick={logout} style={{width:36,height:36,borderRadius:12,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.25)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
             <Icon name="LogOut" size={15} color="#f87171"/>
           </button>
@@ -2297,6 +2299,22 @@ function App(){
 
       {/* Popup de resumo semanal do clima — aparece uma vez por dia */}
       {showWeeklyPopup&&<WeeklyWeatherPopup week={weekWeather} onClose={()=>setShowWeeklyPopup(false)}/>}
+
+      {/* Suporte agora acessível direto do cabeçalho, em qualquer tela —
+          não depende mais de navegar até Config para encontrar a aba. */}
+      {showSupport&&(
+        <div style={{position:"fixed",inset:0,zIndex:150,background:"rgba(8,15,28,.85)",backdropFilter:"blur(4px)",display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 12px",flexShrink:0}}>
+            <div style={{color:"#e0f2fe",fontWeight:900,fontSize:18}}>Suporte</div>
+            <button onClick={()=>setShowSupport(false)} style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.08)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+              <Icon name="XCircle" size={16} color="#bae6fd"/>
+            </button>
+          </div>
+          <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
+            <SupportScreen embedded/>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
