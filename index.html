@@ -1810,7 +1810,20 @@ function AdminScreen({empresaId,currentUser,embedded}){
       // A Edge Function usa supabase.auth.admin.createUser(), que não afeta
       // a sessão de quem está chamando, e também valida o limite de
       // funcionários do plano ANTES de criar o usuário.
-      const{data:sessionData}=await sb.auth.getSession();
+      //
+      // IMPORTANTE: getSession() sozinho pode devolver um token JÁ EXPIRADO
+      // se o app ficou em segundo plano por um tempo (o navegador suspende
+      // o timer de renovação automática nesse caso) — o SDK só percebe e
+      // renova na próxima chamada de rede que fizer. Por isso, chamamos
+      // refreshSession() explicitamente antes, forçando um token válido na
+      // hora, em vez de confiar que a renovação em segundo plano já rodou.
+      let{data:sessionData}=await sb.auth.getSession();
+      const expiresAt=sessionData?.session?.expires_at;
+      const jaExpirado=expiresAt&&(expiresAt*1000)<Date.now();
+      if(!sessionData?.session||jaExpirado){
+        const{data:refreshed}=await sb.auth.refreshSession();
+        if(refreshed?.session)sessionData=refreshed;
+      }
       // NOTA: no painel do Supabase, o campo "Name" da função é apenas um
       // rótulo de exibição — a rota real (slug da URL) é fixada no momento
       // da criação e não muda mesmo renomeando o "Name" depois. A função
@@ -1832,7 +1845,13 @@ function AdminScreen({empresaId,currentUser,embedded}){
       });
       const result=await res.json();
       if(!result.success){
-        setErrors({email:result.message||"Erro ao criar usuário."});
+        // Mensagem mais clara especificamente para o caso de sessão
+        // expirada — orienta a ação certa (relogar) em vez de deixar o
+        // usuário sem saber o que fazer com um "Não autenticado." seco.
+        const msg=result.message==="Não autenticado."
+          ?"Sua sessão expirou. Saia e entre novamente no app, depois tente cadastrar o funcionário de novo."
+          :(result.message||"Erro ao criar usuário.");
+        setErrors({email:msg});
         setSaving(false);
         return;
       }
