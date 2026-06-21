@@ -2220,10 +2220,9 @@ function App(){
     {id:"crm",     label:"CRM",       icon:"Users",    roles:["owner"]},
     {id:"history", label:"Histórico", icon:"History",  roles:["employee"]},
     {id:"config",  label:"Config",    icon:"Settings", roles:["owner"]},
-    {id:"support", label:"Suporte",   icon:"Headphones",roles:["employee"]},
   ];
   const TABS=ALL_TABS.filter(t=>t.roles.includes(profile.role));
-  const TITLES={home:"Fila de Lavagem",new:"Nova Lavagem",crm:"CRM / Fidelização",history:"Histórico",config:"Configurações",support:"Suporte"};
+  const TITLES={home:"Fila de Lavagem",new:"Nova Lavagem",crm:"CRM / Fidelização",history:"Histórico",config:"Configurações"};
   const safeTab=TABS.find(t=>t.id===tab)?tab:"home";
 
   // Trial banner
@@ -2276,7 +2275,6 @@ function App(){
         {safeTab==="crm"     &&isOwner&&<CRMScreen     key="crm"     empresaId={profile.empresa_id}/>}
         {safeTab==="history" &&!isOwner&&<HistoryScreen key="history" empresaId={profile.empresa_id} isOwner={false}/>}
         {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} onUpdate={name=>showToast("✅ "+name+" atualizado!")}/>}
-        {safeTab==="support" &&!isOwner&&<SupportScreen key="support"/>}
       </div>
 
       {/* Bottom nav — flexShrink:0 garante que nunca seja comprimida nem empurrada para fora */}
