@@ -188,8 +188,9 @@ function weatherCodeInfo(code){
   return{icon:"Cloud",label:"—"};
 }
 
-function WeatherBanner(){
+function WeatherBanner({onWeekForecast}){
   const [weather,setWeather]=useState(null);
+  const [weekly,setWeekly]=useState(null);
   const [status,setStatus]=useState("loading"); // loading | ok | denied | error
   const [dismissed,setDismissed]=useState(false);
 
@@ -199,7 +200,9 @@ function WeatherBanner(){
       async(pos)=>{
         try{
           const{latitude,longitude}=pos.coords;
-          const url=`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,precipitation_probability,weather_code&timezone=auto`;
+          // daily=weather_code,precipitation_probability_max traz os próximos
+          // 7 dias na mesma chamada — sem precisar de uma segunda requisição.
+          const url=`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,precipitation_probability,weather_code&daily=weather_code,precipitation_probability_max&timezone=auto`;
           const res=await fetch(url);
           const data=await res.json();
           if(data?.current){
@@ -210,6 +213,16 @@ function WeatherBanner(){
             });
             setStatus("ok");
           }else{setStatus("error");}
+          if(data?.daily){
+            const dias=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+            const week=data.daily.time.map((d,i)=>({
+              label:dias[new Date(d+"T00:00:00").getDay()],
+              code:data.daily.weather_code[i],
+              rain:data.daily.precipitation_probability_max[i]??0,
+            }));
+            setWeekly(week);
+            if(onWeekForecast)onWeekForecast(week);
+          }
         }catch(e){setStatus("error");}
       },
       ()=>setStatus("denied"),
@@ -228,7 +241,6 @@ function WeatherBanner(){
       margin:"10px 14px 4px",
       padding:"14px 16px",
       borderRadius:20,
-      display:"flex",alignItems:"center",gap:14,
       background:highRain
         ?"linear-gradient(135deg,rgba(56,100,233,.28),rgba(14,165,233,.18))"
         :"linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.04))",
@@ -236,55 +248,120 @@ function WeatherBanner(){
       backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
       boxShadow:highRain?"0 8px 24px rgba(14,165,233,.25)":"0 4px 16px rgba(0,0,0,.15)",
     }}>
-      {status==="loading"?(
-        <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0"}}>
-          <div className="spinner spin" style={{width:18,height:18,borderWidth:2.5}}/>
-          <span style={{fontSize:13,color:"rgba(186,230,253,.6)",fontWeight:600}}>Carregando previsão do tempo...</span>
-        </div>
-      ):(
-        <>
-          {/* Ícone grande em destaque */}
-          <div style={{
-            width:52,height:52,borderRadius:16,flexShrink:0,
-            background:highRain?"rgba(125,211,252,.18)":"rgba(251,191,36,.15)",
-            border:`1px solid ${highRain?"rgba(125,211,252,.3)":"rgba(251,191,36,.25)"}`,
-            display:"flex",alignItems:"center",justifyContent:"center",
-          }}>
-            <Icon name={info.icon} size={28} color={highRain?"#7dd3fc":"#fbbf24"}/>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        {status==="loading"?(
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0"}}>
+            <div className="spinner spin" style={{width:18,height:18,borderWidth:2.5}}/>
+            <span style={{fontSize:13,color:"rgba(186,230,253,.6)",fontWeight:600}}>Carregando previsão do tempo...</span>
           </div>
-
-          {/* Temperatura + descrição */}
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-              <span style={{fontSize:26,fontWeight:900,color:"#e0f2fe",lineHeight:1}}>{weather.temp}°</span>
-              <span style={{fontSize:13,color:"rgba(186,230,253,.6)",fontWeight:600}}>{info.label}</span>
+        ):(
+          <>
+            {/* Ícone grande em destaque */}
+            <div style={{
+              width:52,height:52,borderRadius:16,flexShrink:0,
+              background:highRain?"rgba(125,211,252,.18)":"rgba(251,191,36,.15)",
+              border:`1px solid ${highRain?"rgba(125,211,252,.3)":"rgba(251,191,36,.25)"}`,
+              display:"flex",alignItems:"center",justifyContent:"center",
+            }}>
+              <Icon name={info.icon} size={28} color={highRain?"#7dd3fc":"#fbbf24"}/>
             </div>
-            {highRain&&(
-              <div style={{fontSize:11,fontWeight:800,color:"#7dd3fc",marginTop:3,display:"flex",alignItems:"center",gap:4}}>
-                <Icon name="AlertTriangle" size={11} color="#7dd3fc"/>
-                Alto risco de chuva hoje
+
+            {/* Temperatura + descrição */}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                <span style={{fontSize:26,fontWeight:900,color:"#e0f2fe",lineHeight:1}}>{weather.temp}°</span>
+                <span style={{fontSize:13,color:"rgba(186,230,253,.6)",fontWeight:600}}>{info.label}</span>
               </div>
-            )}
-          </div>
-
-          {/* Chance de chuva — destaque grande */}
-          <div style={{
-            textAlign:"center",flexShrink:0,
-            padding:"8px 14px",borderRadius:14,
-            background:highRain?"rgba(125,211,252,.15)":"rgba(255,255,255,.06)",
-            border:`1px solid ${highRain?"rgba(125,211,252,.3)":"rgba(125,211,252,.12)"}`,
-          }}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-              <Icon name="Droplets" size={15} color={highRain?"#7dd3fc":"rgba(186,230,253,.6)"}/>
-              <span style={{fontSize:18,fontWeight:900,color:highRain?"#7dd3fc":"#e0f2fe"}}>{weather.rain}%</span>
+              {highRain&&(
+                <div style={{fontSize:11,fontWeight:800,color:"#7dd3fc",marginTop:3,display:"flex",alignItems:"center",gap:4}}>
+                  <Icon name="AlertTriangle" size={11} color="#7dd3fc"/>
+                  Alto risco de chuva hoje
+                </div>
+              )}
             </div>
-            <div style={{fontSize:9,color:"rgba(186,230,253,.5)",fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginTop:2}}>chuva</div>
-          </div>
-        </>
+
+            {/* Chance de chuva — destaque grande */}
+            <div style={{
+              textAlign:"center",flexShrink:0,
+              padding:"8px 14px",borderRadius:14,
+              background:highRain?"rgba(125,211,252,.15)":"rgba(255,255,255,.06)",
+              border:`1px solid ${highRain?"rgba(125,211,252,.3)":"rgba(125,211,252,.12)"}`,
+            }}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                <Icon name="Droplets" size={15} color={highRain?"#7dd3fc":"rgba(186,230,253,.6)"}/>
+                <span style={{fontSize:18,fontWeight:900,color:highRain?"#7dd3fc":"#e0f2fe"}}>{weather.rain}%</span>
+              </div>
+              <div style={{fontSize:9,color:"rgba(186,230,253,.5)",fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginTop:2}}>chuva</div>
+            </div>
+          </>
+        )}
+        <button onClick={()=>setDismissed(true)} style={{background:"transparent",border:"none",cursor:"pointer",padding:4,display:"flex",flexShrink:0,opacity:.4,alignSelf:"flex-start"}}>
+          <Icon name="XCircle" size={16} color="rgba(186,230,253,.7)"/>
+        </button>
+      </div>
+
+      {/* Previsão dos próximos 7 dias — ícone + dia da semana, em fileira */}
+      {weekly&&(
+        <div style={{display:"flex",justifyContent:"space-between",gap:4,marginTop:14,paddingTop:12,borderTop:"1px solid rgba(125,211,252,.12)"}}>
+          {weekly.map((d,i)=>{
+            const di=weatherCodeInfo(d.code);
+            const diaChuva=d.rain>=50;
+            return(
+              <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,flex:1}}>
+                <span style={{fontSize:10,fontWeight:700,color:i===0?"#e0f2fe":"rgba(186,230,253,.5)"}}>{i===0?"Hoje":d.label}</span>
+                <Icon name={di.icon} size={16} color={diaChuva?"#7dd3fc":"#fbbf24"}/>
+                <span style={{fontSize:9,fontWeight:600,color:diaChuva?"#7dd3fc":"rgba(186,230,253,.4)"}}>{d.rain}%</span>
+              </div>
+            );
+          })}
+        </div>
       )}
-      <button onClick={()=>setDismissed(true)} style={{background:"transparent",border:"none",cursor:"pointer",padding:4,display:"flex",flexShrink:0,opacity:.4,alignSelf:"flex-start"}}>
-        <Icon name="XCircle" size={16} color="rgba(186,230,253,.7)"/>
-      </button>
+    </div>
+  );
+}
+
+/* ── WeeklyWeatherPopup ───────────────────────────────────────────────────
+   Aparece uma vez por sessão/dia ao abrir o app, resumindo a previsão da
+   semana em uma frase de alto impacto — sem ser uma push notification real
+   (que exigiria infraestrutura de servidor própria), mas cobrindo o caso de
+   uso de "avisar logo de cara" sempre que o usuário abrir o app.
+─────────────────────────────────────────────────────────────────────────── */
+function WeeklyWeatherPopup({week,onClose}){
+  if(!week)return null;
+
+  const diasComChuvaAlta=week.filter(d=>d.rain>=50).length;
+  const chuvaForte=week.some(d=>[61,63,65,66,67,80,81,82,95,96,99].includes(d.code)&&d.rain>=60);
+  const semChuva=week.every(d=>d.rain<30);
+
+  let titulo,mensagem,icon,color;
+  if(chuvaForte||diasComChuvaAlta>=3){
+    titulo="⚠️ Alerta de chuva";
+    mensagem=chuvaForte
+      ?"Previsão de pancadas de chuva/tempestade esta semana!"
+      :`Chuva prevista em ${diasComChuvaAlta} dia(s) esta semana. Fique atento ao agendar lavagens!`;
+    icon="CloudRain";color="#7dd3fc";
+  }else if(semChuva){
+    titulo="☀️ Semana ensolarada";
+    mensagem="Esta semana será ensolarada, sem chance de chuva!! Ótimo momento para captar mais clientes.";
+    icon="Sun";color="#fbbf24";
+  }else{
+    titulo="🌤️ Previsão da semana";
+    mensagem="Semana com tempo variável — confira o detalhe de cada dia no banner de clima.";
+    icon="Cloud";color="#38bdf8";
+  }
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:24,background:"rgba(8,15,28,.7)",backdropFilter:"blur(4px)"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="login-card" style={{maxWidth:340,width:"100%",background:"linear-gradient(160deg,rgba(20,40,70,.97),rgba(10,25,45,.97))",border:"1.5px solid rgba(125,211,252,.25)",borderRadius:24,padding:"28px 24px",boxShadow:"0 20px 60px rgba(0,0,0,.5)",textAlign:"center"}}>
+        <div style={{width:64,height:64,borderRadius:20,background:`${color}22`,border:`1px solid ${color}44`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+          <Icon name={icon} size={32} color={color}/>
+        </div>
+        <div style={{fontSize:17,fontWeight:900,color:"#e0f2fe",marginBottom:8}}>{titulo}</div>
+        <div style={{fontSize:14,color:"rgba(186,230,253,.7)",lineHeight:1.5,marginBottom:22}}>{mensagem}</div>
+        <button onClick={onClose} className="btn-glow" style={{width:"100%"}}>
+          Entendido
+        </button>
+      </div>
     </div>
   );
 }
@@ -1967,6 +2044,21 @@ function App(){
   const [tab,setTab]=useState("home");
   const [toast,setToast]=useState(null);
   const [authReady,setAuthReady]=useState(false);
+  const [weekWeather,setWeekWeather]=useState(null);
+  const [showWeeklyPopup,setShowWeeklyPopup]=useState(false);
+
+  // Mostra o popup de resumo semanal uma vez por dia (controlado via
+  // localStorage), evitando que o usuário veja o mesmo aviso toda vez
+  // que reabrir o app no mesmo dia.
+  useEffect(()=>{
+    if(!weekWeather)return;
+    const hoje=new Date().toISOString().split("T")[0];
+    const ultimaVez=localStorage.getItem("weeklyWeatherPopupDate");
+    if(ultimaVez!==hoje){
+      setShowWeeklyPopup(true);
+      localStorage.setItem("weeklyWeatherPopupDate",hoje);
+    }
+  },[weekWeather]);
 
   // Auth listener
   useEffect(()=>{
@@ -2127,7 +2219,7 @@ function App(){
 
       {/* Área superior: clima + trial — espaçamento próprio, separado visualmente do header */}
       <div style={{flexShrink:0,position:"relative",zIndex:15,paddingTop:"env(safe-area-inset-top,10px)"}}>
-        <WeatherBanner/>
+        <WeatherBanner onWeekForecast={setWeekWeather}/>
         {showTrialBanner&&<div style={{background:"rgba(251,191,36,.15)",border:"1px solid rgba(251,191,36,.25)",borderRadius:14,padding:"8px 16px",display:"flex",alignItems:"center",gap:8,margin:"8px 14px 0"}}>
           <Icon name="AlertTriangle" size={14} color="#fbbf24"/>
           <span style={{fontSize:12,color:"#fbbf24",fontWeight:600}}>Trial expira em {assInfo.dias_restantes} dia{assInfo.dias_restantes!==1?"s":""}. Contate o suporte para assinar.</span>
@@ -2185,6 +2277,9 @@ function App(){
 
       {/* Toast */}
       {toast&&<div className="toast" style={{position:"fixed",bottom:84,left:"50%",transform:"translateX(-50%)",background:"rgba(15,23,42,.92)",backdropFilter:"blur(16px)",border:"1px solid rgba(56,189,248,.2)",color:"#e0f2fe",fontSize:13,fontWeight:600,padding:"10px 20px",borderRadius:16,boxShadow:"0 8px 24px rgba(0,0,0,.4)",zIndex:99,whiteSpace:"nowrap"}}>{toast}</div>}
+
+      {/* Popup de resumo semanal do clima — aparece uma vez por dia */}
+      {showWeeklyPopup&&<WeeklyWeatherPopup week={weekWeather} onClose={()=>setShowWeeklyPopup(false)}/>}
     </div>
   );
 }
