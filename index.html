@@ -20,8 +20,8 @@ html,body,#root{height:100%;width:100%;overflow:hidden}
 :root{--app-height:100vh}
 @supports (height:100dvh){:root{--app-height:100dvh}}
 .app-shell{height:var(--app-height);min-height:0}
-body{font-family:'Outfit',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:#0c1a2e}
-input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif}
+body{font-family:'Outfit',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:#0c1a2e;font-size:16px}
+input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif;font-size:16px}
 ::-webkit-scrollbar{width:0;height:0}
 .aqua-bg{position:fixed;inset:0;z-index:0;background:linear-gradient(160deg,#0c1a2e 0%,#0d2847 40%,#0c3460 70%,#0a4a7c 100%);overflow:hidden}
 .bubble{position:absolute;border-radius:50%;background:radial-gradient(circle at 30% 30%,rgba(14,165,233,.35),rgba(56,189,248,.08));border:1px solid rgba(125,211,252,.15);animation:floatUp linear infinite;will-change:transform,opacity}
@@ -32,7 +32,7 @@ input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif}
 .glass{background:rgba(255,255,255,.08);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.15)}
 .glass-card{background:rgba(255,255,255,.07);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(125,211,252,.2);border-radius:20px;transition:transform .2s ease,box-shadow .2s ease,background .2s ease}
 .glass-card:active{transform:scale(.98);background:rgba(255,255,255,.11)}
-.glass-input{background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(125,211,252,.25);border-radius:14px;color:#e0f2fe;font-size:16px;padding:12px 16px;width:100%;outline:none;transition:border-color .2s,background .2s}
+.glass-input{background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(125,211,252,.25);border-radius:14px;color:#e0f2fe;font-size:16px;padding:13px 16px;width:100%;outline:none;transition:border-color .2s,background .2s}
 .glass-input::placeholder{color:rgba(186,230,253,.4)}
 .glass-input:focus{border-color:rgba(56,189,248,.7);background:rgba(255,255,255,.12)}
 .screen-enter{animation:screenIn .3s cubic-bezier(.25,.46,.45,.94) forwards}
@@ -45,7 +45,7 @@ input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif}
 @keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
 .pulse{animation:pulse 2s ease-in-out infinite}
-.btn-glow{position:relative;overflow:hidden;background:linear-gradient(135deg,#0ea5e9,#0284c7);border:none;border-radius:16px;color:#fff;font-family:'Outfit',sans-serif;font-weight:800;font-size:15px;padding:14px;width:100%;cursor:pointer;box-shadow:0 8px 24px rgba(14,165,233,.4),0 0 0 1px rgba(56,189,248,.3);transition:transform .15s,box-shadow .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-glow{position:relative;overflow:hidden;background:linear-gradient(135deg,#0ea5e9,#0284c7);border:none;border-radius:16px;color:#fff;font-family:'Outfit',sans-serif;font-weight:800;font-size:16px;padding:15px;width:100%;cursor:pointer;box-shadow:0 8px 24px rgba(14,165,233,.4),0 0 0 1px rgba(56,189,248,.3);transition:transform .15s,box-shadow .15s;display:flex;align-items:center;justify-content:center;gap:8px}
 .btn-glow:active{transform:scale(.97);box-shadow:0 4px 12px rgba(14,165,233,.3)}
 .btn-glow:disabled{opacity:.5;cursor:not-allowed}
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;background:transparent;border:none;cursor:pointer;position:relative;transition:transform .15s}
@@ -54,8 +54,8 @@ input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif}
 .nav-icon.active{background:linear-gradient(135deg,#0ea5e9,#0284c7);box-shadow:0 4px 14px rgba(14,165,233,.5);transform:scale(1.1) translateY(-2px)}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .toast{animation:toastIn .3s cubic-bezier(.25,.46,.45,.94)}
-.status-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700;white-space:nowrap}
-.lbl{font-size:11px;font-weight:700;color:rgba(186,230,253,.6);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:6px}
+.status-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap}
+.lbl{font-size:12px;font-weight:700;color:rgba(186,230,253,.6);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:6px}
 .scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 16px;position:relative;z-index:1}
 @keyframes loginIn{from{opacity:0;transform:translateY(30px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
 .login-card{animation:loginIn .5s cubic-bezier(.25,.46,.45,.94) forwards}
@@ -1816,10 +1816,13 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                     <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14}}>{h.client}</div>
                     <div style={{color:"rgba(186,230,253,.45)",fontSize:12}}>{h.model} · <span style={{fontFamily:"monospace"}}>{h.plate}</span></div>
                     {h.phone&&(
-                      <div style={{display:"flex",alignItems:"center",gap:4,marginTop:2}}>
-                        <Icon name="MessageCircle" size={10} color="rgba(186,230,253,.3)"/>
-                        <span style={{fontSize:11,color:"rgba(186,230,253,.35)"}}>{h.phone}</span>
-                      </div>
+                      <a href={`tel:${h.phone}`}
+                        style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:4,
+                          padding:"3px 10px",borderRadius:99,textDecoration:"none",
+                          background:"rgba(56,189,248,.12)",border:"1px solid rgba(56,189,248,.25)"}}>
+                        <Icon name="MessageCircle" size={11} color="#38bdf8"/>
+                        <span style={{fontSize:12,fontWeight:700,color:"#38bdf8",fontFamily:"monospace",letterSpacing:".04em"}}>{h.phone}</span>
+                      </a>
                     )}
                   </div>
                   <div style={{textAlign:"right"}}>
