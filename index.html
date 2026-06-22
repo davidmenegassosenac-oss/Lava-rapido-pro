@@ -1026,6 +1026,7 @@ function MasterScreen(){
         p_empresa_id:empresa.id,
         p_plano:novoPlano,
       });
+      alert("RPC resultado: "+JSON.stringify({data,error}));
       if(error)throw new Error(error.message);
       if(!data?.success)throw new Error(data?.message||"Erro ao atualizar plano.");
 
