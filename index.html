@@ -1021,17 +1021,23 @@ function MasterScreen(){
       const ass=empresa.assinaturas?.[0];
       const valorMap={trial:0,basico:49.90,profissional:89.90,enterprise:149.90};
       if(ass?.id){
-        await sb.from('assinaturas').update({
+        // .select() é necessário — sem ele o Supabase executa o UPDATE
+        // mas não confirma se foi aplicado (RLS pode bloquear silenciosamente).
+        const {error}=await sb.from('assinaturas').update({
           plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0,
-        }).eq('id',ass.id);
+        }).eq('id',ass.id).select();
+        if(error)throw new Error("Erro ao atualizar assinatura: "+error.message);
       }else{
-        await sb.from('assinaturas').insert({
+        const {error}=await sb.from('assinaturas').insert({
           empresa_id:empresa.id,plano:novoPlano,status:"ativo",
           valor:valorMap[novoPlano]||0,
           data_inicio:new Date().toISOString().split('T')[0],
-        });
+        }).select();
+        if(error)throw new Error("Erro ao criar assinatura: "+error.message);
       }
-      await sb.from('empresas').update({plano:novoPlano}).eq('id',empresa.id);
+      const {error:errEmp}=await sb.from('empresas').update({plano:novoPlano}).eq('id',empresa.id).select();
+      if(errEmp)throw new Error("Erro ao atualizar empresa: "+errEmp.message);
+
       setEmpresas(prev=>prev.map(emp=>{
         if(emp.id!==empresa.id)return emp;
         const assAtualizada=ass?.id
@@ -1044,8 +1050,8 @@ function MasterScreen(){
       setAlterandoPlano(null);
       setUsageMap(m=>{const n={...m};delete n[empresa.id];return n;});
     }catch(e){
-      setToast("Erro ao alterar plano. Tente novamente.");
-      setTimeout(()=>setToast(""),3000);
+      setToast("Erro: "+e.message);
+      setTimeout(()=>setToast(""),4000);
     }
     setSalvandoPlano(null);
   };
