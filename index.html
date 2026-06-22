@@ -775,6 +775,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
     ["historico","📊 Histórico",true],
     ["relatorios","📈 Relatórios",isOwner],
     ["equipe","👥 Equipe",isOwner],
+    ["folha","💸 Folha",isOwner],
   ].filter(([,,show])=>show);
 
   return(
@@ -972,6 +973,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
       {tab==="historico"&&<HistoryScreen empresaId={empresaId} embedded isOwner/>}
       {tab==="relatorios"&&isOwner&&<RelatoriosScreen empresaId={empresaId} embedded/>}
       {tab==="equipe"&&isOwner&&<AdminScreen empresaId={empresaId} currentUser={currentUser} embedded/>}
+      {tab==="folha"&&isOwner&&<FolhaScreen empresaId={empresaId} embedded/>}
     </div>
   );
 }
@@ -2092,6 +2094,267 @@ function BarChart({data,color="#0ea5e9",height=80}){
 /* ══════════════════════════════════════════════════════════════════════════
    RELATORIOS SCREEN
 ══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   FOLHA SCREEN — pagamentos semanais de funcionários
+   Separado do caixa_movimentos para não misturar receitas de lavagem
+   com gastos de pessoal. Visível apenas para o owner.
+══════════════════════════════════════════════════════════════════════════ */
+function FolhaScreen({empresaId,embedded}){
+  const [funcionarios,setFuncionarios]=useState([]);
+  const [diarias,setDiarias]=useState({});       // profile_id → valor_diaria
+  const [pagamentos,setPagamentos]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [semana,setSemana]=useState(getSemanaAtual());
+  const [showForm,setShowForm]=useState(false);
+  const [form,setForm]=useState({profile_id:"",valor:"",tipo:"pagamento",observacao:""});
+  const [saving,setSaving]=useState(false);
+  const [editandoDiaria,setEditandoDiaria]=useState(null);
+  const [novaDiaria,setNovaDiaria]=useState("");
+
+  function getSemanaAtual(){
+    const d=new Date();
+    const jan1=new Date(d.getFullYear(),0,1);
+    const semNum=Math.ceil(((d-jan1)/86400000+jan1.getDay()+1)/7);
+    return `${d.getFullYear()}-W${String(semNum).padStart(2,"0")}`;
+  }
+
+  function semanaLabel(s){
+    const [ano,w]=s.split("-W");
+    const semNum=parseInt(w);
+    // Calcular data de início da semana
+    const jan1=new Date(parseInt(ano),0,1);
+    const diasAteSegunda=(semNum-1)*7-(jan1.getDay()||7)+1;
+    const inicio=new Date(jan1.getTime()+diasAteSegunda*86400000);
+    const fim=new Date(inicio.getTime()+6*86400000);
+    const fmt=d=>`${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
+    return `${fmt(inicio)} – ${fmt(fim)}`;
+  }
+
+  const fetchTudo=useCallback(async()=>{
+    setLoading(true);
+    const [{data:funcs},{data:dirs},{data:pgtos}]=await Promise.all([
+      sb.from('profiles').select('id,name,role').eq('empresa_id',empresaId).eq('role','employee'),
+      sb.from('funcionario_diaria').select('*').eq('empresa_id',empresaId),
+      sb.from('folha_pagamentos').select('*, pago_por:created_by(name)').eq('empresa_id',empresaId).eq('semana_ref',semana).order('created_at',{ascending:false}),
+    ]);
+    setFuncionarios(funcs||[]);
+    const dMap={};
+    (dirs||[]).forEach(d=>{dMap[d.profile_id]=d.valor_diaria;});
+    setDiarias(dMap);
+    setPagamentos(pgtos||[]);
+    setLoading(false);
+  },[empresaId,semana]);
+
+  useEffect(()=>{fetchTudo();},[fetchTudo]);
+
+  // Total pago na semana por funcionário
+  const totalPorFunc=pagamentos.reduce((acc,p)=>{
+    acc[p.profile_id]=(acc[p.profile_id]||0)+parseFloat(p.valor);
+    return acc;
+  },{});
+  const totalSemana=pagamentos.reduce((s,p)=>s+parseFloat(p.valor),0);
+
+  const salvarPagamento=async()=>{
+    if(!form.profile_id||!form.valor)return;
+    setSaving(true);
+    await sb.from('folha_pagamentos').insert({
+      empresa_id:empresaId,
+      profile_id:form.profile_id,
+      valor:parseFloat(form.valor),
+      tipo:form.tipo,
+      observacao:form.observacao||null,
+      data_pgto:new Date().toISOString().split("T")[0],
+      semana_ref:semana,
+    });
+    setForm({profile_id:"",valor:"",tipo:"pagamento",observacao:""});
+    setShowForm(false);
+    setSaving(false);
+    fetchTudo();
+  };
+
+  const salvarDiaria=async(profileId)=>{
+    const v=parseFloat(novaDiaria);
+    if(isNaN(v)||v<0)return;
+    await sb.from('funcionario_diaria').upsert({
+      empresa_id:empresaId,profile_id:profileId,valor_diaria:v
+    },{onConflict:"empresa_id,profile_id"});
+    setDiarias(d=>({...d,[profileId]:v}));
+    setEditandoDiaria(null);
+  };
+
+  const excluirPagamento=async(id)=>{
+    if(!window.confirm("Excluir este lançamento?"))return;
+    await sb.from('folha_pagamentos').delete().eq('id',id);
+    fetchTudo();
+  };
+
+  // Semanas para navegação (atual + 4 anteriores)
+  const semanas=Array.from({length:5},(_,i)=>{
+    const d=new Date();
+    d.setDate(d.getDate()-i*7);
+    const jan1=new Date(d.getFullYear(),0,1);
+    const n=Math.ceil(((d-jan1)/86400000+jan1.getDay()+1)/7);
+    return `${d.getFullYear()}-W${String(n).padStart(2,"0")}`;
+  });
+
+  if(loading)return<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>;
+
+  return(
+    <div style={{padding:embedded?"0":"0 0 20px"}}>
+      {/* Navegação de semanas */}
+      <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
+        {semanas.map(s=>(
+          <button key={s} onClick={()=>setSemana(s)}
+            style={{flexShrink:0,padding:"6px 12px",borderRadius:99,fontSize:11,fontWeight:700,cursor:"pointer",
+              border:`1px solid ${semana===s?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+              background:semana===s?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
+              color:semana===s?"#38bdf8":"rgba(186,230,253,.4)"}}>
+            {s===getSemanaAtual()?"Esta semana":semanaLabel(s)}
+          </button>
+        ))}
+      </div>
+
+      {/* Resumo da semana */}
+      <div className="glass-card" style={{padding:16,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <span style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.5)"}}>FOLHA DA SEMANA</span>
+          <span style={{fontSize:18,fontWeight:900,color:"#f87171"}}>{fmtBRL(totalSemana)}</span>
+        </div>
+        {funcionarios.map(f=>(
+          <div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:28,height:28,borderRadius:8,background:"rgba(56,189,248,.15)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Icon name="User" size={13} color="#38bdf8"/>
+              </div>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:"#e0f2fe"}}>{f.name}</div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  {editandoDiaria===f.id?(
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <input autoFocus value={novaDiaria} onChange={e=>setNovaDiaria(e.target.value)}
+                        type="number" style={{width:70,padding:"2px 6px",borderRadius:6,background:"rgba(255,255,255,.1)",border:"1px solid rgba(56,189,248,.4)",color:"#e0f2fe",fontSize:11}}/>
+                      <button onClick={()=>salvarDiaria(f.id)} style={{background:"rgba(74,222,128,.2)",border:"none",borderRadius:6,padding:"2px 6px",color:"#4ade80",fontSize:10,fontWeight:700,cursor:"pointer"}}>OK</button>
+                      <button onClick={()=>setEditandoDiaria(null)} style={{background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:10,cursor:"pointer"}}>✕</button>
+                    </div>
+                  ):(
+                    <button onClick={()=>{setEditandoDiaria(f.id);setNovaDiaria(diarias[f.id]||"");}}
+                      style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
+                      <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>diária {diarias[f.id]?fmtBRL(diarias[f.id]):"—"}</span>
+                      <Icon name="Edit" size={9} color="rgba(186,230,253,.3)"/>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+            <span style={{fontSize:14,fontWeight:800,color:totalPorFunc[f.id]?"#f87171":"rgba(186,230,253,.3)"}}>
+              {totalPorFunc[f.id]?fmtBRL(totalPorFunc[f.id]):"R$ 0,00"}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Botão novo lançamento */}
+      <button onClick={()=>{
+          if(!showForm)setForm({profile_id:funcionarios[0]?.id||"",valor:String(diarias[funcionarios[0]?.id]||""),tipo:"pagamento",observacao:""});
+          setShowForm(v=>!v);
+        }}
+        className="btn-glow" style={{marginBottom:14}}>
+        <Icon name="Plus" size={16} color="#fff"/>
+        {showForm?"Cancelar":"Registrar Pagamento"}
+      </button>
+
+      {/* Formulário de lançamento */}
+      {showForm&&(
+        <div className="glass-card" style={{padding:16,marginBottom:14}}>
+          <div style={{marginBottom:10}}>
+            <label className="lbl">Funcionário</label>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {funcionarios.map(f=>(
+                <button key={f.id} onClick={()=>setForm(p=>({...p,profile_id:f.id,valor:diarias[f.id]||p.valor}))}
+                  style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",borderRadius:12,cursor:"pointer",
+                    border:`1.5px solid ${form.profile_id===f.id?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+                    background:form.profile_id===f.id?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
+                    color:form.profile_id===f.id?"#38bdf8":"rgba(186,230,253,.7)",fontWeight:form.profile_id===f.id?700:500,fontSize:13}}>
+                  <span>{f.name}</span>
+                  {diarias[f.id]&&<span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>diária {fmtBRL(diarias[f.id])}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,marginBottom:10}}>
+            {[["pagamento","💰 Pagamento"],["adiantamento","⚡ Adiantamento"]].map(([k,l])=>(
+              <button key={k} onClick={()=>setForm(p=>({...p,tipo:k}))}
+                style={{flex:1,padding:"9px 0",borderRadius:12,cursor:"pointer",fontSize:12,fontWeight:700,
+                  border:`1.5px solid ${form.tipo===k?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+                  background:form.tipo===k?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
+                  color:form.tipo===k?"#38bdf8":"rgba(186,230,253,.4)"}}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <div style={{marginBottom:10}}>
+            <label className="lbl">Valor (R$)</label>
+            <input className="glass-input" type="number" value={form.valor}
+              onChange={e=>setForm(p=>({...p,valor:e.target.value}))} placeholder="0,00"/>
+          </div>
+          <div style={{marginBottom:14}}>
+            <label className="lbl">Observação (opcional)</label>
+            <input className="glass-input" type="text" value={form.observacao}
+              onChange={e=>setForm(p=>({...p,observacao:e.target.value}))} placeholder="ex: semana completa, adiantamento..."/>
+          </div>
+          <button onClick={salvarPagamento} disabled={saving||!form.profile_id||!form.valor}
+            className="btn-glow" style={{opacity:(!form.profile_id||!form.valor)?.5:1}}>
+            {saving?<div className="spinner spin"/>:<><Icon name="CheckCircle" size={15} color="#fff"/> Confirmar Pagamento</>}
+          </button>
+        </div>
+      )}
+
+      {/* Histórico da semana */}
+      {pagamentos.length>0&&(
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>
+            Lançamentos — {semanaLabel(semana)}
+          </div>
+          {pagamentos.map(p=>{
+            const func=funcionarios.find(f=>f.id===p.profile_id);
+            const isAdiant=p.tipo==="adiantamento";
+            return(
+              <div key={p.id} className="glass-card" style={{marginBottom:8,padding:"12px 14px"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:32,height:32,borderRadius:10,background:isAdiant?"rgba(251,191,36,.15)":"rgba(248,113,113,.15)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <Icon name={isAdiant?"Zap":"DollarSign"} size={14} color={isAdiant?"#fbbf24":"#f87171"}/>
+                    </div>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:700,color:"#e0f2fe"}}>{func?.name||"—"}</div>
+                      <div style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
+                        {isAdiant?"Adiantamento":"Pagamento"}{p.observacao&&` · ${p.observacao}`}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:15,fontWeight:900,color:"#f87171"}}>{fmtBRL(p.valor)}</span>
+                    <button onClick={()=>excluirPagamento(p.id)}
+                      style={{background:"transparent",border:"none",cursor:"pointer",padding:4,opacity:.5}}>
+                      <Icon name="Trash2" size={14} color="#f87171"/>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {pagamentos.length===0&&!showForm&&(
+        <div style={{textAlign:"center",padding:"30px 0",color:"rgba(186,230,253,.3)"}}>
+          <Icon name="DollarSign" size={32} color="rgba(56,189,248,.2)"/>
+          <div style={{fontSize:13,marginTop:10}}>Nenhum pagamento registrado nesta semana</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RelatoriosScreen({empresaId,embedded}){
   const [periodo,setPeriodo]=useState("semana");
   const [movs,setMovs]=useState([]);
