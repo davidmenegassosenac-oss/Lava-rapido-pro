@@ -1002,6 +1002,11 @@ function MasterScreen(){
       });
   },[]);
 
+  useEffect(()=>{
+    setToast("MOUNT: MasterScreen montou às "+new Date().toLocaleTimeString());
+    setTimeout(()=>setToast(""),20000);
+  },[]);
+
   useEffect(()=>{fetchEmpresas();},[fetchEmpresas]);
 
   // Busca o uso atual (usuários e ordens) de uma empresa específica ao
