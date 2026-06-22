@@ -996,11 +996,9 @@ function MasterScreen(){
       .then(({data})=>{
         setEmpresas(data||[]);
         setLoading(false);
-        // DEBUG temporário — mostrar o que chegou para a primeira empresa
-        if(data?.[0]){
-          setToast("DB: "+data[0].nome_fantasia+" ass="+JSON.stringify(data[0].assinaturas?.map(a=>({p:a.plano,s:a.status}))));
-          setTimeout(()=>setToast(""),15000);
-        }
+        const resumo=(data||[]).map(e=>e.nome_fantasia.substring(0,8)+":"+(e.assinaturas?.[0]?.status||"?")).join(" | ");
+        setToast("FETCH: "+resumo);
+        setTimeout(()=>setToast(""),20000);
       });
   },[]);
 
