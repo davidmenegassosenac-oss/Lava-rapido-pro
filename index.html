@@ -1035,8 +1035,9 @@ function MasterScreen(){
       setEmpresas(prev=>prev.map(emp=>{
         if(emp.id!==empresa.id)return emp;
         const ass=emp.assinaturas?.[0]||{};
+        const novoStatus=novoPlano==="trial"?"trial":"ativo";
         return{...emp,plano:novoPlano,assinaturas:[{
-          ...ass,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0
+          ...ass,plano:novoPlano,status:novoStatus,valor:valorMap[novoPlano]||0
         }]};
       }));
       setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
