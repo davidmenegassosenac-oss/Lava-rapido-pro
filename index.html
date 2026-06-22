@@ -1019,43 +1019,47 @@ function MasterScreen(){
     setSalvandoPlano(empresa.id);
     try{
       const ass=empresa.assinaturas?.[0];
+      console.log("[salvarPlano] ass atual:", JSON.stringify(ass));
+      console.log("[salvarPlano] novoPlano:", novoPlano);
       const valorMap={trial:0,basico:49.90,profissional:89.90,enterprise:149.90};
       if(ass?.id){
-        await sb.from('assinaturas').update({
+        const {data,error}=await sb.from('assinaturas').update({
           plano:novoPlano,
           status:"ativo",
           valor:valorMap[novoPlano]||0,
         }).eq('id',ass.id);
+        console.log("[salvarPlano] update result:", JSON.stringify({data,error}));
       }else{
-        await sb.from('assinaturas').insert({
+        const {data,error}=await sb.from('assinaturas').insert({
           empresa_id:empresa.id,
           plano:novoPlano,
           status:"ativo",
           valor:valorMap[novoPlano]||0,
           data_inicio:new Date().toISOString().split('T')[0],
         });
+        console.log("[salvarPlano] insert result:", JSON.stringify({data,error}));
       }
-      await sb.from('empresas').update({plano:novoPlano}).eq('id',empresa.id);
+      const {data:empData,error:empError}=await sb.from('empresas').update({plano:novoPlano}).eq('id',empresa.id);
+      console.log("[salvarPlano] empresas update:", JSON.stringify({empData,empError}));
 
-      // Atualiza o estado local imediatamente — sem esperar o refetch
-      // assíncrono, que pode chegar fora de ordem e mostrar dado antigo.
-      setEmpresas(prev=>prev.map(emp=>{
-        if(emp.id!==empresa.id)return emp;
-        const assAtualizada=ass?.id
-          ?{...ass,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0}
-          :{id:"local-"+Date.now(),empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0};
-        return{...emp,plano:novoPlano,assinaturas:[assAtualizada]};
-      }));
+      setEmpresas(prev=>{
+        const next=prev.map(emp=>{
+          if(emp.id!==empresa.id)return emp;
+          const assAtualizada=ass?.id
+            ?{...ass,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0}
+            :{id:"local-"+Date.now(),empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0};
+          return{...emp,plano:novoPlano,assinaturas:[assAtualizada]};
+        });
+        console.log("[salvarPlano] novo estado empresa:", JSON.stringify(next.find(x=>x.id===empresa.id)?.assinaturas));
+        return next;
+      });
 
       setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
       setTimeout(()=>setToast(""),3000);
       setAlterandoPlano(null);
       setUsageMap(m=>{const n={...m};delete n[empresa.id];return n;});
-      // Não chamamos fetchEmpresas() aqui — o estado local já foi atualizado
-      // acima com setEmpresas(), e um refetch assíncrono causaria race condition:
-      // chegaria depois da renderização e sobrescreveria o dado correto com o
-      // dado antigo do banco (que pode não ter propagado ainda).
     }catch(e){
+      console.log("[salvarPlano] ERRO:", e.message);
       setToast("Erro ao alterar plano. Tente novamente.");
       setTimeout(()=>setToast(""),3000);
     }
