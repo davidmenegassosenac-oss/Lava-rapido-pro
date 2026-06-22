@@ -1026,11 +1026,10 @@ function MasterScreen(){
         p_empresa_id:empresa.id,
         p_plano:novoPlano,
       });
+      setToast("RPC: data="+JSON.stringify(data)+" err="+JSON.stringify(error));
+      setTimeout(()=>setToast(""),15000);
       if(error)throw new Error(error.message);
       if(!data?.success)throw new Error(data?.message||"Erro ao atualizar plano.");
-      // DEBUG — mostrar resposta completa no toast por 10 segundos
-      setToast("RPC: "+JSON.stringify(data));
-      setTimeout(()=>setToast(""),10000);
     }catch(e){
       setToast("Erro: "+e.message);
       setTimeout(()=>setToast(""),4000);
