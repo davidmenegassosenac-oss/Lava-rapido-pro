@@ -1815,6 +1815,12 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                   <div>
                     <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14}}>{h.client}</div>
                     <div style={{color:"rgba(186,230,253,.45)",fontSize:12}}>{h.model} · <span style={{fontFamily:"monospace"}}>{h.plate}</span></div>
+                    {h.phone&&(
+                      <div style={{display:"flex",alignItems:"center",gap:4,marginTop:2}}>
+                        <Icon name="MessageCircle" size={10} color="rgba(186,230,253,.3)"/>
+                        <span style={{fontSize:11,color:"rgba(186,230,253,.35)"}}>{h.phone}</span>
+                      </div>
+                    )}
                   </div>
                   <div style={{textAlign:"right"}}>
                     <div style={{fontWeight:800,fontSize:14,color:"#4ade80"}}>{fmtBRL(h.value)}</div>
