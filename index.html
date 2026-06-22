@@ -1003,8 +1003,7 @@ function MasterScreen(){
   },[]);
 
   useEffect(()=>{
-    setToast("MOUNT: MasterScreen montou às "+new Date().toLocaleTimeString());
-    setTimeout(()=>setToast(""),20000);
+    window.alert("MASTER MONTOU: "+new Date().toLocaleTimeString());
   },[]);
 
   useEffect(()=>{fetchEmpresas();},[fetchEmpresas]);
