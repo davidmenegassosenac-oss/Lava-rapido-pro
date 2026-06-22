@@ -993,18 +993,10 @@ function MasterScreen(){
   const fetchEmpresas=useCallback(()=>{
     sb.from('empresas').select('*, assinaturas(*)')
       .order('data_criacao',{ascending:false})
-      .then(({data})=>{
-        setEmpresas(data||[]);
-        setLoading(false);
-        const resumo=(data||[]).map(e=>e.nome_fantasia.substring(0,8)+":"+(e.assinaturas?.[0]?.status||"?")).join(" | ");
-        setToast("FETCH: "+resumo);
-        setTimeout(()=>setToast(""),20000);
-      });
+      .then(({data})=>{setEmpresas(data||[]);setLoading(false);});
   },[]);
 
-  useEffect(()=>{
-    window.alert("MASTER MONTOU: "+new Date().toLocaleTimeString());
-  },[]);
+  useEffect(()=>{fetchEmpresas();},[fetchEmpresas]);
 
   useEffect(()=>{fetchEmpresas();},[fetchEmpresas]);
 
@@ -1036,8 +1028,6 @@ function MasterScreen(){
         p_empresa_id:empresa.id,
         p_plano:novoPlano,
       });
-      setToast("RPC: data="+JSON.stringify(data)+" err="+JSON.stringify(error));
-      setTimeout(()=>setToast(""),15000);
       if(error)throw new Error(error.message);
       if(!data?.success)throw new Error(data?.message||"Erro ao atualizar plano.");
     }catch(e){
