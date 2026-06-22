@@ -1020,29 +1020,27 @@ function MasterScreen(){
     try{
       const ass=empresa.assinaturas?.[0];
       const valorMap={trial:0,basico:49.90,profissional:89.90,enterprise:149.90};
-      if(ass?.id){
-        // .select() é necessário — sem ele o Supabase executa o UPDATE
-        // mas não confirma se foi aplicado (RLS pode bloquear silenciosamente).
-        const {error}=await sb.from('assinaturas').update({
-          plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0,
-        }).eq('id',ass.id).select();
-        if(error)throw new Error("Erro ao atualizar assinatura: "+error.message);
-      }else{
-        const {error}=await sb.from('assinaturas').insert({
-          empresa_id:empresa.id,plano:novoPlano,status:"ativo",
-          valor:valorMap[novoPlano]||0,
-          data_inicio:new Date().toISOString().split('T')[0],
-        }).select();
-        if(error)throw new Error("Erro ao criar assinatura: "+error.message);
-      }
-      const {error:errEmp}=await sb.from('empresas').update({plano:novoPlano}).eq('id',empresa.id).select();
-      if(errEmp)throw new Error("Erro ao atualizar empresa: "+errEmp.message);
+
+      // Upsert: se já existe uma linha para essa empresa_id, atualiza.
+      // Se não existe, cria. Elimina o erro de "chave duplicada" que
+      // acontecia porque ass?.id chegava undefined e o código tentava
+      // INSERT numa empresa que já tinha registro em assinaturas.
+      const {error}=await sb.from('assinaturas').upsert({
+        empresa_id:empresa.id,
+        plano:novoPlano,
+        status:"ativo",
+        valor:valorMap[novoPlano]||0,
+        data_inicio:ass?.data_inicio||new Date().toISOString().split('T')[0],
+      },{onConflict:"empresa_id"});
+      if(error)throw new Error(error.message);
+
+      const {error:errEmp}=await sb.from('empresas')
+        .update({plano:novoPlano}).eq('id',empresa.id);
+      if(errEmp)throw new Error(errEmp.message);
 
       setEmpresas(prev=>prev.map(emp=>{
         if(emp.id!==empresa.id)return emp;
-        const assAtualizada=ass?.id
-          ?{...ass,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0}
-          :{id:"local-"+Date.now(),empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0};
+        const assAtualizada={...(ass||{}),empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0};
         return{...emp,plano:novoPlano,assinaturas:[assAtualizada]};
       }));
       setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
