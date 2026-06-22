@@ -1036,8 +1036,11 @@ function MasterScreen(){
         if(emp.id!==empresa.id)return emp;
         const ass=emp.assinaturas?.[0]||{};
         const novoStatus=novoPlano==="trial"?"trial":"ativo";
+        const diasVenc=novoPlano==="trial"?14:30;
+        const novaData=new Date(Date.now()+diasVenc*86400000).toISOString().split("T")[0];
         return{...emp,plano:novoPlano,assinaturas:[{
-          ...ass,plano:novoPlano,status:novoStatus,valor:valorMap[novoPlano]||0
+          ...ass,plano:novoPlano,status:novoStatus,valor:valorMap[novoPlano]||0,
+          data_vencimento:novaData,
         }]};
       }));
       setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
