@@ -1026,20 +1026,21 @@ function MasterScreen(){
         p_empresa_id:empresa.id,
         p_plano:novoPlano,
       });
-      alert("RPC resultado: "+JSON.stringify({data,error}));
       if(error)throw new Error(error.message);
       if(!data?.success)throw new Error(data?.message||"Erro ao atualizar plano.");
 
       setEmpresas(prev=>prev.map(emp=>{
         if(emp.id!==empresa.id)return emp;
         const ass=emp.assinaturas?.[0]||{};
-        const assAtualizada={...ass,empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0};
+        const assAtualizada={...ass,empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:{trial:0,basico:49.90,profissional:89.90,enterprise:149.90}[novoPlano]||0};
         return{...emp,plano:novoPlano,assinaturas:[assAtualizada]};
       }));
       setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
       setTimeout(()=>setToast(""),3000);
       setAlterandoPlano(null);
       setUsageMap(m=>{const n={...m};delete n[empresa.id];return n;});
+      // Refetch com delay para garantir que o banco propagou antes de buscar
+      setTimeout(()=>fetchEmpresas(),1500);
     }catch(e){
       setToast("Erro: "+e.message);
       setTimeout(()=>setToast(""),4000);
