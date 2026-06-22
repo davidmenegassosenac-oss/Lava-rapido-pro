@@ -1051,7 +1051,10 @@ function MasterScreen(){
       setTimeout(()=>setToast(""),3000);
       setAlterandoPlano(null);
       setUsageMap(m=>{const n={...m};delete n[empresa.id];return n;});
-      fetchEmpresas(); // refetch em segundo plano pra sincronizar, mas UI já atualizou
+      // Não chamamos fetchEmpresas() aqui — o estado local já foi atualizado
+      // acima com setEmpresas(), e um refetch assíncrono causaria race condition:
+      // chegaria depois da renderização e sobrescreveria o dado correto com o
+      // dado antigo do banco (que pode não ter propagado ainda).
     }catch(e){
       setToast("Erro ao alterar plano. Tente novamente.");
       setTimeout(()=>setToast(""),3000);
