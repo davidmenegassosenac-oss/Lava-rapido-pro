@@ -1035,13 +1035,23 @@ function MasterScreen(){
           data_inicio:new Date().toISOString().split('T')[0],
         });
       }
-      // Mantém empresas.plano sincronizado também
       await sb.from('empresas').update({plano:novoPlano}).eq('id',empresa.id);
+
+      // Atualiza o estado local imediatamente — sem esperar o refetch
+      // assíncrono, que pode chegar fora de ordem e mostrar dado antigo.
+      setEmpresas(prev=>prev.map(emp=>{
+        if(emp.id!==empresa.id)return emp;
+        const assAtualizada=ass?.id
+          ?{...ass,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0}
+          :{id:"local-"+Date.now(),empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0};
+        return{...emp,plano:novoPlano,assinaturas:[assAtualizada]};
+      }));
+
       setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
       setTimeout(()=>setToast(""),3000);
       setAlterandoPlano(null);
-      setUsageMap(m=>{const n={...m};delete n[empresa.id];return n;}); // força reload
-      fetchEmpresas();
+      setUsageMap(m=>{const n={...m};delete n[empresa.id];return n;});
+      fetchEmpresas(); // refetch em segundo plano pra sincronizar, mas UI já atualizou
     }catch(e){
       setToast("Erro ao alterar plano. Tente novamente.");
       setTimeout(()=>setToast(""),3000);
