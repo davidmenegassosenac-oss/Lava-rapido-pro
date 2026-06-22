@@ -1019,47 +1019,31 @@ function MasterScreen(){
     setSalvandoPlano(empresa.id);
     try{
       const ass=empresa.assinaturas?.[0];
-      console.log("[salvarPlano] ass atual:", JSON.stringify(ass));
-      console.log("[salvarPlano] novoPlano:", novoPlano);
       const valorMap={trial:0,basico:49.90,profissional:89.90,enterprise:149.90};
       if(ass?.id){
-        const {data,error}=await sb.from('assinaturas').update({
-          plano:novoPlano,
-          status:"ativo",
-          valor:valorMap[novoPlano]||0,
+        await sb.from('assinaturas').update({
+          plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0,
         }).eq('id',ass.id);
-        console.log("[salvarPlano] update result:", JSON.stringify({data,error}));
       }else{
-        const {data,error}=await sb.from('assinaturas').insert({
-          empresa_id:empresa.id,
-          plano:novoPlano,
-          status:"ativo",
+        await sb.from('assinaturas').insert({
+          empresa_id:empresa.id,plano:novoPlano,status:"ativo",
           valor:valorMap[novoPlano]||0,
           data_inicio:new Date().toISOString().split('T')[0],
         });
-        console.log("[salvarPlano] insert result:", JSON.stringify({data,error}));
       }
-      const {data:empData,error:empError}=await sb.from('empresas').update({plano:novoPlano}).eq('id',empresa.id);
-      console.log("[salvarPlano] empresas update:", JSON.stringify({empData,empError}));
-
-      setEmpresas(prev=>{
-        const next=prev.map(emp=>{
-          if(emp.id!==empresa.id)return emp;
-          const assAtualizada=ass?.id
-            ?{...ass,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0}
-            :{id:"local-"+Date.now(),empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0};
-          return{...emp,plano:novoPlano,assinaturas:[assAtualizada]};
-        });
-        console.log("[salvarPlano] novo estado empresa:", JSON.stringify(next.find(x=>x.id===empresa.id)?.assinaturas));
-        return next;
-      });
-
+      await sb.from('empresas').update({plano:novoPlano}).eq('id',empresa.id);
+      setEmpresas(prev=>prev.map(emp=>{
+        if(emp.id!==empresa.id)return emp;
+        const assAtualizada=ass?.id
+          ?{...ass,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0}
+          :{id:"local-"+Date.now(),empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0};
+        return{...emp,plano:novoPlano,assinaturas:[assAtualizada]};
+      }));
       setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
       setTimeout(()=>setToast(""),3000);
       setAlterandoPlano(null);
       setUsageMap(m=>{const n={...m};delete n[empresa.id];return n;});
     }catch(e){
-      console.log("[salvarPlano] ERRO:", e.message);
       setToast("Erro ao alterar plano. Tente novamente.");
       setTimeout(()=>setToast(""),3000);
     }
