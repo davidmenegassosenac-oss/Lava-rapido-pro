@@ -1436,23 +1436,35 @@ function HomeScreen({empresaId}){
    NEW WASH SCREEN
 ══════════════════════════════════════════════════════════════════════════ */
 function NewWashScreen({empresaId,userId,onSuccess}){
-  // Usar refs para inputs — evita perda de foco a cada keystroke no mobile
   const refs={
     plate:useRef(null),model:useRef(null),
     client:useRef(null),phone:useRef(null),
-    observacoes:useRef(null),value:useRef(null),
+    observacoes:useRef(null),
   };
-  const [svcType,setSvcType]=useState(SVC_DEFAULT[0].label);
-  const [svcValue,setSvcValue]=useState(SVC_DEFAULT[0].value);
+  // Multi-seleção: array de serviços selecionados
+  const [selectedSvcs,setSelectedSvcs]=useState([]);
   const [color,setColor]=useState(CAR_COLORS[0]);
   const [errors,setErrors]=useState({});
   const [loading,setLoading]=useState(false);
   const [svcs,setSvcs]=useState(SVC_DEFAULT);
+  const [limitError,setLimitError]=useState("");
 
   useEffect(()=>{
     sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).eq('ativo',true)
       .then(({data})=>{if(data&&data.length>0)setSvcs(data.map(s=>({label:s.nome,value:s.valor})));});
   },[empresaId]);
+
+  // Valor total calculado automaticamente
+  const totalValue=selectedSvcs.reduce((s,sv)=>s+sv.value,0);
+
+  const toggleSvc=(sv)=>{
+    setSelectedSvcs(prev=>{
+      const jaSelected=prev.find(s=>s.label===sv.label);
+      if(jaSelected)return prev.filter(s=>s.label!==sv.label);
+      return [...prev,sv];
+    });
+    setErrors(e=>({...e,svc:undefined}));
+  };
 
   const getVal=k=>refs[k]?.current?.value||"";
 
@@ -1462,32 +1474,31 @@ function NewWashScreen({empresaId,userId,onSuccess}){
     if(!getVal("model").trim())e.model="Obrigatório";
     if(!getVal("client").trim())e.client="Obrigatório";
     if(!getVal("phone").trim())e.phone="Obrigatório";
+    if(selectedSvcs.length===0)e.svc="Selecione pelo menos um serviço";
     setErrors(e);return Object.keys(e).length===0;
   };
-
-  const [limitError,setLimitError]=useState("");
 
   const submit=async()=>{
     if(!validate())return;
     setLoading(true);
     setLimitError("");
-    const v=parseFloat(refs.value?.current?.value)||svcValue;
+    // type armazena os nomes dos serviços concatenados para exibição no card
+    const typeLabel=selectedSvcs.map(s=>s.label).join(" + ");
     const{error}=await sb.from('ordens_servico').insert({
       empresa_id:empresaId,
       plate:getVal("plate").trim().toUpperCase(),
       model:getVal("model").trim(),
       client:getVal("client").trim(),
       phone:getVal("phone").trim(),
-      type:svcType,value:v,color,
+      type:typeLabel,
+      value:totalValue,
+      color,
       observacoes:getVal("observacoes")||null,
       status:"Aguardando",
       criado_por:userId||null
     });
     setLoading(false);
     if(error){
-      // O trigger fn_verificar_limite_ordens no banco bloqueia o INSERT
-      // e retorna uma mensagem prefixada com LIMITE_PLANO_EXCEDIDO quando
-      // a empresa atingiu o limite mensal de ordens do plano atual.
       if(error.message?.includes("LIMITE_PLANO_EXCEDIDO")){
         setLimitError("Limite de ordens deste mês atingido pelo seu plano. Acesse Configurações para ver detalhes ou faça upgrade.");
       }else{
@@ -1495,19 +1506,11 @@ function NewWashScreen({empresaId,userId,onSuccess}){
       }
       return;
     }
-    // Limpar inputs manualmente
     Object.values(refs).forEach(r=>{if(r.current)r.current.value="";});
-    if(refs.value.current)refs.value.current.value=SVC_DEFAULT[0].value;
-    setSvcType(svcs[0]?.label||SVC_DEFAULT[0].label);
-    setSvcValue(svcs[0]?.value||SVC_DEFAULT[0].value);
+    setSelectedSvcs([]);
     setColor(CAR_COLORS[0]);
     setErrors({});
     onSuccess();
-  };
-
-  const pickSvc=(label,value)=>{
-    setSvcType(label);setSvcValue(value);
-    if(refs.value.current)refs.value.current.value=value;
   };
 
   return(
@@ -1541,35 +1544,45 @@ function NewWashScreen({empresaId,userId,onSuccess}){
           style={{borderColor:errors.phone?"rgba(239,68,68,.5)":undefined}}/>
         {errors.phone&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.phone}</div>}
       </div>
-      {/* Serviço */}
+      {/* Serviços — multi-seleção com total automático */}
       <div style={{marginBottom:14}}>
-        <label className="lbl">Tipo de Serviço</label>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {svcs.map(sv=>(
-            <button key={sv.label} onClick={()=>pickSvc(sv.label,sv.value)}
-              style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",borderRadius:14,
-                border:`1.5px solid ${svcType===sv.label?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
-                background:svcType===sv.label?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
-                color:svcType===sv.label?"#38bdf8":"rgba(186,230,253,.7)",
-                fontWeight:svcType===sv.label?700:500,fontSize:13,cursor:"pointer",transition:"all .15s"}}>
-              <span>{sv.label}</span><span style={{fontWeight:800,color:"#4ade80"}}>{fmtBRL(sv.value)}</span>
-            </button>
-          ))}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <label className="lbl" style={{margin:0}}>Serviços</label>
+          {selectedSvcs.length>0&&(
+            <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:99,background:"rgba(74,222,128,.15)",border:"1px solid rgba(74,222,128,.3)"}}>
+              <span style={{fontSize:11,color:"rgba(186,230,253,.6)",fontWeight:600}}>{selectedSvcs.length} selecionado{selectedSvcs.length>1?"s":""}</span>
+              <span style={{fontSize:15,fontWeight:900,color:"#4ade80"}}>{fmtBRL(totalValue)}</span>
+            </div>
+          )}
         </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {svcs.map(sv=>{
+            const sel=selectedSvcs.some(s=>s.label===sv.label);
+            return(
+              <button key={sv.label} onClick={()=>toggleSvc(sv)}
+                style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",borderRadius:14,
+                  border:`1.5px solid ${sel?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+                  background:sel?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
+                  color:sel?"#38bdf8":"rgba(186,230,253,.7)",
+                  fontWeight:sel?700:500,fontSize:13,cursor:"pointer",transition:"all .15s"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${sel?"#38bdf8":"rgba(125,211,252,.3)"}`,background:sel?"#38bdf8":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+                    {sel&&<Icon name="Check" size={12} color="#fff"/>}
+                  </div>
+                  <span>{sv.label}</span>
+                </div>
+                <span style={{fontWeight:800,color:"#4ade80"}}>{fmtBRL(sv.value)}</span>
+              </button>
+            );
+          })}
+        </div>
+        {errors.svc&&<div style={{fontSize:11,color:"#f87171",marginTop:6}}>{errors.svc}</div>}
       </div>
       {/* Cor */}
       <div style={{marginBottom:14}}>
         <label className="lbl">Cor do Ícone</label>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {CAR_COLORS.map(c=><button key={c} onClick={()=>setColor(c)} style={{width:34,height:34,borderRadius:99,background:c,border:`3px solid ${color===c?"#fff":"transparent"}`,cursor:"pointer",boxShadow:color===c?`0 0 12px ${c}88`:"none",transition:"all .15s"}}/>)}
-        </div>
-      </div>
-      {/* Valor */}
-      <div style={{marginBottom:14}}>
-        <label className="lbl">Valor (R$)</label>
-        <div style={{position:"relative"}}>
-          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",color:"rgba(186,230,253,.4)",fontSize:13,fontWeight:600}}>R$</span>
-          <input ref={refs.value} className="glass-input" type="number" defaultValue={svcValue} style={{paddingLeft:40}}/>
         </div>
       </div>
       {/* Observações */}
@@ -1583,8 +1596,12 @@ function NewWashScreen({empresaId,userId,onSuccess}){
           <span style={{color:"#f87171",fontSize:13,fontWeight:600,lineHeight:1.4}}>{limitError}</span>
         </div>
       )}
-      <button className="btn-glow" onClick={submit} disabled={loading}>
-        {loading?<div className="spinner spin"/>:<><Icon name="Plus" size={18} color="#fff"/> Adicionar à Fila</>}
+      <button className="btn-glow" onClick={submit} disabled={loading||selectedSvcs.length===0}
+        style={{opacity:selectedSvcs.length===0?.5:1}}>
+        {loading?<div className="spinner spin"/>:<>
+          <Icon name="Plus" size={18} color="#fff"/>
+          {selectedSvcs.length>0?`Adicionar à Fila — ${fmtBRL(totalValue)}`:"Adicionar à Fila"}
+        </>}
       </button>
     </div>
   );
