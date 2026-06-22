@@ -984,7 +984,10 @@ function MasterScreen(){
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState("");
   const [filtro,setFiltro]=useState("todas");
-  const [confirmando,setConfirmando]=useState(null); // id da empresa sendo confirmada
+  const [confirmando,setConfirmando]=useState(null);
+  const [alterandoPlano,setAlterandoPlano]=useState(null); // id da empresa com modal de plano aberto
+  const [salvandoPlano,setSalvandoPlano]=useState(null);
+  const [usageMap,setUsageMap]=useState({});
   const [toast,setToast]=useState("");
 
   const fetchEmpresas=useCallback(()=>{
@@ -995,14 +998,57 @@ function MasterScreen(){
 
   useEffect(()=>{fetchEmpresas();},[fetchEmpresas]);
 
-  // Confirma um pagamento manual (Pix combinado fora do app, sem gateway
-  // automatizado) — usado enquanto a integração de pagamento recorrente
-  // real (Mercado Pago) não está configurada, por exemplo por ainda não
-  // ter CNPJ/MEI aberto. Estende a assinatura por 1 mês a partir de HOJE
-  // (não a partir do vencimento antigo, para não acumular tempo perdido
-  // se a empresa já estava vencida) e registra uma cobrança com
-  // gateway='manual' para manter o histórico consistente com o restante
-  // do sistema de cobranças.
+  // Busca o uso atual (usuários e ordens) de uma empresa específica ao
+  // abrir o modal de plano — evita uma consulta pesada pra todas as
+  // empresas de uma vez, carregando só sob demanda.
+  const fetchUsage=async(empresaId)=>{
+    if(usageMap[empresaId])return; // já carregado
+    const {data}=await sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId});
+    if(data)setUsageMap(m=>({...m,[empresaId]:data}));
+  };
+
+  const abrirModalPlano=(empresa)=>{
+    setAlterandoPlano(empresa.id);
+    fetchUsage(empresa.id);
+  };
+
+  const salvarPlano=async(empresa,novoPlano)=>{
+    if(novoPlano===(empresa.assinaturas?.[0]?.plano||"trial")){
+      setAlterandoPlano(null);return;
+    }
+    setSalvandoPlano(empresa.id);
+    try{
+      const ass=empresa.assinaturas?.[0];
+      const valorMap={trial:0,basico:49.90,profissional:89.90,enterprise:149.90};
+      if(ass?.id){
+        await sb.from('assinaturas').update({
+          plano:novoPlano,
+          status:"ativo",
+          valor:valorMap[novoPlano]||0,
+        }).eq('id',ass.id);
+      }else{
+        await sb.from('assinaturas').insert({
+          empresa_id:empresa.id,
+          plano:novoPlano,
+          status:"ativo",
+          valor:valorMap[novoPlano]||0,
+          data_inicio:new Date().toISOString().split('T')[0],
+        });
+      }
+      // Mantém empresas.plano sincronizado também
+      await sb.from('empresas').update({plano:novoPlano}).eq('id',empresa.id);
+      setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
+      setTimeout(()=>setToast(""),3000);
+      setAlterandoPlano(null);
+      setUsageMap(m=>{const n={...m};delete n[empresa.id];return n;}); // força reload
+      fetchEmpresas();
+    }catch(e){
+      setToast("Erro ao alterar plano. Tente novamente.");
+      setTimeout(()=>setToast(""),3000);
+    }
+    setSalvandoPlano(null);
+  };
+
   const confirmarPagamentoManual=async(empresa)=>{
     if(!window.confirm(`Confirmar pagamento manual de ${empresa.nome_fantasia}? Isso estende a assinatura por 1 mês a partir de hoje.`))return;
     setConfirmando(empresa.id);
@@ -1023,8 +1069,6 @@ function MasterScreen(){
         p_gateway:'manual',
         p_descricao:'Pagamento Pix confirmado manualmente pelo admin',
       }).then(async({data})=>{
-        // fn_criar_cobranca cria como 'pendente' por padrão — aqui já
-        // sabemos que foi pago, então atualizamos na hora.
         if(data?.cobranca_id){
           await sb.from('cobrancas').update({
             status:'pago',
@@ -1051,8 +1095,14 @@ function MasterScreen(){
 
   const totalMRR=empresas.reduce((s,e)=>{const a=e.assinaturas?.[0];return s+(a?.status==="ativo"?parseFloat(a?.valor||0):0);},0);
   const totalAtivas=empresas.filter(e=>e.assinaturas?.[0]?.status==="ativo").length;
-  const totalTrial=empresas.filter(e=>e.assinaturas?.[0]?.status==="trial").length;
-  const totalVencidas=empresas.filter(e=>e.assinaturas?.[0]?.status==="vencido").length;
+  const totalTrial=empresas.filter(e=>e.assinaturas?.[0]?.status==="trial"||!e.assinaturas?.[0]).length;
+
+  const PLANOS=[
+    {id:"trial",     label:"Trial",        cor:"#fbbf24", usuarios:2,    valor:"Grátis"},
+    {id:"basico",    label:"Básico",       cor:"#38bdf8", usuarios:3,    valor:"R$49,90"},
+    {id:"profissional",label:"Profissional",cor:"#4ade80",usuarios:10,   valor:"R$89,90"},
+    {id:"enterprise",label:"Enterprise",   cor:"#a78bfa", usuarios:999,  valor:"R$149,90"},
+  ];
 
   return(
     <div className="scroll screen-enter">
@@ -1073,7 +1123,6 @@ function MasterScreen(){
         ))}
       </div>
 
-      {/* Busca e filtro */}
       <div style={{position:"relative",marginBottom:10}}>
         <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)"}}><Icon name="Search" size={14} color="rgba(186,230,253,.4)"/></span>
         <input className="glass-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar empresa..." style={{paddingLeft:38}}/>
@@ -1097,8 +1146,12 @@ function MasterScreen(){
       {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
       :filtradas.map(e=>{
         const ass=e.assinaturas?.[0];
+        const planoAtual=ass?.plano||"trial";
         const statusColor=ass?.status==="ativo"?"#4ade80":ass?.status==="trial"?"#fbbf24":ass?.status==="vencido"?"#f87171":"#64748b";
         const diasRest=ass?.data_vencimento?Math.max(0,Math.floor((new Date(ass.data_vencimento)-new Date())/86400000)):null;
+        const usage=usageMap[e.id];
+        const modalAberto=alterandoPlano===e.id;
+
         return(
           <div key={e.id} className="glass-card" style={{marginBottom:10}}>
             <div style={{padding:14}}>
@@ -1112,19 +1165,72 @@ function MasterScreen(){
                   {ass?.status||"sem plano"}
                 </span>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"rgba(186,230,253,.4)",marginBottom:ass?.status==="trial"?10:0}}>
-                <span>Plano: <b style={{color:"rgba(186,230,253,.6)"}}>{ass?.plano||"—"}</b></span>
+
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"rgba(186,230,253,.4)",marginBottom:8}}>
+                <span>Plano: <b style={{color:"rgba(186,230,253,.6)"}}>{planoAtual}</b></span>
                 {diasRest!==null&&<span style={{color:diasRest<=3?"#f87171":diasRest<=7?"#fbbf24":"rgba(186,230,253,.4)"}}>
                   {diasRest}d restantes
                 </span>}
               </div>
-              {ass?.status==="trial"&&diasRest!==null&&(
-                <ProgressBar pct={(diasRest/14)*100} color={diasRest<=3?"#f87171":diasRest<=7?"#fbbf24":"#fbbf24"}/>
+
+              {/* Botão Alterar Plano */}
+              <button onClick={()=>modalAberto?setAlterandoPlano(null):abrirModalPlano(e)}
+                style={{width:"100%",marginBottom:8,padding:"8px 0",borderRadius:12,
+                  background:modalAberto?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
+                  border:`1px solid ${modalAberto?"rgba(14,165,233,.5)":"rgba(125,211,252,.15)"}`,
+                  color:modalAberto?"#38bdf8":"rgba(186,230,253,.5)",
+                  fontWeight:700,fontSize:12,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                <Icon name="CreditCard" size={12} color={modalAberto?"#38bdf8":"rgba(186,230,253,.4)"}/>
+                {modalAberto?"Fechar":"Alterar Plano"}
+              </button>
+
+              {/* Modal inline de seleção de plano */}
+              {modalAberto&&(
+                <div style={{background:"rgba(8,15,28,.6)",borderRadius:14,padding:12,marginBottom:8,border:"1px solid rgba(125,211,252,.12)"}}>
+                  {usage?(
+                    <div style={{display:"flex",gap:8,marginBottom:10}}>
+                      <div style={{flex:1,background:"rgba(255,255,255,.04)",borderRadius:10,padding:"8px 10px"}}>
+                        <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:700,marginBottom:2}}>USUÁRIOS</div>
+                        <div style={{fontSize:14,fontWeight:900,color:"#e0f2fe"}}>{usage.usuarios_atual}<span style={{fontSize:11,color:"rgba(186,230,253,.4)",fontWeight:600}}>/{usage.usuarios_limite}</span></div>
+                      </div>
+                      <div style={{flex:1,background:"rgba(255,255,255,.04)",borderRadius:10,padding:"8px 10px"}}>
+                        <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:700,marginBottom:2}}>ORDENS/MÊS</div>
+                        <div style={{fontSize:14,fontWeight:900,color:"#e0f2fe"}}>{usage.ordens_mes_atual}<span style={{fontSize:11,color:"rgba(186,230,253,.4)",fontWeight:600}}>/{usage.ordens_mes_limite}</span></div>
+                      </div>
+                    </div>
+                  ):(
+                    <div style={{display:"flex",justifyContent:"center",padding:"8px 0 10px"}}>
+                      <div className="spinner spin" style={{width:14,height:14,borderWidth:2}}/>
+                    </div>
+                  )}
+
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                    {PLANOS.map(p=>{
+                      const ativo=planoAtual===p.id;
+                      const salvando=salvandoPlano===e.id;
+                      return(
+                        <button key={p.id} onClick={()=>!salvando&&salvarPlano(e,p.id)}
+                          disabled={salvando}
+                          style={{padding:"10px 8px",borderRadius:12,cursor:salvando?"not-allowed":"pointer",
+                            background:ativo?`${p.cor}22`:"rgba(255,255,255,.04)",
+                            border:`1.5px solid ${ativo?p.cor:"rgba(125,211,252,.12)"}`,
+                            opacity:salvando?.6:1,transition:"all .15s"}}>
+                          <div style={{fontSize:12,fontWeight:800,color:ativo?p.cor:"#e0f2fe",marginBottom:2}}>{p.label}</div>
+                          <div style={{fontSize:10,color:"rgba(186,230,253,.5)",fontWeight:600}}>{p.valor} · {p.usuarios===999?"∞":p.usuarios} users</div>
+                          {ativo&&<div style={{fontSize:9,color:p.cor,fontWeight:700,marginTop:2}}>✓ ATUAL</div>}
+                          {salvandoPlano===e.id&&!ativo&&<div className="spinner spin" style={{width:10,height:10,borderWidth:1.5,margin:"2px auto 0"}}/>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
+
               <button
                 onClick={()=>confirmarPagamentoManual(e)}
                 disabled={confirmando===e.id}
-                style={{width:"100%",marginTop:12,padding:"9px 0",borderRadius:12,background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.3)",color:"#4ade80",fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:confirmando===e.id?.6:1}}>
+                style={{width:"100%",padding:"9px 0",borderRadius:12,background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.3)",color:"#4ade80",fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:confirmando===e.id?.6:1}}>
                 {confirmando===e.id?<div className="spinner spin" style={{width:13,height:13,borderWidth:2}}/>:<><Icon name="CheckCircle" size={13} color="#4ade80"/> Confirmar Pagamento Manual (Pix)</>}
               </button>
             </div>
@@ -1135,6 +1241,7 @@ function MasterScreen(){
     </div>
   );
 }
+
 
 
 /* ══════════════════════════════════════════════════════════════════════════
