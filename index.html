@@ -399,6 +399,7 @@ function StatusBadge({status}){
 const today=new Date();
 function daysSince(ds){return Math.floor((today-new Date(ds))/86400000);}
 function fmtDate(ds){return new Date(ds).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"});}
+function fmtTime(ds){return ds?new Date(ds).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—";}
 function fmtBRL(v){return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v||0);}
 const SVC_DEFAULT=[
   {label:"Lavagem Simples",value:30},{label:"Lavagem Completa",value:50},
@@ -1254,36 +1255,55 @@ function MasterScreen(){
 /* ══════════════════════════════════════════════════════════════════════════
    CAR CARD
 ══════════════════════════════════════════════════════════════════════════ */
-function CarCard({item,onAdvance,onDelete,idx}){
+function CarCard({item,onAdvance,onDelete,onUpdate,idx}){
   const [open,setOpen]=useState(false);
   const [loading,setLoading]=useState(false);
   const [showPgto,setShowPgto]=useState(false);
+  const [editHora,setEditHora]=useState(false);
+  const [horaEntrega,setHoraEntrega]=useState(
+    item.hora_entrega?new Date(item.hora_entrega).toTimeString().slice(0,5):""
+  );
+  const [savingHora,setSavingHora]=useState(false);
   const next=STATUS_FLOW[STATUS_FLOW.indexOf(item.status)+1];
   const prog={"Aguardando":15,"Lavando":55,"Concluído":85,"Pago":100};
   const progColor={"Aguardando":"#fbbf24","Lavando":"#0ea5e9","Concluído":"#22c55e","Pago":"#64748b"};
 
   const FORMAS=[
-    {id:"pix",    label:"Pix",    icon:"Zap",    color:"#4ade80"},
+    {id:"pix",    label:"Pix",    icon:"Zap",       color:"#4ade80"},
     {id:"cartao", label:"Cartão", icon:"CreditCard", color:"#38bdf8"},
     {id:"dinheiro",label:"Dinheiro",icon:"DollarSign",color:"#fbbf24"},
   ];
 
   const handleAdvance=async(formaPgto)=>{
-    setLoading(true);
-    setShowPgto(false);
+    setLoading(true);setShowPgto(false);
     await onAdvance(item.id,next,item.status,formaPgto||null);
     setLoading(false);
   };
 
+  const salvarHoraEntrega=async()=>{
+    setSavingHora(true);
+    let ts=null;
+    if(horaEntrega){
+      const [hh,mm]=horaEntrega.split(":").map(Number);
+      const d=new Date();d.setHours(hh,mm,0,0);ts=d.toISOString();
+    }
+    await sb.from("ordens_servico").update({hora_entrega:ts}).eq("id",item.id);
+    if(onUpdate)onUpdate(item.id,{hora_entrega:ts});
+    setEditHora(false);setSavingHora(false);
+  };
+
   const onClickAvancar=()=>{
-    // Só pede forma de pagamento ao marcar como Pago
     if(next==="Pago"){setShowPgto(true);}
     else{handleAdvance(null);}
   };
 
+  const horaEntregaFmt=item.hora_entrega
+    ?new Date(item.hora_entrega).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})
+    :null;
+
   return(
     <div className="glass-card car-enter" style={{marginBottom:12,animationDelay:`${idx*.07}s`,overflow:"hidden"}}>
-      <div style={{padding:14,cursor:"pointer"}} onClick={()=>{if(!showPgto)setOpen(!open);}}>
+      <div style={{padding:14,cursor:"pointer"}} onClick={()=>{if(!showPgto&&!editHora)setOpen(!open);}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{width:42,height:42,borderRadius:14,background:`${item.color}22`,border:`1px solid ${item.color}44`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -1314,9 +1334,41 @@ function CarCard({item,onAdvance,onDelete,idx}){
             <span style={{fontSize:13,fontWeight:800,color:"#4ade80"}}>{fmtBRL(item.value)}</span>
           </div>
         </div>
+        {item.observacoes&&(
+          <div style={{marginTop:8,padding:"6px 10px",borderRadius:10,background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.2)",display:"flex",alignItems:"flex-start",gap:6}}>
+            <Icon name="FileText" size={11} color="#fbbf24"/>
+            <span style={{fontSize:11,color:"rgba(251,191,36,.8)",lineHeight:1.4}}>{item.observacoes}</span>
+          </div>
+        )}
+        <div style={{marginTop:8,display:"flex",alignItems:"center",gap:6}} onClick={e=>e.stopPropagation()}>
+          {editHora?(
+            <div style={{display:"flex",alignItems:"center",gap:6,flex:1}}>
+              <Icon name="Clock" size={12} color="#38bdf8"/>
+              <input type="time" value={horaEntrega} onChange={e=>setHoraEntrega(e.target.value)}
+                style={{flex:1,padding:"4px 8px",borderRadius:8,background:"rgba(14,165,233,.15)",
+                  border:"1px solid rgba(14,165,233,.4)",color:"#e0f2fe",fontSize:12,fontWeight:700}}/>
+              <button onClick={salvarHoraEntrega} disabled={savingHora}
+                style={{padding:"4px 10px",borderRadius:8,background:"rgba(14,165,233,.25)",
+                  border:"1px solid rgba(14,165,233,.4)",color:"#38bdf8",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                {savingHora?<div className="spinner spin" style={{width:10,height:10}}/>:"OK"}
+              </button>
+              <button onClick={()=>setEditHora(false)}
+                style={{padding:"4px 8px",borderRadius:8,background:"transparent",
+                  border:"1px solid rgba(125,211,252,.2)",color:"rgba(186,230,253,.4)",fontSize:13,cursor:"pointer"}}>×</button>
+            </div>
+          ):(
+            <button onClick={()=>setEditHora(true)}
+              style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:99,cursor:"pointer",
+                background:horaEntregaFmt?"rgba(56,189,248,.15)":"rgba(255,255,255,.04)",
+                border:`1px solid ${horaEntregaFmt?"rgba(56,189,248,.3)":"rgba(125,211,252,.12)"}`}}>
+              <Icon name="Clock" size={11} color={horaEntregaFmt?"#38bdf8":"rgba(186,230,253,.3)"}/>
+              <span style={{fontSize:11,fontWeight:700,color:horaEntregaFmt?"#38bdf8":"rgba(186,230,253,.3)"}}>
+                {horaEntregaFmt?`Entrega ${horaEntregaFmt}`:"+ Hora de entrega"}
+              </span>
+            </button>
+          )}
+        </div>
       </div>
-
-      {/* Modal inline de forma de pagamento */}
       {showPgto&&(
         <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.2)"}}>
           <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:10,textAlign:"center"}}>
@@ -1327,8 +1379,7 @@ function CarCard({item,onAdvance,onDelete,idx}){
               <button key={f.id} onClick={()=>handleAdvance(f.id)} disabled={loading}
                 style={{flex:1,padding:"12px 4px",borderRadius:14,cursor:"pointer",
                   background:`${f.color}18`,border:`1.5px solid ${f.color}44`,
-                  display:"flex",flexDirection:"column",alignItems:"center",gap:5,
-                  opacity:loading?.5:1,transition:"all .15s"}}>
+                  display:"flex",flexDirection:"column",alignItems:"center",gap:5,opacity:loading?.5:1}}>
                 <Icon name={f.icon} size={18} color={f.color}/>
                 <span style={{fontSize:12,fontWeight:800,color:f.color}}>{f.label}</span>
               </button>
@@ -1336,18 +1387,16 @@ function CarCard({item,onAdvance,onDelete,idx}){
           </div>
           <button onClick={()=>setShowPgto(false)}
             style={{width:"100%",padding:"8px 0",borderRadius:12,background:"transparent",
-              border:"1px solid rgba(125,211,252,.15)",color:"rgba(186,230,253,.4)",
-              fontSize:12,fontWeight:600,cursor:"pointer"}}>
+              border:"1px solid rgba(125,211,252,.15)",color:"rgba(186,230,253,.4)",fontSize:12,fontWeight:600,cursor:"pointer"}}>
             Cancelar
           </button>
         </div>
       )}
-
       {open&&!showPgto&&(
         <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.15)"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14,fontSize:12}}>
             <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Telefone</span><span style={{color:"#bae6fd",fontWeight:600}}>{item.phone}</span></div>
-            <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Entrada</span><span style={{color:"#bae6fd",fontWeight:600}}>{fmtDate(item.created_at)}</span></div>
+            <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Entrada</span><span style={{color:"#bae6fd",fontWeight:600}}>{fmtTime(item.created_at)}</span></div>
             {item.criador?.name&&<div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Criado por</span><span style={{color:"#bae6fd",fontWeight:600}}>{item.criador.name}</span></div>}
           </div>
           <div style={{display:"flex",gap:8}}>
@@ -1363,6 +1412,7 @@ function CarCard({item,onAdvance,onDelete,idx}){
     </div>
   );
 }
+
 
 /* ══════════════════════════════════════════════════════════════════════════
    HOME SCREEN
@@ -1480,7 +1530,7 @@ function HomeScreen({empresaId}){
           <div style={{color:"rgba(186,230,253,.7)",fontWeight:700,fontSize:16}}>Fila vazia</div>
           <div style={{color:"rgba(186,230,253,.4)",fontSize:13,marginTop:6}}>Adicione um veículo na aba Nova Lavagem</div>
         </div>
-      ):(queue.map((v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} idx={i}/>))}
+      ):(queue.map((v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} onUpdate={(id,patch)=>setQueue(q=>q.map(x=>x.id===id?{...x,...patch}:x))} idx={i}/>))}
     </div>
   );
 }
@@ -1751,7 +1801,14 @@ function HistoryScreen({empresaId,embedded,isOwner}){
           </div>
           {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
           :filtered.length===0?<div style={{textAlign:"center",color:"rgba(186,230,253,.4)",padding:"40px 0"}}>Nenhum registro encontrado</div>
-          :filtered.map((h,i)=>(
+          :filtered.map((h,i)=>{
+            const PGTO_STYLE={
+              pix:    {color:"#4ade80",bg:"rgba(74,222,128,.15)",border:"rgba(74,222,128,.3)",label:"Pix"},
+              cartao: {color:"#38bdf8",bg:"rgba(56,189,248,.15)",border:"rgba(56,189,248,.3)",label:"Cartão"},
+              dinheiro:{color:"#fbbf24",bg:"rgba(251,191,36,.15)",border:"rgba(251,191,36,.3)",label:"Dinheiro"},
+            };
+            const pgto=h.forma_pagamento?PGTO_STYLE[h.forma_pagamento]:null;
+            return(
             <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`}}>
               <div style={{padding:14}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
@@ -1764,15 +1821,45 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                     <div style={{color:"rgba(186,230,253,.4)",fontSize:11}}>{fmtDate(h.completed_at)}</div>
                   </div>
                 </div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:h.entrada_at||pgto?8:0}}>
                   <span style={{fontSize:12,color:"rgba(186,230,253,.45)"}}>
                     {h.type}{h.criador?.name&&<span style={{color:"rgba(186,230,253,.3)"}}> · por {h.criador.name}</span>}
                   </span>
                   <StatusBadge status={h.status||"Pago"}/>
                 </div>
+                {/* Linha de horários + forma de pagamento */}
+                {(h.entrada_at||h.completed_at||pgto)&&(
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:8,borderTop:"1px solid rgba(125,211,252,.08)"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:12}}>
+                      {h.entrada_at&&(
+                        <div style={{display:"flex",alignItems:"center",gap:4}}>
+                          <Icon name="Clock" size={11} color="rgba(186,230,253,.35)"/>
+                          <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
+                            Entrada <b style={{color:"rgba(186,230,253,.6)"}}>{fmtTime(h.entrada_at)}</b>
+                          </span>
+                        </div>
+                      )}
+                      {h.completed_at&&(
+                        <div style={{display:"flex",alignItems:"center",gap:4}}>
+                          <Icon name="CheckCircle" size={11} color="rgba(74,222,128,.5)"/>
+                          <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
+                            Saída <b style={{color:"#4ade80"}}>{fmtTime(h.completed_at)}</b>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {pgto&&(
+                      <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
+                        background:pgto.bg,border:`1px solid ${pgto.border}`,color:pgto.color}}>
+                        {pgto.label}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </>
       ):(
         <>
