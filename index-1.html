@@ -1,0 +1,2552 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="LavaRápido"/>
+<meta name="theme-color" content="#0ea5e9"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<title>Lava Rápido Premium</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body,#root{height:100%;width:100%;overflow:hidden}
+:root{--app-height:100vh}
+@supports (height:100dvh){:root{--app-height:100dvh}}
+.app-shell{height:var(--app-height);min-height:0}
+body{font-family:'Outfit',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:#0c1a2e}
+input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif}
+::-webkit-scrollbar{width:0;height:0}
+.aqua-bg{position:fixed;inset:0;z-index:0;background:linear-gradient(160deg,#0c1a2e 0%,#0d2847 40%,#0c3460 70%,#0a4a7c 100%);overflow:hidden}
+.bubble{position:absolute;border-radius:50%;background:radial-gradient(circle at 30% 30%,rgba(14,165,233,.35),rgba(56,189,248,.08));border:1px solid rgba(125,211,252,.15);animation:floatUp linear infinite;will-change:transform,opacity}
+@keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:0}10%{opacity:1}90%{opacity:.6}100%{transform:translateY(-110vh) scale(1.15);opacity:0}}
+.wave{position:absolute;bottom:0;left:0;width:200%;height:120px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 120'%3E%3Cpath fill='rgba(14,165,233,0.07)' d='M0,60 C360,120 720,0 1080,60 C1260,90 1350,45 1440,60 L1440,120 L0,120 Z'/%3E%3C/svg%3E") repeat-x;animation:waveMove 8s linear infinite}
+.wave2{position:absolute;bottom:8px;left:0;width:200%;height:100px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 100'%3E%3Cpath fill='rgba(56,189,248,0.05)' d='M0,50 C480,100 960,0 1440,50 L1440,100 L0,100 Z'/%3E%3C/svg%3E") repeat-x;animation:waveMove 12s linear infinite reverse}
+@keyframes waveMove{to{transform:translateX(-50%)}}
+.glass{background:rgba(255,255,255,.08);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.15)}
+.glass-card{background:rgba(255,255,255,.07);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(125,211,252,.2);border-radius:20px;transition:transform .2s ease,box-shadow .2s ease,background .2s ease}
+.glass-card:active{transform:scale(.98);background:rgba(255,255,255,.11)}
+.glass-input{background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(125,211,252,.25);border-radius:14px;color:#e0f2fe;font-size:16px;padding:12px 16px;width:100%;outline:none;transition:border-color .2s,background .2s}
+.glass-input::placeholder{color:rgba(186,230,253,.4)}
+.glass-input:focus{border-color:rgba(56,189,248,.7);background:rgba(255,255,255,.12)}
+.screen-enter{animation:screenIn .3s cubic-bezier(.25,.46,.45,.94) forwards}
+@keyframes screenIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes carSlide{0%{transform:translateX(-32px);opacity:0}100%{transform:translateX(0);opacity:1}}
+.car-enter{animation:carSlide .4s cubic-bezier(.25,.46,.45,.94) forwards}
+.progress-bar{height:6px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden;position:relative}
+.progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#0ea5e9,#38bdf8,#7dd3fc);transition:width .8s cubic-bezier(.25,.46,.45,.94);position:relative}
+.progress-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);animation:shimmer 2s linear infinite}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
+.pulse{animation:pulse 2s ease-in-out infinite}
+.btn-glow{position:relative;overflow:hidden;background:linear-gradient(135deg,#0ea5e9,#0284c7);border:none;border-radius:16px;color:#fff;font-family:'Outfit',sans-serif;font-weight:800;font-size:15px;padding:14px;width:100%;cursor:pointer;box-shadow:0 8px 24px rgba(14,165,233,.4),0 0 0 1px rgba(56,189,248,.3);transition:transform .15s,box-shadow .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-glow:active{transform:scale(.97);box-shadow:0 4px 12px rgba(14,165,233,.3)}
+.btn-glow:disabled{opacity:.5;cursor:not-allowed}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;background:transparent;border:none;cursor:pointer;position:relative;transition:transform .15s}
+.nav-btn:active{transform:scale(.92)}
+.nav-icon{width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;transition:all .2s cubic-bezier(.34,1.56,.64,1)}
+.nav-icon.active{background:linear-gradient(135deg,#0ea5e9,#0284c7);box-shadow:0 4px 14px rgba(14,165,233,.5);transform:scale(1.1) translateY(-2px)}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.toast{animation:toastIn .3s cubic-bezier(.25,.46,.45,.94)}
+.status-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700;white-space:nowrap}
+.lbl{font-size:11px;font-weight:700;color:rgba(186,230,253,.6);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:6px}
+.scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 16px;position:relative;z-index:1}
+@keyframes loginIn{from{opacity:0;transform:translateY(30px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.login-card{animation:loginIn .5s cubic-bezier(.25,.46,.45,.94) forwards}
+.tab-active{color:#38bdf8;border-bottom:2px solid #38bdf8;margin-bottom:-1px}
+.tab-inactive{color:rgba(186,230,253,.4);border-bottom:2px solid transparent;margin-bottom:-1px}
+@keyframes countUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.count-up{animation:countUp .4s ease forwards}
+.chart-bar{transition:height .6s cubic-bezier(.25,.46,.45,.94)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin .8s linear infinite}
+.spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.fade-in{animation:fadeIn .4s ease forwards}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Supabase CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- React -->
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+<script>
+// ── Supabase client (global, before React) ────────────────────────────────
+const SUPABASE_URL  = 'https://ikahodmuchwitxfvlaop.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrYWhvZG11Y2h3aXR4ZnZsYW9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NDkzMTcsImV4cCI6MjA5NjUyNTMxN30.qRBN7lFQAGeN1phNneqY368dhAMllnAtQgVCb-piDds';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+</script>
+
+<script type="text/babel">
+const { useState, useCallback, useEffect, useRef, useMemo } = React;
+
+/* ── Icons ──────────────────────────────────────────────────────────────── */
+function Icon({name,size=16,color="currentColor",style={}}){
+  const P={
+    Car:`<path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1l2-4h10l2 4h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="17.5" r="2.5"/>`,
+    Plus:`<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>`,
+    History:`<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>`,
+    Users:`<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
+    Headphones:`<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z"/><path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>`,
+    Home:`<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`,
+    CheckCircle:`<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>`,
+    Droplets:`<path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/>`,
+    MessageCircle:`<path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/>`,
+    Search:`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
+    ChevronDown:`<polyline points="6 9 12 15 18 9"/>`,
+    ChevronUp:`<polyline points="18 15 12 9 6 15"/>`,
+    Trash2:`<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>`,
+    Check:`<polyline points="20 6 9 17 4 12"/>`,
+    Zap:`<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`,
+    Award:`<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>`,
+    Send:`<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>`,
+    Lock:`<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`,
+    Eye:`<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`,
+    EyeOff:`<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`,
+    LogOut:`<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>`,
+    UserPlus:`<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>`,
+    Shield:`<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`,
+    User:`<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`,
+    Settings:`<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`,
+    XCircle:`<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>`,
+    TrendingUp:`<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>`,
+    Building:`<rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="22" x2="9" y2="2"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>`,
+    Crown:`<path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/>`,
+    AlertTriangle:`<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`,
+    RefreshCw:`<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>`,
+    DollarSign:`<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>`,
+    PlusCircle:`<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>`,
+    MinusCircle:`<circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/>`,
+    Calendar:`<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`,
+    Sun:`<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`,
+    Cloud:`<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>`,
+    CloudDrizzle:`<line x1="8" y1="19" x2="8" y2="21"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="16" y1="19" x2="16" y2="21"/><line x1="16" y1="13" x2="16" y2="15"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="12" y1="15" x2="12" y2="17"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/>`,
+    CloudRain:`<line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/>`,
+    CloudSnow:`<path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="16" x2="8.01" y2="16"/><line x1="8" y1="20" x2="8.01" y2="20"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="12" y1="22" x2="12.01" y2="22"/><line x1="16" y1="16" x2="16.01" y2="16"/><line x1="16" y1="20" x2="16.01" y2="20"/>`,
+    CloudLightning:`<path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9"/><polyline points="13 11 9 17 15 17 11 23"/>`,
+    CreditCard:`<rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>`,
+    Clock:`<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,
+    BarChart2:`<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`,
+    Package:`<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>`,
+    Edit:`<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>`,
+    Tag:`<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`,
+    Wallet:`<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>`,
+    FileText:`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>`,
+    Store:`<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`,
+  };
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}
+    dangerouslySetInnerHTML={{__html:P[name]||""}} />;
+}
+
+/* ── Aquatic Background ─────────────────────────────────────────────────── */
+function AquaBg(){
+  const bubbles=useMemo(()=>Array.from({length:16},(_,i)=>({
+    id:i,size:20+Math.random()*55,left:Math.random()*100,
+    delay:Math.random()*12,duration:8+Math.random()*14,
+  })),[]);
+  return(
+    <div className="aqua-bg">
+      {bubbles.map(b=><div key={b.id} className="bubble" style={{width:b.size,height:b.size,left:`${b.left}%`,bottom:`-${b.size}px`,animationDelay:`${b.delay}s`,animationDuration:`${b.duration}s`}}/>)}
+      <div className="wave"/><div className="wave2"/>
+    </div>
+  );
+}
+
+/* ── ProgressBar ─────────────────────────────────────────────────────────── */
+function ProgressBar({pct,color="#0ea5e9"}){
+  const [w,setW]=useState(0);
+  useEffect(()=>{const t=setTimeout(()=>setW(pct),80);return()=>clearTimeout(t);},[pct]);
+  return <div className="progress-bar"><div className="progress-fill" style={{width:`${w}%`,background:`linear-gradient(90deg,${color}aa,${color})`}}/></div>;
+}
+
+/* ── WeatherBanner ────────────────────────────────────────────────────────
+   Clima em tempo real via Open-Meteo (gratuito, sem API key).
+   Usa geolocalização do dispositivo. Mostra temperatura + chance de chuva.
+   Prioridade extra para lava-jato: alerta visual quando chuva é provável.
+─────────────────────────────────────────────────────────────────────────── */
+function weatherCodeInfo(code){
+  // WMO weather codes simplificados
+  if(code===0)return{icon:"Sun",label:"Céu limpo"};
+  if([1,2,3].includes(code))return{icon:"Cloud",label:"Parcialmente nublado"};
+  if([45,48].includes(code))return{icon:"Cloud",label:"Neblina"};
+  if([51,53,55,56,57].includes(code))return{icon:"CloudDrizzle",label:"Garoa"};
+  if([61,63,65,66,67,80,81,82].includes(code))return{icon:"CloudRain",label:"Chuva"};
+  if([71,73,75,77,85,86].includes(code))return{icon:"CloudSnow",label:"Neve"};
+  if([95,96,99].includes(code))return{icon:"CloudLightning",label:"Tempestade"};
+  return{icon:"Cloud",label:"—"};
+}
+
+function WeatherBanner({onWeekForecast}){
+  const [weather,setWeather]=useState(null);
+  const [weekly,setWeekly]=useState(null);
+  const [status,setStatus]=useState("loading"); // loading | ok | denied | error
+  const [dismissed,setDismissed]=useState(false);
+  const [retryCount,setRetryCount]=useState(0);
+
+  useEffect(()=>{
+    if(!navigator.geolocation){setStatus("error");return;}
+    setStatus("loading");
+    navigator.geolocation.getCurrentPosition(
+      async(pos)=>{
+        try{
+          const{latitude,longitude}=pos.coords;
+          // daily=weather_code,precipitation_probability_max traz os próximos
+          // 7 dias na mesma chamada — sem precisar de uma segunda requisição.
+          const url=`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,precipitation_probability,weather_code&daily=weather_code,precipitation_probability_max&timezone=auto`;
+          const res=await fetch(url);
+          const data=await res.json();
+          if(data?.current){
+            setWeather({
+              temp:Math.round(data.current.temperature_2m),
+              rain:data.current.precipitation_probability ?? 0,
+              code:data.current.weather_code,
+            });
+            setStatus("ok");
+          }else{setStatus("error");}
+          if(data?.daily){
+            const dias=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+            const week=data.daily.time.map((d,i)=>({
+              label:dias[new Date(d+"T00:00:00").getDay()],
+              code:data.daily.weather_code[i],
+              rain:data.daily.precipitation_probability_max[i]??0,
+            }));
+            setWeekly(week);
+            if(onWeekForecast)onWeekForecast(week);
+          }
+        }catch(e){
+          // Falha de rede/API costuma ser temporária — tenta de novo
+          // automaticamente até 2 vezes antes de desistir e esconder o
+          // banner. Sem isso, uma instabilidade momentânea de conexão
+          // fazia o banner que já tinha começado a carregar simplesmente
+          // desaparecer, sem dar nenhuma chance de recuperação.
+          if(retryCount<2){
+            setTimeout(()=>setRetryCount(c=>c+1),2000);
+          }else{
+            setStatus("error");
+          }
+        }
+      },
+      ()=>setStatus("denied"),
+      {timeout:8000}
+    );
+  },[retryCount]);
+
+
+  if(dismissed||status==="denied"||status==="error")return null;
+
+  const info=weather?weatherCodeInfo(weather.code):null;
+  const highRain=weather&&weather.rain>=50;
+
+  return(
+    <div style={{
+      flexShrink:0,position:"relative",zIndex:15,
+      margin:"10px 14px 4px",
+      padding:"14px 16px",
+      borderRadius:20,
+      background:highRain
+        ?"linear-gradient(135deg,rgba(56,100,233,.28),rgba(14,165,233,.18))"
+        :"linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.04))",
+      border:`1.5px solid ${highRain?"rgba(125,211,252,.4)":"rgba(125,211,252,.18)"}`,
+      backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
+      boxShadow:highRain?"0 8px 24px rgba(14,165,233,.25)":"0 4px 16px rgba(0,0,0,.15)",
+    }}>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        {status==="loading"?(
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0"}}>
+            <div className="spinner spin" style={{width:18,height:18,borderWidth:2.5}}/>
+            <span style={{fontSize:13,color:"rgba(186,230,253,.6)",fontWeight:600}}>Carregando previsão do tempo...</span>
+          </div>
+        ):(
+          <>
+            {/* Ícone grande em destaque */}
+            <div style={{
+              width:52,height:52,borderRadius:16,flexShrink:0,
+              background:highRain?"rgba(125,211,252,.18)":"rgba(251,191,36,.15)",
+              border:`1px solid ${highRain?"rgba(125,211,252,.3)":"rgba(251,191,36,.25)"}`,
+              display:"flex",alignItems:"center",justifyContent:"center",
+            }}>
+              <Icon name={info.icon} size={28} color={highRain?"#7dd3fc":"#fbbf24"}/>
+            </div>
+
+            {/* Temperatura + descrição */}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                <span style={{fontSize:26,fontWeight:900,color:"#e0f2fe",lineHeight:1}}>{weather.temp}°</span>
+                <span style={{fontSize:13,color:"rgba(186,230,253,.6)",fontWeight:600}}>{info.label}</span>
+              </div>
+              {highRain&&(
+                <div style={{fontSize:11,fontWeight:800,color:"#7dd3fc",marginTop:3,display:"flex",alignItems:"center",gap:4}}>
+                  <Icon name="AlertTriangle" size={11} color="#7dd3fc"/>
+                  Alto risco de chuva hoje
+                </div>
+              )}
+            </div>
+
+            {/* Chance de chuva — destaque grande */}
+            <div style={{
+              textAlign:"center",flexShrink:0,
+              padding:"8px 14px",borderRadius:14,
+              background:highRain?"rgba(125,211,252,.15)":"rgba(255,255,255,.06)",
+              border:`1px solid ${highRain?"rgba(125,211,252,.3)":"rgba(125,211,252,.12)"}`,
+            }}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                <Icon name="Droplets" size={15} color={highRain?"#7dd3fc":"rgba(186,230,253,.6)"}/>
+                <span style={{fontSize:18,fontWeight:900,color:highRain?"#7dd3fc":"#e0f2fe"}}>{weather.rain}%</span>
+              </div>
+              <div style={{fontSize:9,color:"rgba(186,230,253,.5)",fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginTop:2}}>chuva</div>
+            </div>
+          </>
+        )}
+        <button onClick={()=>setDismissed(true)} style={{background:"transparent",border:"none",cursor:"pointer",padding:4,display:"flex",flexShrink:0,opacity:.4,alignSelf:"flex-start"}}>
+          <Icon name="XCircle" size={16} color="rgba(186,230,253,.7)"/>
+        </button>
+      </div>
+
+      {/* Previsão dos próximos 7 dias — ícone + dia da semana, em fileira */}
+      {weekly&&(
+        <div style={{display:"flex",justifyContent:"space-between",gap:4,marginTop:14,paddingTop:12,borderTop:"1px solid rgba(125,211,252,.12)"}}>
+          {weekly.map((d,i)=>{
+            const di=weatherCodeInfo(d.code);
+            const diaChuva=d.rain>=50;
+            return(
+              <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,flex:1}}>
+                <span style={{fontSize:10,fontWeight:700,color:i===0?"#e0f2fe":"rgba(186,230,253,.5)"}}>{i===0?"Hoje":d.label}</span>
+                <Icon name={di.icon} size={16} color={diaChuva?"#7dd3fc":"#fbbf24"}/>
+                <span style={{fontSize:9,fontWeight:600,color:diaChuva?"#7dd3fc":"rgba(186,230,253,.4)"}}>{d.rain}%</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── WeeklyWeatherPopup ───────────────────────────────────────────────────
+   Aparece uma vez por sessão/dia ao abrir o app, resumindo a previsão da
+   semana em uma frase de alto impacto — sem ser uma push notification real
+   (que exigiria infraestrutura de servidor própria), mas cobrindo o caso de
+   uso de "avisar logo de cara" sempre que o usuário abrir o app.
+─────────────────────────────────────────────────────────────────────────── */
+function WeeklyWeatherPopup({week,onClose}){
+  if(!week)return null;
+
+  const diasComChuvaAlta=week.filter(d=>d.rain>=50).length;
+  const chuvaForte=week.some(d=>[61,63,65,66,67,80,81,82,95,96,99].includes(d.code)&&d.rain>=60);
+  const semChuva=week.every(d=>d.rain<30);
+
+  let titulo,mensagem,icon,color;
+  if(chuvaForte||diasComChuvaAlta>=3){
+    titulo="⚠️ Alerta de chuva";
+    mensagem=chuvaForte
+      ?"Previsão de pancadas de chuva/tempestade esta semana!"
+      :`Chuva prevista em ${diasComChuvaAlta} dia(s) esta semana. Fique atento ao agendar lavagens!`;
+    icon="CloudRain";color="#7dd3fc";
+  }else if(semChuva){
+    titulo="☀️ Semana ensolarada";
+    mensagem="Esta semana será ensolarada, sem chance de chuva!! Ótimo momento para captar mais clientes.";
+    icon="Sun";color="#fbbf24";
+  }else{
+    titulo="🌤️ Previsão da semana";
+    mensagem="Semana com tempo variável — confira o detalhe de cada dia no banner de clima.";
+    icon="Cloud";color="#38bdf8";
+  }
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:24,background:"rgba(8,15,28,.7)",backdropFilter:"blur(4px)"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="login-card" style={{maxWidth:340,width:"100%",background:"linear-gradient(160deg,rgba(20,40,70,.97),rgba(10,25,45,.97))",border:"1.5px solid rgba(125,211,252,.25)",borderRadius:24,padding:"28px 24px",boxShadow:"0 20px 60px rgba(0,0,0,.5)",textAlign:"center"}}>
+        <div style={{width:64,height:64,borderRadius:20,background:`${color}22`,border:`1px solid ${color}44`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+          <Icon name={icon} size={32} color={color}/>
+        </div>
+        <div style={{fontSize:17,fontWeight:900,color:"#e0f2fe",marginBottom:8}}>{titulo}</div>
+        <div style={{fontSize:14,color:"rgba(186,230,253,.7)",lineHeight:1.5,marginBottom:22}}>{mensagem}</div>
+        <button onClick={onClose} className="btn-glow" style={{width:"100%"}}>
+          Entendido
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── StatusBadge ─────────────────────────────────────────────────────────── */
+const SB={
+  "Aguardando":{bg:"rgba(251,191,36,.15)",border:"rgba(251,191,36,.35)",text:"#fbbf24",dot:"#fbbf24"},
+  "Lavando":   {bg:"rgba(14,165,233,.15)",border:"rgba(14,165,233,.35)",text:"#38bdf8",dot:"#0ea5e9"},
+  "Concluído": {bg:"rgba(34,197,94,.15)", border:"rgba(34,197,94,.35)", text:"#4ade80",dot:"#22c55e"},
+  "Pago":      {bg:"rgba(148,163,184,.1)",border:"rgba(148,163,184,.2)",text:"#94a3b8",dot:"#64748b"},
+};
+function StatusBadge({status}){
+  const c=SB[status]||SB["Aguardando"];
+  return <span className="status-badge" style={{background:c.bg,border:`1px solid ${c.border}`,color:c.text}}>
+    <span className="pulse" style={{width:6,height:6,borderRadius:99,background:c.dot,flexShrink:0,display:"inline-block"}}/>
+    {status}
+  </span>;
+}
+
+/* ── helpers ─────────────────────────────────────────────────────────────── */
+const today=new Date();
+function daysSince(ds){return Math.floor((today-new Date(ds))/86400000);}
+function fmtDate(ds){return new Date(ds).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"});}
+function fmtBRL(v){return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v||0);}
+const SVC_DEFAULT=[
+  {label:"Lavagem Simples",value:30},{label:"Lavagem Completa",value:50},
+  {label:"Polimento",value:120},{label:"Higienização Interna",value:90},{label:"Enceramento",value:80},
+];
+const STATUS_FLOW=["Aguardando","Lavando","Concluído","Pago"];
+const CAR_COLORS=["#0ea5e9","#7c3aed","#f59e0b","#ef4444","#10b981","#f97316","#ec4899","#06b6d4"];
+const FAQ=[
+  {q:"Como adicionar um veículo à fila?",a:"Acesse 'Nova Lavagem', preencha os dados e toque em 'Adicionar à Fila'."},
+  {q:"Como recuperar clientes sumidos?",a:"Acesse 'CRM' para ver clientes inativos há mais de 30 dias e envie via WhatsApp."},
+  {q:"Como alterar o status de uma lavagem?",a:"Na tela 'Fila', toque no card e use o botão 'Avançar' para mudar o estágio."},
+  {q:"Os dados ficam salvos?",a:"Sim. Todos os dados são salvos em tempo real no banco de dados seguro na nuvem."},
+  {q:"Como funciona o acesso de funcionários?",a:"O dono cadastra funcionários na aba 'Equipe'. Cada um recebe e-mail e senha únicos."},
+];
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TELA DE ASSINATURA BLOQUEADA
+══════════════════════════════════════════════════════════════════════════ */
+function AssinaturaScreen({info,onLogout}){
+  return(
+    <div style={{height:"var(--app-height)",width:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,position:"relative",overflow:"hidden"}}>
+      <AquaBg/>
+      <div className="login-card" style={{width:"100%",maxWidth:360,position:"relative",zIndex:1,textAlign:"center"}}>
+        <div style={{width:72,height:72,borderRadius:24,background:"rgba(239,68,68,.2)",border:"2px solid rgba(239,68,68,.4)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",boxShadow:"0 0 40px rgba(239,68,68,.2)"}}>
+          <Icon name="AlertTriangle" size={36} color="#f87171"/>
+        </div>
+        <div style={{color:"#e0f2fe",fontWeight:900,fontSize:22,marginBottom:8}}>Acesso Bloqueado</div>
+        <div style={{color:"rgba(186,230,253,.6)",fontSize:14,marginBottom:24,lineHeight:1.6}}>{info?.mensagem||"Sua assinatura está inativa."}</div>
+        <div className="glass" style={{borderRadius:20,padding:20,marginBottom:20}}>
+          <div style={{color:"rgba(186,230,253,.5)",fontSize:12,marginBottom:4}}>Status</div>
+          <div style={{color:"#f87171",fontWeight:800,fontSize:16,textTransform:"uppercase"}}>{info?.status||"vencido"}</div>
+        </div>
+        <div style={{color:"rgba(186,230,253,.5)",fontSize:13,marginBottom:20}}>Entre em contato com o suporte para renovar sua assinatura.</div>
+        <button className="btn-glow" onClick={onLogout} style={{background:"linear-gradient(135deg,#64748b,#475569)"}}>
+          <Icon name="LogOut" size={16} color="#fff"/> Sair
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TELA DE CADASTRO DE EMPRESA (primeiro acesso owner)
+══════════════════════════════════════════════════════════════════════════ */
+function CadastroEmpresaScreen({user,onComplete}){
+  const [form,setForm]=useState({nome_fantasia:"",telefone:"",cnpj:""});
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const submit=async()=>{
+    if(!form.nome_fantasia.trim()){setErr("Nome da empresa obrigatório.");return;}
+    setLoading(true);setErr("");
+    try{
+      const {data,error}=await sb.rpc('fn_criar_empresa',{
+        p_nome_fantasia:form.nome_fantasia.trim(),
+        p_email:user.email,
+        p_telefone:form.telefone||null,
+        p_cnpj:form.cnpj||null,
+      });
+      if(error)throw error;
+      if(!data.success){setErr(data.mensagem);setLoading(false);return;}
+
+      // Vincular usuário à empresa como owner via SQL direto (bypass RLS timing)
+      const {error:upErr}=await sb.rpc('fn_vincular_usuario_empresa',{
+        p_user_id:user.id,
+        p_empresa_id:data.empresa_id,
+        p_role:'owner',
+        p_name:user.email.split('@')[0]
+      });
+
+      // Fallback: tentar update direto se RPC não existir ainda
+      if(upErr){
+        await sb.from('profiles').update({
+          empresa_id:data.empresa_id,
+          role:'owner',
+          name:user.email.split('@')[0]
+        }).eq('id',user.id);
+      }
+
+      // Aguardar propagação do banco
+      await new Promise(r=>setTimeout(r,1200));
+      onComplete();
+    }catch(e){setErr(e.message||"Erro ao criar empresa. Tente novamente.");}
+    setLoading(false);
+  };
+
+  return(
+    <div style={{height:"var(--app-height)",width:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,position:"relative",overflow:"hidden"}}>
+      <AquaBg/>
+      <div className="login-card" style={{width:"100%",maxWidth:360,position:"relative",zIndex:1}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{width:72,height:72,borderRadius:24,background:"rgba(14,165,233,.2)",border:"2px solid rgba(56,189,248,.4)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 0 40px rgba(14,165,233,.3)"}}>
+            <Icon name="Building" size={36} color="#38bdf8"/>
+          </div>
+          <div style={{color:"#e0f2fe",fontWeight:900,fontSize:22}}>Cadastrar Empresa</div>
+          <div style={{color:"rgba(186,230,253,.6)",fontSize:13,marginTop:4}}>Configure seu lava-jato para começar</div>
+        </div>
+        <div className="glass" style={{borderRadius:24,padding:24,boxShadow:"0 24px 64px rgba(0,0,0,.4)"}}>
+          <div style={{marginBottom:14}}>
+            <label className="lbl">Nome do Lava-Jato *</label>
+            <input className="glass-input" value={form.nome_fantasia} onChange={e=>set("nome_fantasia",e.target.value)} placeholder="Lava Rápido do João"/>
+          </div>
+          <div style={{marginBottom:14}}>
+            <label className="lbl">Telefone</label>
+            <input className="glass-input" value={form.telefone} onChange={e=>set("telefone",e.target.value)} placeholder="(49) 99999-9999" type="tel"/>
+          </div>
+          <div style={{marginBottom:20}}>
+            <label className="lbl">CNPJ (opcional)</label>
+            <input className="glass-input" value={form.cnpj} onChange={e=>set("cnpj",e.target.value)} placeholder="00.000.000/0001-00"/>
+          </div>
+          {err&&<div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.3)",borderRadius:12,padding:"10px 14px",marginBottom:14,color:"#f87171",fontSize:13}}>{err}</div>}
+          <button className="btn-glow" onClick={submit} disabled={loading}>
+            {loading?<div className="spinner spin"/>:<><Icon name="CheckCircle" size={16} color="#fff"/> Criar Empresa — 14 dias grátis</>}
+          </button>
+          <div style={{marginTop:14,padding:"10px 12px",background:"rgba(255,255,255,.05)",borderRadius:12,border:"1px solid rgba(255,255,255,.08)",textAlign:"center"}}>
+            <div style={{fontSize:12,color:"rgba(186,230,253,.5)"}}>Trial de 14 dias · Sem cartão · Cancele quando quiser</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LOGIN
+══════════════════════════════════════════════════════════════════════════ */
+function LoginScreen({onLogin}){
+  const [email,setEmail]=useState("");
+  const [pwd,setPwd]=useState("");
+  const [show,setShow]=useState(false);
+  const [err,setErr]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [mode,setMode]=useState("login"); // login | register
+  const [aceitouTermos,setAceitouTermos]=useState(false);
+  const [showTermos,setShowTermos]=useState(false);
+
+  const submit=async()=>{
+    if(!email.trim()||!pwd.trim()){setErr("Preencha e-mail e senha.");return;}
+    // O aceite dos termos só é obrigatório no cadastro — quem já tem conta
+    // já aceitou no momento em que se cadastrou.
+    if(mode==="register"&&!aceitouTermos){
+      setErr("Você precisa aceitar os Termos de Uso e Política de Privacidade para criar sua conta.");
+      return;
+    }
+    setLoading(true);setErr("");
+    try{
+      if(mode==="register"){
+        const {data,error}=await sb.auth.signUp({
+          email:email.trim().toLowerCase(),
+          password:pwd,
+          options:{data:{
+            name:email.split("@")[0],role:"owner",
+            // Registro de auditoria do aceite — booleano + timestamp exato,
+            // salvo nos metadados do usuário no momento do cadastro. Isso
+            // fica disponível tanto em auth.users.raw_user_meta_data quanto
+            // pode ser replicado para profiles via trigger, se necessário
+            // para consulta mais simples no futuro.
+            aceitou_termos:true,
+            aceitou_termos_em:new Date().toISOString(),
+          }}
+        });
+        if(error)throw error;
+        if(data.user&&!data.session){
+          setErr("Verifique seu e-mail para confirmar o cadastro.");
+          setLoading(false);return;
+        }
+        onLogin(data.session);
+      }else{
+        const {data,error}=await sb.auth.signInWithPassword({
+          email:email.trim().toLowerCase(),password:pwd
+        });
+        if(error)throw error;
+        onLogin(data.session);
+      }
+    }catch(e){
+      setErr(e.message==="Invalid login credentials"?"E-mail ou senha incorretos.":e.message);
+    }
+    setLoading(false);
+  };
+
+
+  return(
+    <div style={{height:"var(--app-height)",width:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,position:"relative",overflow:"hidden"}}>
+      <AquaBg/>
+      <div className="login-card" style={{width:"100%",maxWidth:360,position:"relative",zIndex:1}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{width:80,height:80,borderRadius:28,background:"rgba(14,165,233,.2)",border:"2px solid rgba(56,189,248,.4)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 0 40px rgba(14,165,233,.3)"}}>
+            <Icon name="Droplets" size={40} color="#38bdf8"/>
+          </div>
+          <div style={{color:"#e0f2fe",fontWeight:900,fontSize:26,letterSpacing:"-0.5px",textShadow:"0 0 20px rgba(56,189,248,.4)"}}>Lava Rápido</div>
+          <div style={{color:"rgba(186,230,253,.6)",fontSize:13,marginTop:4}}>Sistema de Gerenciamento Premium</div>
+        </div>
+        <div className="glass" style={{borderRadius:28,padding:28,boxShadow:"0 24px 64px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.1)"}}>
+          <div style={{color:"#e0f2fe",fontWeight:800,fontSize:18,marginBottom:4}}>{mode==="login"?"Bem-vindo 👋":"Criar Conta 🚀"}</div>
+          <div style={{color:"rgba(186,230,253,.6)",fontSize:13,marginBottom:22}}>{mode==="login"?"Faça login para continuar":"Cadastre seu lava-jato gratuitamente"}</div>
+          <div style={{marginBottom:14}}>
+            <label className="lbl">E-mail</label>
+            <input className="glass-input" type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="seu@email.com" autoCapitalize="none"/>
+          </div>
+          <div style={{marginBottom:20}}>
+            <label className="lbl">Senha</label>
+            <div style={{position:"relative"}}>
+              <input className="glass-input" type={show?"text":"password"} value={pwd} onChange={e=>{setPwd(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="••••••••" style={{paddingRight:44}}/>
+              <button onClick={()=>setShow(!show)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",padding:4,display:"flex"}}>
+                <Icon name={show?"EyeOff":"Eye"} size={16} color="rgba(186,230,253,.5)"/>
+              </button>
+            </div>
+          </div>
+          {err&&<div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+            <Icon name="XCircle" size={15} color="#f87171"/>
+            <span style={{color:"#f87171",fontSize:13,fontWeight:600}}>{err}</span>
+          </div>}
+
+          {/* Checkbox de aceite — visível só no cadastro, posicionado na
+              base do card, antes do botão de submeter, para garantir que o
+              usuário veja o aviso antes de criar a conta. */}
+          {mode==="register"&&(
+            <label style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:18,cursor:"pointer"}}>
+              <input
+                type="checkbox"
+                checked={aceitouTermos}
+                onChange={e=>{setAceitouTermos(e.target.checked);setErr("");}}
+                style={{marginTop:2,width:18,height:18,flexShrink:0,accentColor:"#38bdf8",cursor:"pointer"}}
+              />
+              <span style={{fontSize:12.5,color:"rgba(186,230,253,.7)",lineHeight:1.4}}>
+                Li e aceito os{" "}
+                <button type="button" onClick={e=>{e.preventDefault();setShowTermos(true);}} style={{background:"none",border:"none",padding:0,color:"#38bdf8",fontWeight:700,fontSize:12.5,cursor:"pointer",textDecoration:"underline"}}>
+                  Termos de Uso e Política de Privacidade
+                </button>
+              </span>
+            </label>
+          )}
+
+          <button className="btn-glow" onClick={submit} disabled={loading}>
+            {loading?<div className="spinner spin"/>:mode==="login"?"Entrar →":"Criar Conta →"}
+          </button>
+          <button onClick={()=>{setMode(m=>m==="login"?"register":"login");setErr("");}} style={{width:"100%",marginTop:14,padding:"10px",background:"transparent",border:"1px solid rgba(125,211,252,.2)",borderRadius:12,color:"rgba(186,230,253,.6)",fontSize:13,cursor:"pointer"}}>
+            {mode==="login"?"Não tem conta? Cadastre-se grátis":"Já tem conta? Fazer login"}
+          </button>
+        </div>
+      </div>
+      {showTermos&&<TermosModal onClose={()=>setShowTermos(false)} onAceitar={()=>{setAceitouTermos(true);setShowTermos(false);}}/>}
+    </div>
+  );
+}
+
+/* ── TermosModal ──────────────────────────────────────────────────────────
+   Exibe um resumo navegável dos Termos de Uso e Política de Privacidade.
+   IMPORTANTE: o texto completo é um RASCUNHO TÉCNICO, não um documento
+   jurídico validado — precisa de revisão por advogado antes de uso real
+   em produção com clientes pagantes. Ver rascunho_termos_privacidade.md.
+─────────────────────────────────────────────────────────────────────────── */
+function TermosModal({onClose,onAceitar}){
+  const secoes=[
+    {t:"1. Quem somos",c:"Este sistema é oferecido como um serviço (SaaS) para gestão de lava-jatos, incluindo fila de atendimento, histórico financeiro e relacionamento com clientes."},
+    {t:"2. Dados de clientes e veículos",c:"Armazenamos placa, modelo, nome e telefone dos clientes do seu lava-jato, além do histórico de serviços prestados, para fins de gestão operacional e ações de recuperação de clientes inativos (CRM)."},
+    {t:"3. Dados de funcionários",c:"O cadastro de funcionários é feito pelo dono da empresa, de forma segura. Cada lavagem registrada fica vinculada ao funcionário que a criou, para fins de controle operacional."},
+    {t:"4. Dados financeiros",c:"Valores de cobrança, status de pagamento e registros de caixa são protegidos por isolamento de dados entre empresas (Row Level Security) e conexão criptografada."},
+    {t:"5. Localização e previsão do tempo",c:"Solicitamos acesso à sua localização apenas para exibir a previsão do tempo local. Essa informação não é armazenada por nós — a consulta é feita em tempo real a cada uso."},
+    {t:"6. Infraestrutura em nuvem",c:"Utilizamos o Supabase como provedor de banco de dados e comunicação em tempo real. Seus dados podem ser processados em servidores fora do Brasil, conforme a região de hospedagem contratada."},
+    {t:"7. Propriedade intelectual",c:"O código-fonte, design e a marca \"Lava Rápido\" são de propriedade exclusiva do desenvolvedor. Você recebe uma licença de uso da plataforma, não a propriedade do software."},
+  ];
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:18,background:"rgba(8,15,28,.85)",backdropFilter:"blur(4px)"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:420,maxHeight:"85vh",display:"flex",flexDirection:"column",background:"linear-gradient(160deg,rgba(20,40,70,.97),rgba(10,25,45,.97))",border:"1.5px solid rgba(125,211,252,.25)",borderRadius:24,boxShadow:"0 20px 60px rgba(0,0,0,.5)",overflow:"hidden"}}>
+        <div style={{padding:"20px 22px 14px",flexShrink:0,borderBottom:"1px solid rgba(125,211,252,.12)"}}>
+          <div style={{fontSize:17,fontWeight:900,color:"#e0f2fe"}}>Termos de Uso e Privacidade</div>
+          <div style={{fontSize:11.5,color:"rgba(186,230,253,.5)",marginTop:4}}>Resumo das principais cláusulas — versão completa disponível com o suporte</div>
+        </div>
+        <div className="scroll" style={{flex:1,minHeight:0,padding:"16px 22px"}}>
+          {secoes.map((s,i)=>(
+            <div key={i} style={{marginBottom:16}}>
+              <div style={{fontSize:13,fontWeight:800,color:"#7dd3fc",marginBottom:4}}>{s.t}</div>
+              <div style={{fontSize:12.5,color:"rgba(186,230,253,.65)",lineHeight:1.5}}>{s.c}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{padding:"14px 22px 20px",flexShrink:0,display:"flex",gap:10,borderTop:"1px solid rgba(125,211,252,.12)"}}>
+          <button onClick={onClose} style={{flex:1,padding:"11px 0",borderRadius:12,background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",color:"rgba(186,230,253,.7)",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+            Fechar
+          </button>
+          <button onClick={onAceitar} className="btn-glow" style={{flex:1.5,margin:0}}>
+            Li e aceito
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MASTER SCREEN — painel do dono da plataforma
+══════════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RELATÓRIOS SCREEN — gráficos e métricas por período
+══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   CONFIGURAÇÕES SCREEN — personalização da empresa
+══════════════════════════════════════════════════════════════════════════ */
+function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
+  const [empresa,setEmpresa]=useState(null);
+  const [ass,setAss]=useState(null);
+  const [limites,setLimites]=useState(null);
+  const [cobrancas,setCobrancas]=useState([]);
+  const [form,setForm]=useState({nome_fantasia:"",telefone:"",razao_social:"",cnpj:""});
+  const [svcs,setSvcs]=useState([]);
+  const [newSvc,setNewSvc]=useState({nome:"",valor:""});
+  const [saving,setSaving]=useState(false);
+  const [success,setSuccess]=useState("");
+  const [tab,setTab]=useState("empresa");
+  const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  useEffect(()=>{
+    sb.from('empresas').select('*').eq('id',empresaId).single()
+      .then(({data})=>{
+        setEmpresa(data);
+        setForm({nome_fantasia:data?.nome_fantasia||"",telefone:data?.telefone||"",razao_social:data?.razao_social||"",cnpj:data?.cnpj||""});
+      });
+    sb.rpc('fn_assinatura_valida',{p_empresa_id:empresaId}).then(({data})=>setAss(data));
+    // Quotas do plano (usuários e ordens/mês) — RPC criada para fechar a
+    // lacuna de segurança onde limites existiam no schema mas nunca eram
+    // exibidos nem verificados em lugar nenhum.
+    sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId}).then(({data,error})=>{
+      if(!error)setLimites(data);
+    });
+    // Histórico de cobranças — funciona independente do checkout final
+    // (cartão recorrente ou Pix manual), pois lê direto da tabela
+    // `cobrancas`, que é populada pelo webhook do gateway de pagamento.
+    sb.rpc('fn_listar_cobrancas',{p_empresa_id:empresaId}).then(({data,error})=>{
+      if(!error)setCobrancas(data||[]);
+    });
+    sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).order('created_at')
+      .then(({data})=>setSvcs(data||[]));
+  },[empresaId]);
+
+  const saveEmpresa=async()=>{
+    setSaving(true);
+    await sb.from('empresas').update({
+      nome_fantasia:form.nome_fantasia.trim(),
+      telefone:form.telefone.trim(),
+      razao_social:form.razao_social.trim()||null,
+      cnpj:form.cnpj.trim()||null,
+      updated_at:new Date().toISOString()
+    }).eq('id',empresaId);
+    setSuccess("Dados salvos com sucesso!");
+    setTimeout(()=>setSuccess(""),3000);
+    setSaving(false);
+    if(onUpdate)onUpdate(form.nome_fantasia.trim());
+  };
+
+  const addSvc=async()=>{
+    if(!newSvc.nome.trim()||!newSvc.valor)return;
+    const{data}=await sb.from('servicos_catalogo').insert({empresa_id:empresaId,nome:newSvc.nome.trim(),valor:parseFloat(newSvc.valor)}).select().single();
+    if(data)setSvcs(s=>[...s,data]);
+    setNewSvc({nome:"",valor:""});
+  };
+
+  const toggleSvc=async(id,ativo)=>{
+    await sb.from('servicos_catalogo').update({ativo:!ativo}).eq('id',id);
+    setSvcs(s=>s.map(x=>x.id===id?{...x,ativo:!ativo}:x));
+  };
+
+  const delSvc=async(id)=>{
+    await sb.from('servicos_catalogo').delete().eq('id',id);
+    setSvcs(s=>s.filter(x=>x.id!==id));
+  };
+
+  const ALL_CONFIG_TABS=[
+    ["empresa","🏢 Empresa",true],
+    ["servicos","🔧 Serviços",true],
+    ["assinatura","💳 Plano",true],
+    ["historico","📊 Histórico",true],
+    ["relatorios","📈 Relatórios",isOwner],
+    ["equipe","👥 Equipe",isOwner],
+  ].filter(([,,show])=>show);
+
+  return(
+    <div className="scroll screen-enter">
+      {/* Tabs — fileira única com scroll horizontal, sem agrupamento por categoria.
+          width:"100%" + minWidth:"max-content" nos botões é necessário: sem isso,
+          alguns navegadores mobile encolhem os itens extras em vez de permitir
+          scroll horizontal, fazendo abas "desaparecerem" visualmente mesmo
+          existindo no DOM. */}
+      <div style={{display:"flex",width:"100%",marginBottom:18,borderBottom:"1px solid rgba(125,211,252,.15)",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+        {ALL_CONFIG_TABS.map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)}
+            className={tab===k?"tab-active":"tab-inactive"}
+            style={{flex:"0 0 auto",minWidth:"max-content",padding:"10px 16px",fontSize:12,fontWeight:700,background:"transparent",border:"none",cursor:"pointer",transition:"all .2s",whiteSpace:"nowrap"}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Empresa */}
+      {tab==="empresa"&&(
+        <div>
+          {[["nome_fantasia","Nome do Lava-Jato *","Lava Rápido do João"],["telefone","Telefone","(49) 99999-9999"],["razao_social","Razão Social","Empresa LTDA"],["cnpj","CNPJ","00.000.000/0001-00"]].map(([field,label,ph])=>(
+            <div key={field} style={{marginBottom:14}}>
+              <label className="lbl">{label}</label>
+              <input className="glass-input" value={form[field]} onChange={e=>setF(field,e.target.value)} placeholder={ph}/>
+            </div>
+          ))}
+          {success&&<div style={{background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.3)",borderRadius:12,padding:"10px 14px",marginBottom:14,color:"#4ade80",fontSize:13,fontWeight:600}}>{success}</div>}
+          <button className="btn-glow" onClick={saveEmpresa} disabled={saving}>
+            {saving?<div className="spinner spin"/>:<><Icon name="Check" size={16} color="#fff"/> Salvar Alterações</>}
+          </button>
+        </div>
+      )}
+
+      {/* Tab Serviços */}
+      {tab==="servicos"&&(
+        <div>
+          <div className="glass-card" style={{padding:14,marginBottom:16,background:"rgba(14,165,233,.08)",border:"1px solid rgba(56,189,248,.2)"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.5)",marginBottom:10,textTransform:"uppercase",letterSpacing:".08em"}}>Novo Serviço</div>
+            <input className="glass-input" value={newSvc.nome} onChange={e=>setNewSvc(s=>({...s,nome:e.target.value}))} placeholder="Nome do serviço" style={{marginBottom:8}}/>
+            <div style={{display:"flex",gap:8}}>
+              <input className="glass-input" type="number" value={newSvc.valor} onChange={e=>setNewSvc(s=>({...s,valor:e.target.value}))} placeholder="Valor R$" style={{flex:1}}/>
+              <button onClick={addSvc} className="btn-glow" style={{width:"auto",padding:"0 20px",borderRadius:12}}>
+                <Icon name="Plus" size={16} color="#fff"/>
+              </button>
+            </div>
+          </div>
+          {svcs.map(s=>(
+            <div key={s.id} className="glass-card" style={{marginBottom:8}}>
+              <div style={{padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{flex:1}}>
+                  <div style={{color:s.ativo?"#e0f2fe":"rgba(186,230,253,.3)",fontWeight:700,fontSize:14}}>{s.nome}</div>
+                  <div style={{color:"#4ade80",fontSize:12,fontWeight:600}}>{fmtBRL(s.valor)}</div>
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <button onClick={()=>toggleSvc(s.id,s.ativo)}
+                    style={{padding:"5px 12px",borderRadius:99,fontSize:11,fontWeight:700,border:`1px solid ${s.ativo?"rgba(34,197,94,.3)":"rgba(148,163,184,.2)"}`,background:s.ativo?"rgba(34,197,94,.15)":"rgba(255,255,255,.05)",color:s.ativo?"#4ade80":"#64748b",cursor:"pointer"}}>
+                    {s.ativo?"Ativo":"Inativo"}
+                  </button>
+                  <button onClick={()=>delSvc(s.id)} style={{padding:"7px 9px",borderRadius:10,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.25)",cursor:"pointer",display:"flex"}}>
+                    <Icon name="Trash2" size={13} color="#f87171"/>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Tab Assinatura */}
+      {tab==="assinatura"&&(
+        <div>
+          <div className="glass-card" style={{padding:20,marginBottom:16,background:"rgba(124,58,237,.12)",border:"1px solid rgba(167,139,250,.25)",textAlign:"center"}}>
+            <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Plano Atual</div>
+            <div style={{fontSize:28,fontWeight:900,color:"#a78bfa",textTransform:"uppercase",marginBottom:4}}>{ass?.plano||"trial"}</div>
+            <div style={{fontSize:13,color:"rgba(186,230,253,.6)",marginBottom:16}}>{ass?.mensagem||"Carregando..."}</div>
+            {ass?.dias_restantes!==undefined&&(
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:11,color:"rgba(186,230,253,.4)",marginBottom:6}}>Dias restantes</div>
+                <ProgressBar pct={Math.min((ass.dias_restantes/14)*100,100)} color="#a78bfa"/>
+                <div style={{fontSize:12,color:"#a78bfa",marginTop:4,fontWeight:700}}>{ass.dias_restantes} dias</div>
+              </div>
+            )}
+          </div>
+
+          {/* Quotas de uso do plano — usuários e ordens/mês */}
+          {limites&&(
+            <div className="glass-card" style={{padding:16,marginBottom:16}}>
+              <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:14}}>Uso do Plano</div>
+              {[
+                {label:"Funcionários",atual:limites.usuarios_atual,limite:limites.usuarios_limite,icon:"Users"},
+                {label:"Ordens este mês",atual:limites.ordens_mes_atual,limite:limites.ordens_mes_limite,icon:"Car"},
+              ].map(q=>{
+                const pct=q.limite>0?Math.min((q.atual/q.limite)*100,100):0;
+                const perto=pct>=80;
+                const color=perto?"#f87171":"#38bdf8";
+                return(
+                  <div key={q.label} style={{marginBottom:14}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <Icon name={q.icon} size={13} color={color}/>
+                        <span style={{fontSize:12,color:"rgba(186,230,253,.6)",fontWeight:600}}>{q.label}</span>
+                      </div>
+                      <span style={{fontSize:13,fontWeight:800,color}}>{q.atual} / {q.limite}</span>
+                    </div>
+                    <ProgressBar pct={pct} color={color}/>
+                    {perto&&(
+                      <div style={{fontSize:11,color:"#f87171",marginTop:4,fontWeight:600}}>
+                        Quase no limite! Considere fazer upgrade do plano.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:12}}>Planos Disponíveis</div>
+          {[
+            {nome:"Básico",valor:"R$ 49,90/mês",recursos:["Até 3 usuários","200 ordens/mês","Fila + Histórico + CRM"],color:"#38bdf8"},
+            {nome:"Profissional",valor:"R$ 89,90/mês",recursos:["Até 10 usuários","1.000 ordens/mês","Tudo + Relatórios + Equipe"],color:"#4ade80"},
+            {nome:"Enterprise",valor:"R$ 149,90/mês",recursos:["Usuários ilimitados","Ordens ilimitadas","Tudo + API + Whitelabel"],color:"#a78bfa"},
+          ].map(p=>(
+            <div key={p.nome} className="glass-card" style={{marginBottom:10,border:`1px solid ${p.color}33`}}>
+              <div style={{padding:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                  <div style={{color:p.color,fontWeight:800,fontSize:15}}>{p.nome}</div>
+                  <div style={{color:"#e0f2fe",fontWeight:700,fontSize:14}}>{p.valor}</div>
+                </div>
+                {p.recursos.map((r,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                    <Icon name="CheckCircle" size={12} color={p.color}/>
+                    <span style={{fontSize:12,color:"rgba(186,230,253,.6)"}}>{r}</span>
+                  </div>
+                ))}
+                <button style={{width:"100%",marginTop:12,padding:"9px 0",borderRadius:12,background:`${p.color}22`,border:`1px solid ${p.color}44`,color:p.color,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                  Assinar — Em breve
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Histórico de cobranças — popula automaticamente quando o
+              webhook do gateway de pagamento processar um pagamento.
+              Funciona igual independente do checkout final ser cartão
+              recorrente ou Pix gerado manualmente todo mês. */}
+          {cobrancas.length>0&&(
+            <>
+              <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:12,marginTop:20}}>Histórico de Cobranças</div>
+              {cobrancas.map(c=>{
+                const statusInfo={
+                  pago:{color:"#4ade80",label:"Pago",icon:"CheckCircle"},
+                  pendente:{color:"#fbbf24",label:"Pendente",icon:"Clock"},
+                  vencido:{color:"#f87171",label:"Vencido",icon:"AlertTriangle"},
+                  cancelado:{color:"#94a3b8",label:"Cancelado",icon:"XCircle"},
+                  estornado:{color:"#94a3b8",label:"Estornado",icon:"XCircle"},
+                }[c.status]||{color:"#94a3b8",label:c.status,icon:"Clock"};
+                return(
+                  <div key={c.id} className="glass-card" style={{marginBottom:8}}>
+                    <div style={{padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{width:32,height:32,borderRadius:10,background:`${statusInfo.color}22`,border:`1px solid ${statusInfo.color}44`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <Icon name="CreditCard" size={14} color={statusInfo.color}/>
+                        </div>
+                        <div>
+                          <div style={{color:"#e0f2fe",fontWeight:700,fontSize:13}}>{fmtBRL(c.valor)}</div>
+                          <div style={{color:"rgba(186,230,253,.4)",fontSize:11}}>Venc. {fmtDate(c.data_vencimento)}</div>
+                        </div>
+                      </div>
+                      <span style={{display:"flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:statusInfo.color,background:`${statusInfo.color}18`,padding:"4px 10px",borderRadius:99}}>
+                        <Icon name={statusInfo.icon} size={11} color={statusInfo.color}/>
+                        {statusInfo.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          <div style={{textAlign:"center",marginTop:8}}>
+            <a href="https://wa.me/5549999508801?text=Olá! Quero assinar o Lava Rápido Premium" target="_blank" rel="noreferrer"
+              style={{color:"#4ade80",fontSize:13,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              <Icon name="MessageCircle" size={14} color="#4ade80"/> Falar com suporte para assinar
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* As 4 abas abaixo eram telas próprias na barra inferior antes —
+          agora vivem dentro de Config para simplificar a navegação
+          principal. Cada uma é renderizada sem o wrapper "scroll
+          screen-enter" próprio, porque já estamos dentro de um. */}
+      {tab==="historico"&&<HistoryScreen empresaId={empresaId} embedded isOwner/>}
+      {tab==="relatorios"&&isOwner&&<RelatoriosScreen empresaId={empresaId} embedded/>}
+      {tab==="equipe"&&isOwner&&<AdminScreen empresaId={empresaId} currentUser={currentUser} embedded/>}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MASTER SCREEN MELHORADA
+══════════════════════════════════════════════════════════════════════════ */
+function MasterScreen(){
+  const [empresas,setEmpresas]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState("");
+  const [filtro,setFiltro]=useState("todas");
+  const [confirmando,setConfirmando]=useState(null);
+  const [alterandoPlano,setAlterandoPlano]=useState(null); // id da empresa com modal de plano aberto
+  const [salvandoPlano,setSalvandoPlano]=useState(null);
+  const [usageMap,setUsageMap]=useState({});
+  const [toast,setToast]=useState("");
+
+  const fetchEmpresas=useCallback(()=>{
+    // Usa RPC com SECURITY DEFINER para buscar empresas + assinaturas,
+    // contornando o RLS que bloqueava o SELECT de assinaturas de outras
+    // empresas quando auth.uid() retornava null no contexto do client.
+    sb.rpc('fn_master_listar_empresas')
+      .then(({data})=>{setEmpresas(data||[]);setLoading(false);});
+  },[]);
+
+  useEffect(()=>{fetchEmpresas();},[fetchEmpresas]);
+
+  useEffect(()=>{fetchEmpresas();},[fetchEmpresas]);
+
+  // Busca o uso atual (usuários e ordens) de uma empresa específica ao
+  // abrir o modal de plano — evita uma consulta pesada pra todas as
+  // empresas de uma vez, carregando só sob demanda.
+  const fetchUsage=async(empresaId)=>{
+    if(usageMap[empresaId])return; // já carregado
+    const {data}=await sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId});
+    if(data)setUsageMap(m=>({...m,[empresaId]:data}));
+  };
+
+  const abrirModalPlano=(empresa)=>{
+    setAlterandoPlano(empresa.id);
+    fetchUsage(empresa.id);
+  };
+
+  const salvarPlano=async(empresa,novoPlano)=>{
+    if(novoPlano===(empresa.assinaturas?.[0]?.plano||"trial")){
+      setAlterandoPlano(null);return;
+    }
+    setSalvandoPlano(empresa.id);
+    try{
+      const valorMap={trial:0,basico:49.90,profissional:89.90,enterprise:149.90};
+      const {data,error}=await sb.rpc('fn_master_atualizar_plano',{
+        p_empresa_id:empresa.id,
+        p_plano:novoPlano,
+      });
+      if(error)throw new Error(error.message);
+      if(!data?.success)throw new Error(data?.message||"Erro ao atualizar plano.");
+
+      // Atualiza estado local imediatamente após RPC confirmar sucesso
+      // sem chamar fetchEmpresas (evita sobrescrever com dado antigo do banco)
+      setEmpresas(prev=>prev.map(emp=>{
+        if(emp.id!==empresa.id)return emp;
+        const ass=emp.assinaturas?.[0]||{};
+        return{...emp,plano:novoPlano,assinaturas:[{
+          ...ass,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0
+        }]};
+      }));
+      setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
+      setTimeout(()=>setToast(""),3000);
+      setAlterandoPlano(null);
+      setUsageMap(m=>{const n={...m};delete n[empresa.id];return n;});
+    }catch(e){
+      setToast("Erro: "+e.message);
+      setTimeout(()=>setToast(""),4000);
+    }
+    setSalvandoPlano(null);
+  };
+
+  const confirmarPagamentoManual=async(empresa)=>{
+    if(!window.confirm(`Confirmar pagamento manual de ${empresa.nome_fantasia}? Isso estende a assinatura por 1 mês a partir de hoje.`))return;
+    setConfirmando(empresa.id);
+    const ass=empresa.assinaturas?.[0];
+    const valor=ass?.valor||0;
+    try{
+      if(ass?.id){
+        await sb.from('assinaturas').update({
+          status:'ativo',
+          data_pagamento:new Date().toISOString().split('T')[0],
+          data_vencimento:new Date(Date.now()+30*86400000).toISOString().split('T')[0],
+        }).eq('id',ass.id);
+      }
+      await sb.rpc('fn_criar_cobranca',{
+        p_empresa_id:empresa.id,
+        p_valor:valor,
+        p_tipo_cobranca:'manual',
+        p_gateway:'manual',
+        p_descricao:'Pagamento Pix confirmado manualmente pelo admin',
+      }).then(async({data})=>{
+        if(data?.cobranca_id){
+          await sb.from('cobrancas').update({
+            status:'pago',
+            data_pagamento:new Date().toISOString().split('T')[0],
+          }).eq('id',data.cobranca_id);
+        }
+      });
+      setToast(`✅ Pagamento de ${empresa.nome_fantasia} confirmado!`);
+      setTimeout(()=>setToast(""),3000);
+      fetchEmpresas();
+    }catch(e){
+      setToast("Erro ao confirmar pagamento. Tente novamente.");
+      setTimeout(()=>setToast(""),3000);
+    }
+    setConfirmando(null);
+  };
+
+  const filtradas=empresas.filter(e=>{
+    const matchSearch=e.nome_fantasia?.toLowerCase().includes(search.toLowerCase())||e.email?.toLowerCase().includes(search.toLowerCase());
+    const status=e.assinaturas?.[0]?.status||"sem_plano";
+    const matchFiltro=filtro==="todas"||status===filtro;
+    return matchSearch&&matchFiltro;
+  });
+
+  const totalMRR=empresas.reduce((s,e)=>{const a=e.assinaturas?.[0];return s+(a?.status==="ativo"?parseFloat(a?.valor||0):0);},0);
+  const totalAtivas=empresas.filter(e=>e.assinaturas?.[0]?.status==="ativo").length;
+  const totalTrial=empresas.filter(e=>e.assinaturas?.[0]?.status==="trial"||!e.assinaturas?.[0]).length;
+
+  const PLANOS=[
+    {id:"trial",     label:"Trial",        cor:"#fbbf24", usuarios:2,    valor:"Grátis"},
+    {id:"basico",    label:"Básico",       cor:"#38bdf8", usuarios:3,    valor:"R$49,90"},
+    {id:"profissional",label:"Profissional",cor:"#4ade80",usuarios:10,   valor:"R$89,90"},
+    {id:"enterprise",label:"Enterprise",   cor:"#a78bfa", usuarios:999,  valor:"R$149,90"},
+  ];
+
+  return(
+    <div className="scroll screen-enter">
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+        {[
+          {label:"Total Empresas",val:empresas.length,color:"#38bdf8",icon:"Building"},
+          {label:"MRR",           val:fmtBRL(totalMRR),color:"#4ade80",icon:"TrendingUp"},
+          {label:"Ativas",        val:totalAtivas,color:"#4ade80",icon:"CheckCircle"},
+          {label:"Em Trial",      val:totalTrial,color:"#fbbf24",icon:"Calendar"},
+        ].map(k=>(
+          <div key={k.label} className="glass-card" style={{padding:14}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.5)"}}>{k.label}</span>
+              <Icon name={k.icon} size={13} color={k.color}/>
+            </div>
+            <div style={{fontSize:20,fontWeight:900,color:k.color}}>{k.val}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{position:"relative",marginBottom:10}}>
+        <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)"}}><Icon name="Search" size={14} color="rgba(186,230,253,.4)"/></span>
+        <input className="glass-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar empresa..." style={{paddingLeft:38}}/>
+      </div>
+      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+        {[["todas","Todas"],["trial","Trial"],["ativo","Ativas"],["vencido","Vencidas"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setFiltro(k)}
+            style={{padding:"5px 12px",borderRadius:99,fontSize:11,fontWeight:700,cursor:"pointer",
+              border:`1px solid ${filtro===k?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+              background:filtro===k?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
+              color:filtro===k?"#38bdf8":"rgba(186,230,253,.4)"}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>
+        {filtradas.length} empresa{filtradas.length!==1?"s":""}
+      </div>
+
+      {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
+      :filtradas.map(e=>{
+        const ass=e.assinaturas?.[0];
+        const planoAtual=ass?.plano||"trial";
+        const statusColor=ass?.status==="ativo"?"#4ade80":ass?.status==="trial"?"#fbbf24":ass?.status==="vencido"?"#f87171":"#64748b";
+        const diasRest=ass?.data_vencimento?Math.max(0,Math.floor((new Date(ass.data_vencimento)-new Date())/86400000)):null;
+        const usage=usageMap[e.id];
+        const modalAberto=alterandoPlano===e.id;
+
+        return(
+          <div key={e.id} className="glass-card" style={{marginBottom:10}}>
+            <div style={{padding:14}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
+                <div>
+                  <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14}}>{e.nome_fantasia}</div>
+                  <div style={{color:"rgba(186,230,253,.45)",fontSize:12}}>{e.email}</div>
+                  {e.telefone&&<div style={{color:"rgba(186,230,253,.35)",fontSize:11}}>{e.telefone}</div>}
+                </div>
+                <span style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:700,background:`${statusColor}22`,border:`1px solid ${statusColor}44`,color:statusColor,whiteSpace:"nowrap"}}>
+                  {ass?.status||"sem plano"}
+                </span>
+              </div>
+
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"rgba(186,230,253,.4)",marginBottom:8}}>
+                <span>Plano: <b style={{color:"rgba(186,230,253,.6)"}}>{planoAtual}</b></span>
+                {diasRest!==null&&<span style={{color:diasRest<=3?"#f87171":diasRest<=7?"#fbbf24":"rgba(186,230,253,.4)"}}>
+                  {diasRest}d restantes
+                </span>}
+              </div>
+
+              {/* Botão Alterar Plano */}
+              <button onClick={()=>modalAberto?setAlterandoPlano(null):abrirModalPlano(e)}
+                style={{width:"100%",marginBottom:8,padding:"8px 0",borderRadius:12,
+                  background:modalAberto?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
+                  border:`1px solid ${modalAberto?"rgba(14,165,233,.5)":"rgba(125,211,252,.15)"}`,
+                  color:modalAberto?"#38bdf8":"rgba(186,230,253,.5)",
+                  fontWeight:700,fontSize:12,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                <Icon name="CreditCard" size={12} color={modalAberto?"#38bdf8":"rgba(186,230,253,.4)"}/>
+                {modalAberto?"Fechar":"Alterar Plano"}
+              </button>
+
+              {/* Modal inline de seleção de plano */}
+              {modalAberto&&(
+                <div style={{background:"rgba(8,15,28,.6)",borderRadius:14,padding:12,marginBottom:8,border:"1px solid rgba(125,211,252,.12)"}}>
+                  {usage?(
+                    <div style={{display:"flex",gap:8,marginBottom:10}}>
+                      <div style={{flex:1,background:"rgba(255,255,255,.04)",borderRadius:10,padding:"8px 10px"}}>
+                        <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:700,marginBottom:2}}>USUÁRIOS</div>
+                        <div style={{fontSize:14,fontWeight:900,color:"#e0f2fe"}}>{usage.usuarios_atual}<span style={{fontSize:11,color:"rgba(186,230,253,.4)",fontWeight:600}}>/{usage.usuarios_limite}</span></div>
+                      </div>
+                      <div style={{flex:1,background:"rgba(255,255,255,.04)",borderRadius:10,padding:"8px 10px"}}>
+                        <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:700,marginBottom:2}}>ORDENS/MÊS</div>
+                        <div style={{fontSize:14,fontWeight:900,color:"#e0f2fe"}}>{usage.ordens_mes_atual}<span style={{fontSize:11,color:"rgba(186,230,253,.4)",fontWeight:600}}>/{usage.ordens_mes_limite}</span></div>
+                      </div>
+                    </div>
+                  ):(
+                    <div style={{display:"flex",justifyContent:"center",padding:"8px 0 10px"}}>
+                      <div className="spinner spin" style={{width:14,height:14,borderWidth:2}}/>
+                    </div>
+                  )}
+
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                    {PLANOS.map(p=>{
+                      const ativo=planoAtual===p.id;
+                      const salvando=salvandoPlano===e.id;
+                      return(
+                        <button key={p.id} onClick={()=>!salvando&&salvarPlano(e,p.id)}
+                          disabled={salvando}
+                          style={{padding:"10px 8px",borderRadius:12,cursor:salvando?"not-allowed":"pointer",
+                            background:ativo?`${p.cor}22`:"rgba(255,255,255,.04)",
+                            border:`1.5px solid ${ativo?p.cor:"rgba(125,211,252,.12)"}`,
+                            opacity:salvando?.6:1,transition:"all .15s"}}>
+                          <div style={{fontSize:12,fontWeight:800,color:ativo?p.cor:"#e0f2fe",marginBottom:2}}>{p.label}</div>
+                          <div style={{fontSize:10,color:"rgba(186,230,253,.5)",fontWeight:600}}>{p.valor} · {p.usuarios===999?"∞":p.usuarios} users</div>
+                          {ativo&&<div style={{fontSize:9,color:p.cor,fontWeight:700,marginTop:2}}>✓ ATUAL</div>}
+                          {salvandoPlano===e.id&&!ativo&&<div className="spinner spin" style={{width:10,height:10,borderWidth:1.5,margin:"2px auto 0"}}/>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={()=>confirmarPagamentoManual(e)}
+                disabled={confirmando===e.id}
+                style={{width:"100%",padding:"9px 0",borderRadius:12,background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.3)",color:"#4ade80",fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:confirmando===e.id?.6:1}}>
+                {confirmando===e.id?<div className="spinner spin" style={{width:13,height:13,borderWidth:2}}/>:<><Icon name="CheckCircle" size={13} color="#4ade80"/> Confirmar Pagamento Manual (Pix)</>}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {toast&&<div className="toast" style={{position:"fixed",bottom:84,left:"50%",transform:"translateX(-50%)",background:"rgba(15,23,42,.92)",backdropFilter:"blur(16px)",border:"1px solid rgba(56,189,248,.2)",color:"#e0f2fe",fontSize:13,fontWeight:600,padding:"10px 20px",borderRadius:16,boxShadow:"0 8px 24px rgba(0,0,0,.4)",zIndex:99,whiteSpace:"nowrap"}}>{toast}</div>}
+    </div>
+  );
+}
+
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CAR CARD
+══════════════════════════════════════════════════════════════════════════ */
+function CarCard({item,onAdvance,onDelete,idx}){
+  const [open,setOpen]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const next=STATUS_FLOW[STATUS_FLOW.indexOf(item.status)+1];
+  const prog={"Aguardando":15,"Lavando":55,"Concluído":85,"Pago":100};
+  const progColor={"Aguardando":"#fbbf24","Lavando":"#0ea5e9","Concluído":"#22c55e","Pago":"#64748b"};
+
+  const handleAdvance=async()=>{
+    setLoading(true);
+    await onAdvance(item.id,next,item.status);
+    setLoading(false);
+  };
+
+  return(
+    <div className="glass-card car-enter" style={{marginBottom:12,animationDelay:`${idx*.07}s`,overflow:"hidden"}}>
+      <div style={{padding:14,cursor:"pointer"}} onClick={()=>setOpen(!open)}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:42,height:42,borderRadius:14,background:`${item.color}22`,border:`1px solid ${item.color}44`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Icon name="Car" size={20} color={item.color}/>
+            </div>
+            <div>
+              <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14}}>{item.model}</div>
+              <div style={{color:"rgba(186,230,253,.45)",fontSize:11,fontFamily:"monospace",letterSpacing:".12em"}}>{item.plate}</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <StatusBadge status={item.status}/>
+            <Icon name={open?"ChevronUp":"ChevronDown"} size={14} color="rgba(186,230,253,.4)"/>
+          </div>
+        </div>
+        <div style={{marginTop:10,marginBottom:6}}><ProgressBar pct={prog[item.status]||0} color={progColor[item.status]}/></div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:12,color:"rgba(186,230,253,.5)"}}>{item.client} · {item.type}</span>
+          <span style={{fontSize:13,fontWeight:800,color:"#4ade80"}}>{fmtBRL(item.value)}</span>
+        </div>
+      </div>
+      {open&&(
+        <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.15)"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14,fontSize:12}}>
+            <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Telefone</span><span style={{color:"#bae6fd",fontWeight:600}}>{item.phone}</span></div>
+            <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Entrada</span><span style={{color:"#bae6fd",fontWeight:600}}>{fmtDate(item.created_at)}</span></div>
+            {item.criador?.name&&<div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Criado por</span><span style={{color:"#bae6fd",fontWeight:600}}>{item.criador.name}</span></div>}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            {next&&<button onClick={handleAdvance} disabled={loading} style={{flex:1,padding:"10px 0",borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",color:"#fff",fontWeight:700,fontSize:12,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,boxShadow:"0 4px 12px rgba(14,165,233,.3)",opacity:loading?.6:1}}>
+              {loading?<div className="spinner spin" style={{width:14,height:14}}/>:<><Icon name="Zap" size={13} color="#fff"/> Avançar: {next}</>}
+            </button>}
+            <button onClick={()=>onDelete(item.id)} style={{padding:"10px 12px",borderRadius:12,background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",cursor:"pointer",display:"flex",alignItems:"center"}}>
+              <Icon name="Trash2" size={14} color="#f87171"/>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HOME SCREEN
+══════════════════════════════════════════════════════════════════════════ */
+function HomeScreen({empresaId}){
+  const [queue,setQueue]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [errorMsg,setErrorMsg]=useState("");
+
+  const fetchQueue=useCallback(async()=>{
+    // Join com profiles para mostrar quem criou cada lavagem — útil para
+    // controle de processo entre múltiplos funcionários da mesma empresa.
+    const{data,error}=await sb.from('ordens_servico').select('*, criador:profiles!criado_por(name)').eq('empresa_id',empresaId).order('created_at',{ascending:true});
+    if(error){setErrorMsg("Não foi possível carregar a fila. Verifique sua conexão.");}
+    setQueue(data||[]);setLoading(false);
+  },[empresaId]);
+
+  useEffect(()=>{
+    fetchQueue();
+    // Realtime subscription — usa o payload do evento para atualizar o
+    // estado local de forma incremental (merge), em vez de refazer um
+    // SELECT * completo a cada mudança. Antes, qualquer INSERT/UPDATE/DELETE
+    // em qualquer linha disparava um refetch de toda a tabela para todos os
+    // clientes conectados, multiplicando chamadas à API do Supabase sem
+    // necessidade — relevante para não estourar a cota do plano gratuito.
+    // Apenas em caso de evento inesperado (sem payload reconhecível) cai
+    // no fallback de refetch completo, como rede de segurança.
+    const ch=sb.channel(`queue_${empresaId}`)
+      .on('postgres_changes',{event:'*',schema:'public',table:'ordens_servico',filter:`empresa_id=eq.${empresaId}`},(payload)=>{
+        if(payload.eventType==='INSERT'&&payload.new){
+          // Eventos Realtime trazem só a linha pura, sem o join com
+          // profiles — então um INSERT vindo de outro celular não tem
+          // .criador.name ainda. Um refetch leve corrige isso sem
+          // impactar a percepção de "tempo real" (a linha já aparece
+          // na hora, só sem o nome do criador por um instante).
+          setQueue(prev=>prev.some(v=>v.id===payload.new.id)?prev:[...prev,payload.new]);
+          fetchQueue();
+        }else if(payload.eventType==='UPDATE'&&payload.new){
+          // Preserva o campo .criador já carregado anteriormente, já que
+          // o payload do Realtime não inclui dados de tabelas relacionadas.
+          setQueue(prev=>prev.map(v=>v.id===payload.new.id?{...payload.new,criador:v.criador}:v));
+        }else if(payload.eventType==='DELETE'&&payload.old){
+          setQueue(prev=>prev.filter(v=>v.id!==payload.old.id));
+        }else{
+          fetchQueue(); // fallback de segurança, raramente acionado
+        }
+      })
+      .subscribe();
+    return()=>sb.removeChannel(ch);
+  },[fetchQueue,empresaId]);
+
+  const advance=async(id,nextStatus,currentStatus)=>{
+    setErrorMsg("");
+    // Lock otimista: o UPDATE só é aplicado se o status no banco ainda for
+    // o mesmo que o app tinha quando o usuário clicou. Isso evita que dois
+    // funcionários avançando o mesmo carro simultaneamente causem updates
+    // duplicados ou pulem um estágio sem perceber — se outro funcionário já
+    // mudou o status entre o clique e o envio, esta query não afeta nenhuma
+    // linha (count=0), e avisamos o usuário para recarregar.
+    const{error,count}=await sb.from('ordens_servico')
+      .update({status:nextStatus,updated_at:new Date().toISOString()},{count:'exact'})
+      .eq('id',id)
+      .eq('status',currentStatus);
+    if(error){
+      setErrorMsg("Falha ao atualizar status. Verifique sua conexão e tente novamente.");
+      setTimeout(()=>setErrorMsg(""),5000);
+      return;
+    }
+    if(count===0){
+      setErrorMsg("Este veículo já foi atualizado por outro usuário. A fila foi recarregada.");
+      setTimeout(()=>setErrorMsg(""),5000);
+    }
+    // trigger fn_ordem_paga no banco cuida de mover para histórico se Pago
+    fetchQueue();
+  };
+
+  const del=async(id)=>{
+    setErrorMsg("");
+    const{error}=await sb.from('ordens_servico').delete().eq('id',id);
+    if(error){
+      setErrorMsg("Não foi possível remover o veículo. Tente novamente.");
+      setTimeout(()=>setErrorMsg(""),5000);
+      return;
+    }
+    setQueue(q=>q.filter(v=>v.id!==id));
+  };
+
+  const pills=[
+    {label:"Aguardando",count:queue.filter(v=>v.status==="Aguardando").length,color:"#fbbf24",pct:queue.length?queue.filter(v=>v.status==="Aguardando").length/queue.length*100:0},
+    {label:"Lavando",   count:queue.filter(v=>v.status==="Lavando").length,   color:"#38bdf8",pct:queue.length?queue.filter(v=>v.status==="Lavando").length/queue.length*100:0},
+    {label:"Concluído", count:queue.filter(v=>v.status==="Concluído").length, color:"#4ade80",pct:queue.length?queue.filter(v=>v.status==="Concluído").length/queue.length*100:0},
+  ];
+
+  return(
+    <div className="scroll screen-enter">
+      {errorMsg&&(
+        <div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"flex-start",gap:8}}>
+          <Icon name="AlertTriangle" size={14} color="#f87171" style={{marginTop:1,flexShrink:0}}/>
+          <span style={{color:"#f87171",fontSize:12,fontWeight:600,lineHeight:1.4,flex:1}}>{errorMsg}</span>
+          <button onClick={()=>setErrorMsg("")} style={{background:"transparent",border:"none",cursor:"pointer",padding:0,flexShrink:0}}>
+            <Icon name="XCircle" size={14} color="#f87171"/>
+          </button>
+        </div>
+      )}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:18}}>
+        {pills.map(p=>(
+          <div key={p.label} className="glass-card" style={{padding:"12px 8px",textAlign:"center"}}>
+            <div style={{fontSize:28,fontWeight:900,color:p.color,lineHeight:1}}>{p.count}</div>
+            <div style={{fontSize:10,fontWeight:600,color:"rgba(186,230,253,.5)",marginTop:4,marginBottom:6}}>{p.label}</div>
+            <ProgressBar pct={p.pct} color={p.color}/>
+          </div>
+        ))}
+      </div>
+      {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
+      :queue.length===0?(
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 0",textAlign:"center"}}>
+          <div style={{width:68,height:68,borderRadius:22,background:"rgba(14,165,233,.1)",border:"1px solid rgba(14,165,233,.2)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+            <Icon name="Droplets" size={30} color="rgba(56,189,248,.5)"/>
+          </div>
+          <div style={{color:"rgba(186,230,253,.7)",fontWeight:700,fontSize:16}}>Fila vazia</div>
+          <div style={{color:"rgba(186,230,253,.4)",fontSize:13,marginTop:6}}>Adicione um veículo na aba Nova Lavagem</div>
+        </div>
+      ):(queue.map((v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} idx={i}/>))}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NEW WASH SCREEN
+══════════════════════════════════════════════════════════════════════════ */
+function NewWashScreen({empresaId,userId,onSuccess}){
+  const refs={
+    plate:useRef(null),model:useRef(null),
+    client:useRef(null),phone:useRef(null),
+    observacoes:useRef(null),
+  };
+  // Multi-seleção: array de serviços selecionados
+  const [selectedSvcs,setSelectedSvcs]=useState([]);
+  const [color,setColor]=useState(CAR_COLORS[0]);
+  const [errors,setErrors]=useState({});
+  const [loading,setLoading]=useState(false);
+  const [svcs,setSvcs]=useState(SVC_DEFAULT);
+  const [limitError,setLimitError]=useState("");
+
+  useEffect(()=>{
+    sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).eq('ativo',true)
+      .then(({data})=>{if(data&&data.length>0)setSvcs(data.map(s=>({label:s.nome,value:s.valor})));});
+  },[empresaId]);
+
+  // Valor total calculado automaticamente
+  const totalValue=selectedSvcs.reduce((s,sv)=>s+sv.value,0);
+
+  const toggleSvc=(sv)=>{
+    setSelectedSvcs(prev=>{
+      const jaSelected=prev.find(s=>s.label===sv.label);
+      if(jaSelected)return prev.filter(s=>s.label!==sv.label);
+      return [...prev,sv];
+    });
+    setErrors(e=>({...e,svc:undefined}));
+  };
+
+  const getVal=k=>refs[k]?.current?.value||"";
+
+  const validate=()=>{
+    const e={};
+    if(!getVal("plate").trim())e.plate="Obrigatório";
+    if(!getVal("model").trim())e.model="Obrigatório";
+    if(!getVal("client").trim())e.client="Obrigatório";
+    if(!getVal("phone").trim())e.phone="Obrigatório";
+    if(selectedSvcs.length===0)e.svc="Selecione pelo menos um serviço";
+    setErrors(e);return Object.keys(e).length===0;
+  };
+
+  const submit=async()=>{
+    if(!validate())return;
+    setLoading(true);
+    setLimitError("");
+    // type armazena os nomes dos serviços concatenados para exibição no card
+    const typeLabel=selectedSvcs.map(s=>s.label).join(" + ");
+    const{error}=await sb.from('ordens_servico').insert({
+      empresa_id:empresaId,
+      plate:getVal("plate").trim().toUpperCase(),
+      model:getVal("model").trim(),
+      client:getVal("client").trim(),
+      phone:getVal("phone").trim(),
+      type:typeLabel,
+      value:totalValue,
+      color,
+      observacoes:getVal("observacoes")||null,
+      status:"Aguardando",
+      criado_por:userId||null
+    });
+    setLoading(false);
+    if(error){
+      if(error.message?.includes("LIMITE_PLANO_EXCEDIDO")){
+        setLimitError("Limite de ordens deste mês atingido pelo seu plano. Acesse Configurações para ver detalhes ou faça upgrade.");
+      }else{
+        setLimitError("Não foi possível adicionar o veículo. Verifique sua conexão e tente novamente.");
+      }
+      return;
+    }
+    Object.values(refs).forEach(r=>{if(r.current)r.current.value="";});
+    setSelectedSvcs([]);
+    setColor(CAR_COLORS[0]);
+    setErrors({});
+    onSuccess();
+  };
+
+  return(
+    <div className="scroll screen-enter">
+      {/* Placa */}
+      <div style={{marginBottom:14}}>
+        <label className="lbl">Placa</label>
+        <input ref={refs.plate} className="glass-input" type="text" defaultValue="" placeholder="ABC-1234"
+          style={{borderColor:errors.plate?"rgba(239,68,68,.5)":undefined}}
+          autoCapitalize="characters"/>
+        {errors.plate&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.plate}</div>}
+      </div>
+      {/* Modelo */}
+      <div style={{marginBottom:14}}>
+        <label className="lbl">Modelo / Marca</label>
+        <input ref={refs.model} className="glass-input" type="text" defaultValue="" placeholder="Honda Civic"
+          style={{borderColor:errors.model?"rgba(239,68,68,.5)":undefined}}/>
+        {errors.model&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.model}</div>}
+      </div>
+      {/* Cliente */}
+      <div style={{marginBottom:14}}>
+        <label className="lbl">Nome do Cliente</label>
+        <input ref={refs.client} className="glass-input" type="text" defaultValue="" placeholder="João da Silva"
+          style={{borderColor:errors.client?"rgba(239,68,68,.5)":undefined}}/>
+        {errors.client&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.client}</div>}
+      </div>
+      {/* Telefone */}
+      <div style={{marginBottom:14}}>
+        <label className="lbl">Telefone (com DDD)</label>
+        <input ref={refs.phone} className="glass-input" type="tel" defaultValue="" placeholder="5549991234567"
+          style={{borderColor:errors.phone?"rgba(239,68,68,.5)":undefined}}/>
+        {errors.phone&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.phone}</div>}
+      </div>
+      {/* Serviços — multi-seleção com total automático */}
+      <div style={{marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <label className="lbl" style={{margin:0}}>Serviços</label>
+          {selectedSvcs.length>0&&(
+            <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:99,background:"rgba(74,222,128,.15)",border:"1px solid rgba(74,222,128,.3)"}}>
+              <span style={{fontSize:11,color:"rgba(186,230,253,.6)",fontWeight:600}}>{selectedSvcs.length} selecionado{selectedSvcs.length>1?"s":""}</span>
+              <span style={{fontSize:15,fontWeight:900,color:"#4ade80"}}>{fmtBRL(totalValue)}</span>
+            </div>
+          )}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {svcs.map(sv=>{
+            const sel=selectedSvcs.some(s=>s.label===sv.label);
+            return(
+              <button key={sv.label} onClick={()=>toggleSvc(sv)}
+                style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",borderRadius:14,
+                  border:`1.5px solid ${sel?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+                  background:sel?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
+                  color:sel?"#38bdf8":"rgba(186,230,253,.7)",
+                  fontWeight:sel?700:500,fontSize:13,cursor:"pointer",transition:"all .15s"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${sel?"#38bdf8":"rgba(125,211,252,.3)"}`,background:sel?"#38bdf8":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+                    {sel&&<Icon name="Check" size={12} color="#fff"/>}
+                  </div>
+                  <span>{sv.label}</span>
+                </div>
+                <span style={{fontWeight:800,color:"#4ade80"}}>{fmtBRL(sv.value)}</span>
+              </button>
+            );
+          })}
+        </div>
+        {errors.svc&&<div style={{fontSize:11,color:"#f87171",marginTop:6}}>{errors.svc}</div>}
+      </div>
+      {/* Cor */}
+      <div style={{marginBottom:14}}>
+        <label className="lbl">Cor do Ícone</label>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {CAR_COLORS.map(c=><button key={c} onClick={()=>setColor(c)} style={{width:34,height:34,borderRadius:99,background:c,border:`3px solid ${color===c?"#fff":"transparent"}`,cursor:"pointer",boxShadow:color===c?`0 0 12px ${c}88`:"none",transition:"all .15s"}}/>)}
+        </div>
+      </div>
+      {/* Observações */}
+      <div style={{marginBottom:20}}>
+        <label className="lbl">Observações (opcional)</label>
+        <textarea ref={refs.observacoes} className="glass-input" defaultValue="" placeholder="Arranhado no para-choque, etc." rows={2} style={{resize:"none"}}/>
+      </div>
+      {limitError&&(
+        <div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",borderRadius:12,padding:"12px 14px",marginBottom:14,display:"flex",alignItems:"flex-start",gap:8}}>
+          <Icon name="AlertTriangle" size={15} color="#f87171" style={{marginTop:1,flexShrink:0}}/>
+          <span style={{color:"#f87171",fontSize:13,fontWeight:600,lineHeight:1.4}}>{limitError}</span>
+        </div>
+      )}
+      <button className="btn-glow" onClick={submit} disabled={loading||selectedSvcs.length===0}
+        style={{opacity:selectedSvcs.length===0?.5:1}}>
+        {loading?<div className="spinner spin"/>:<>
+          <Icon name="Plus" size={18} color="#fff"/>
+          {selectedSvcs.length>0?`Adicionar à Fila — ${fmtBRL(totalValue)}`:"Adicionar à Fila"}
+        </>}
+      </button>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HISTORY SCREEN — histórico de lavagens + lançamentos manuais de caixa
+══════════════════════════════════════════════════════════════════════════ */
+function HistoryScreen({empresaId,embedded,isOwner}){
+  const [subTab,setSubTab]=useState("historico");
+  const [hist,setHist]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState("");
+
+  // Caixa manual
+  const [movs,setMovs]=useState([]);
+  const [movLoading,setMovLoading]=useState(true);
+  const [showForm,setShowForm]=useState(false);
+  const [form,setForm]=useState({tipo:"entrada",categoria:"lavagem",descricao:"",valor:""});
+  const [saving,setSaving]=useState(false);
+  const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  useEffect(()=>{
+    sb.from('historico').select('*, criador:profiles!criado_por(name)').eq('empresa_id',empresaId).order('completed_at',{ascending:false}).limit(100)
+      .then(({data})=>{setHist(data||[]);setLoading(false);});
+  },[empresaId]);
+
+  const fetchMovs=useCallback(async()=>{
+    // select() limitado às colunas realmente usadas na tela — reduz bytes
+    // transferidos, relevante em conexões 3G/4G de campo.
+    const{data}=await sb.from('caixa_movimentos').select('id,tipo,categoria,descricao,valor,data').eq('empresa_id',empresaId)
+      .gte('data',new Date(Date.now()-30*86400000).toISOString().split("T")[0])
+      .order('created_at',{ascending:false});
+    setMovs(data||[]);setMovLoading(false);
+  },[empresaId]);
+
+  useEffect(()=>{if(subTab==="caixa")fetchMovs();},[subTab,fetchMovs]);
+
+  const filtered=hist.filter(h=>h.client?.toLowerCase().includes(search.toLowerCase())||h.plate?.toLowerCase().includes(search.toLowerCase())||h.model?.toLowerCase().includes(search.toLowerCase()));
+  const total=hist.reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+  const tod=hist.filter(h=>daysSince(h.completed_at)===0).reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+
+  const hoje=new Date().toISOString().split("T")[0];
+  const entradasHoje=movs.filter(m=>m.tipo==="entrada"&&m.data===hoje).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const saidasHoje=movs.filter(m=>m.tipo==="saida"&&m.data===hoje).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const saldoHoje=entradasHoje-saidasHoje;
+
+  const catEntrada=["lavagem","detalhamento","produto_venda","outro"];
+  const catSaida=["produto_compra","despesa","salario","manutencao","outro"];
+
+  const saveMov=async()=>{
+    if(!form.valor||!form.descricao)return;
+    setSaving(true);
+    await sb.from('caixa_movimentos').insert({empresa_id:empresaId,tipo:form.tipo,categoria:form.categoria,descricao:form.descricao,valor:parseFloat(form.valor),data:hoje});
+    setForm({tipo:"entrada",categoria:"lavagem",descricao:"",valor:""});
+    setShowForm(false);setSaving(false);fetchMovs();
+  };
+
+  return(
+    <div className={embedded?"":"scroll screen-enter"}>
+      {/* Sub-abas */}
+      <div style={{display:"flex",marginBottom:18,borderBottom:"1px solid rgba(125,211,252,.15)"}}>
+        {[["historico","🚗 Lavagens"],["caixa","💰 Caixa Manual"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setSubTab(k)}
+            className={subTab===k?"tab-active":"tab-inactive"}
+            style={{flex:1,padding:"10px 0",fontSize:12,fontWeight:700,background:"transparent",border:"none",cursor:"pointer",transition:"all .2s"}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {subTab==="historico"?(
+        <>
+          {/* Receita Total e Hoje são dados financeiros sensíveis do negócio
+              — visíveis apenas para o dono, nunca para funcionários. */}
+          {isOwner&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+              {[{label:"Receita Total",val:fmtBRL(total),color:"#4ade80",icon:"TrendingUp",pct:100},
+                {label:"Hoje",         val:fmtBRL(tod),  color:"#38bdf8",icon:"Droplets",  pct:total?tod/total*100:0}].map(c=>(
+                <div key={c.label} className="glass-card" style={{padding:16}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                    <span style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.5)"}}>{c.label}</span>
+                    <Icon name={c.icon} size={14} color={c.color}/>
+                  </div>
+                  <div style={{fontSize:17,fontWeight:900,color:c.color,marginBottom:8}}>{c.val}</div>
+                  <ProgressBar pct={c.pct} color={c.color}/>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{position:"relative",marginBottom:14}}>
+            <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)"}}><Icon name="Search" size={14} color="rgba(186,230,253,.4)"/></span>
+            <input className="glass-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, placa, modelo..." style={{paddingLeft:38}}/>
+          </div>
+          {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
+          :filtered.length===0?<div style={{textAlign:"center",color:"rgba(186,230,253,.4)",padding:"40px 0"}}>Nenhum registro encontrado</div>
+          :filtered.map((h,i)=>(
+            <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`}}>
+              <div style={{padding:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                  <div>
+                    <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14}}>{h.client}</div>
+                    <div style={{color:"rgba(186,230,253,.45)",fontSize:12}}>{h.model} · <span style={{fontFamily:"monospace"}}>{h.plate}</span></div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontWeight:800,fontSize:14,color:"#4ade80"}}>{fmtBRL(h.value)}</div>
+                    <div style={{color:"rgba(186,230,253,.4)",fontSize:11}}>{fmtDate(h.completed_at)}</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <span style={{fontSize:12,color:"rgba(186,230,253,.45)"}}>
+                    {h.type}{h.criador?.name&&<span style={{color:"rgba(186,230,253,.3)"}}> · por {h.criador.name}</span>}
+                  </span>
+                  <StatusBadge status={h.status||"Pago"}/>
+                </div>
+              </div>
+            </div>
+          ))}
+        </>
+      ):(
+        <>
+          {/* Resumo do dia */}
+          <div className="glass-card" style={{padding:16,marginBottom:16,background:"rgba(14,165,233,.08)",border:"1px solid rgba(56,189,248,.2)"}}>
+            <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.5)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:12}}>Resumo de Hoje</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+              {[{label:"Entradas",val:fmtBRL(entradasHoje),color:"#4ade80"},{label:"Saídas",val:fmtBRL(saidasHoje),color:"#f87171"},{label:"Saldo",val:fmtBRL(saldoHoje),color:saldoHoje>=0?"#38bdf8":"#f87171"}].map(k=>(
+                <div key={k.label} style={{textAlign:"center"}}>
+                  <div style={{fontSize:14,fontWeight:900,color:k.color}}>{k.val}</div>
+                  <div style={{fontSize:10,color:"rgba(186,230,253,.4)",marginTop:2}}>{k.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button className="btn-glow" onClick={()=>setShowForm(!showForm)} style={{marginBottom:16,background:showForm?"linear-gradient(135deg,#64748b,#475569)":undefined}}>
+            <Icon name={showForm?"XCircle":"PlusCircle"} size={16} color="#fff"/>
+            {showForm?"Cancelar":"Registrar Movimento"}
+          </button>
+
+          {showForm&&(
+            <div className="glass-card" style={{padding:16,marginBottom:16,background:"rgba(255,255,255,.06)"}}>
+              <div style={{display:"flex",gap:8,marginBottom:12}}>
+                {["entrada","saida"].map(t=>(
+                  <button key={t} onClick={()=>{setF("tipo",t);setF("categoria",t==="entrada"?catEntrada[0]:catSaida[0]);}}
+                    style={{flex:1,padding:"9px 0",borderRadius:12,border:`1.5px solid ${form.tipo===t?(t==="entrada"?"rgba(74,222,128,.6)":"rgba(248,113,113,.6)"):"rgba(125,211,252,.15)"}`,background:form.tipo===t?(t==="entrada"?"rgba(74,222,128,.15)":"rgba(248,113,113,.15)"):"rgba(255,255,255,.04)",color:form.tipo===t?(t==="entrada"?"#4ade80":"#f87171"):"rgba(186,230,253,.5)",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                    {t==="entrada"?"⬆ Entrada":"⬇ Saída"}
+                  </button>
+                ))}
+              </div>
+              <div style={{marginBottom:10}}>
+                <label className="lbl">Categoria</label>
+                <select className="glass-input" value={form.categoria} onChange={e=>setF("categoria",e.target.value)} style={{WebkitAppearance:"none"}}>
+                  {(form.tipo==="entrada"?catEntrada:catSaida).map(c=><option key={c} value={c} style={{background:"#0d2847"}}>{c.replace("_"," ")}</option>)}
+                </select>
+              </div>
+              <div style={{marginBottom:10}}>
+                <label className="lbl">Descrição</label>
+                <input className="glass-input" value={form.descricao} onChange={e=>setF("descricao",e.target.value)} placeholder="Ex: Compra de shampoo automotivo"/>
+              </div>
+              <div style={{marginBottom:14}}>
+                <label className="lbl">Valor (R$)</label>
+                <input className="glass-input" type="number" value={form.valor} onChange={e=>setF("valor",e.target.value)} placeholder="0,00"/>
+              </div>
+              <button className="btn-glow" onClick={saveMov} disabled={saving} style={{background:form.tipo==="entrada"?"linear-gradient(135deg,#16a34a,#15803d)":"linear-gradient(135deg,#dc2626,#b91c1c)"}}>
+                {saving?<div className="spinner spin"/>:<><Icon name="Check" size={16} color="#fff"/> Salvar Movimento</>}
+              </button>
+            </div>
+          )}
+
+          <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>Últimos 30 dias</div>
+          {movLoading?<div style={{display:"flex",justifyContent:"center",padding:20}}><div className="spinner spin"/></div>
+          :movs.length===0?<div style={{textAlign:"center",color:"rgba(186,230,253,.4)",padding:20}}>Nenhum movimento registrado</div>
+          :movs.map((m,i)=>(
+            <div key={m.id} className="glass-card car-enter" style={{marginBottom:8,animationDelay:`${i*.03}s`}}>
+              <div style={{padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:34,height:34,borderRadius:10,background:m.tipo==="entrada"?"rgba(74,222,128,.15)":"rgba(248,113,113,.15)",border:`1px solid ${m.tipo==="entrada"?"rgba(74,222,128,.25)":"rgba(248,113,113,.25)"}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <Icon name={m.tipo==="entrada"?"PlusCircle":"MinusCircle"} size={15} color={m.tipo==="entrada"?"#4ade80":"#f87171"}/>
+                  </div>
+                  <div>
+                    <div style={{color:"#e0f2fe",fontWeight:600,fontSize:13}}>{m.descricao||m.categoria}</div>
+                    <div style={{color:"rgba(186,230,253,.4)",fontSize:11}}>{m.categoria?.replace("_"," ")} · {fmtDate(m.data)}</div>
+                  </div>
+                </div>
+                <div style={{fontWeight:800,fontSize:14,color:m.tipo==="entrada"?"#4ade80":"#f87171"}}>
+                  {m.tipo==="entrada"?"+":"-"}{fmtBRL(m.valor)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CRM SCREEN
+══════════════════════════════════════════════════════════════════════════ */
+function CRMScreen({empresaId}){
+  const [min,setMin]=useState(30);
+  const [hist,setHist]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    sb.from('historico').select('phone,client,model,plate,type,completed_at').eq('empresa_id',empresaId).order('completed_at',{ascending:false})
+      .then(({data})=>{setHist(data||[]);setLoading(false);});
+  },[empresaId]);
+
+  // Latest per phone
+  const map={};
+  hist.forEach(r=>{if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))map[r.phone]=r;});
+  const sumidos=Object.values(map).map(r=>({...r,dias:daysSince(r.completed_at)})).filter(r=>r.dias>=min).sort((a,b)=>b.dias-a.dias);
+
+  const waLink=r=>{
+    // Mensagem com gatilho de desconto + urgência (validade de 7 dias) —
+    // testes de copywriting mostram que oferta concreta + prazo claro
+    // converte mais que convite genérico sem benefício tangível.
+    const msg=encodeURIComponent(`Olá ${r.client}! 👋 Notamos que faz ${r.dias} dias desde a última vez que cuidamos do seu ${r.model} (placa ${r.plate}) aqui no nosso lava-jato. Queremos você de volta! 🎁 Preparamos *10% de desconto* na sua próxima lavagem, válido somente até esta semana. Responda essa mensagem ou venha nos visitar para garantir sua vaga — não queremos que essa oferta acabe sem você aproveitar! 🚗💦✨`);
+    return`https://api.whatsapp.com/send?phone=${r.phone}&text=${msg}`;
+  };
+
+  return(
+    <div className="scroll screen-enter">
+      <div className="glass-card" style={{padding:16,marginBottom:18,background:"rgba(124,58,237,.12)",border:"1px solid rgba(167,139,250,.25)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+          <div style={{width:42,height:42,borderRadius:14,background:"rgba(124,58,237,.2)",border:"1px solid rgba(167,139,250,.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Icon name="Award" size={20} color="#a78bfa"/>
+          </div>
+          <div>
+            <div style={{color:"#e0f2fe",fontWeight:800,fontSize:15}}>Clientes Sumidos</div>
+            <div style={{color:"rgba(186,230,253,.5)",fontSize:12}}>Recupere inativos via WhatsApp</div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{fontSize:36,fontWeight:900,color:"#a78bfa",lineHeight:1}}>{loading?"…":sumidos.length}</div>
+          <div>
+            <div style={{fontSize:11,color:"rgba(186,230,253,.4)",marginBottom:6,textAlign:"right"}}>Filtro: ≥ {min} dias</div>
+            <div style={{display:"flex",gap:6}}>
+              {[30,45,60].map(d=><button key={d} onClick={()=>setMin(d)} style={{padding:"5px 12px",borderRadius:99,fontSize:12,fontWeight:700,border:`1.5px solid ${min===d?"#a78bfa":"rgba(125,211,252,.2)"}`,background:min===d?"rgba(124,58,237,.4)":"rgba(255,255,255,.05)",color:min===d?"#e9d5ff":"rgba(186,230,253,.5)",cursor:"pointer",transition:"all .15s"}}>{d}d</button>)}
+            </div>
+          </div>
+        </div>
+        <ProgressBar pct={Math.min(sumidos.length*10,100)} color="#a78bfa"/>
+      </div>
+
+      {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
+      :sumidos.length===0?(
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"56px 0",textAlign:"center"}}>
+          <div style={{width:64,height:64,borderRadius:20,background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.2)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+            <Icon name="CheckCircle" size={28} color="#4ade80"/>
+          </div>
+          <div style={{color:"#e0f2fe",fontWeight:700,fontSize:16}}>Nenhum cliente sumido!</div>
+          <div style={{color:"rgba(186,230,253,.4)",fontSize:13,marginTop:6}}>Todos lavaram dentro de {min} dias</div>
+        </div>
+      ):(
+        sumidos.map((r,i)=>{
+          const hot=r.dias>=60;
+          return(
+            <div key={r.phone} className="glass-card car-enter" style={{marginBottom:12,animationDelay:`${i*.06}s`}}>
+              <div style={{padding:14}}>
+                <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:40,height:40,borderRadius:12,background:"rgba(255,255,255,.06)",border:"1px solid rgba(125,211,252,.15)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <Icon name="Car" size={16} color="rgba(186,230,253,.5)"/>
+                    </div>
+                    <div>
+                      <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14}}>{r.client}</div>
+                      <div style={{color:"rgba(186,230,253,.45)",fontSize:12}}>{r.model}</div>
+                    </div>
+                  </div>
+                  <div style={{padding:"6px 10px",borderRadius:12,background:hot?"rgba(239,68,68,.15)":"rgba(251,191,36,.12)",border:`1px solid ${hot?"rgba(239,68,68,.3)":"rgba(251,191,36,.25)"}`,textAlign:"right"}}>
+                    <div style={{fontSize:22,fontWeight:900,color:hot?"#f87171":"#fbbf24",lineHeight:1}}>{r.dias}d</div>
+                    <div style={{fontSize:10,color:hot?"#f87171":"#fbbf24",opacity:.75}}>sem lavar</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,fontSize:12}}>
+                  <span style={{fontFamily:"monospace",background:"rgba(255,255,255,.06)",border:"1px solid rgba(125,211,252,.15)",padding:"2px 8px",borderRadius:6,color:"#bae6fd"}}>{r.plate}</span>
+                  <span style={{color:"rgba(186,230,253,.3)"}}>·</span>
+                  <span style={{color:"rgba(186,230,253,.5)"}}>{r.phone}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"rgba(186,230,253,.4)",marginBottom:12}}>
+                  <span>Última: {fmtDate(r.completed_at)}</span><span>{r.type}</span>
+                </div>
+                <a href={waLink(r)} target="_blank" rel="noreferrer" style={{width:"100%",padding:"12px 0",borderRadius:14,background:"linear-gradient(135deg,#16a34a,#15803d)",color:"#fff",fontWeight:700,fontSize:14,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,textDecoration:"none",boxShadow:"0 6px 18px rgba(22,163,74,.3)"}}>
+                  <Icon name="MessageCircle" size={16} color="#fff"/> Enviar via WhatsApp
+                </a>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ADMIN SCREEN — gerenciar equipe
+══════════════════════════════════════════════════════════════════════════ */
+function AdminScreen({empresaId,currentUser,embedded}){
+  const [users,setUsers]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [form,setForm]=useState({name:"",email:"",password:"",role:"employee"});
+  const [errors,setErrors]=useState({});
+  const [saving,setSaving]=useState(false);
+  const [success,setSuccess]=useState("");
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const fetchUsers=useCallback(async()=>{
+    const{data}=await sb.from('profiles').select('*').eq('empresa_id',empresaId).order('created_at');
+    setUsers(data||[]);setLoading(false);
+  },[empresaId]);
+
+  useEffect(()=>{fetchUsers();},[fetchUsers]);
+
+  const validate=()=>{
+    const e={};
+    if(!form.name.trim())e.name="Obrigatório";
+    if(!form.email.trim()||!form.email.includes("@"))e.email="E-mail inválido";
+    if(form.password.length<6)e.password="Mínimo 6 caracteres";
+    setErrors(e);return Object.keys(e).length===0;
+  };
+
+  const addUser=async()=>{
+    if(!validate())return;
+    setSaving(true);
+    try{
+      // Chama Edge Function (roda no servidor com Service Role Key).
+      // Isso evita o bug de "sequestro de sessão": sb.auth.signUp() direto
+      // do client troca a sessão ativa do navegador para o usuário recém-criado.
+      // A Edge Function usa supabase.auth.admin.createUser(), que não afeta
+      // a sessão de quem está chamando, e também valida o limite de
+      // funcionários do plano ANTES de criar o usuário.
+      //
+      // IMPORTANTE: getSession() sozinho pode devolver um token JÁ EXPIRADO
+      // se o app ficou em segundo plano por um tempo (o navegador suspende
+      // o timer de renovação automática nesse caso) — o SDK só percebe e
+      // renova na próxima chamada de rede que fizer. Por isso, chamamos
+      // refreshSession() explicitamente antes, forçando um token válido na
+      // hora, em vez de confiar que a renovação em segundo plano já rodou.
+      let{data:sessionData}=await sb.auth.getSession();
+      const expiresAt=sessionData?.session?.expires_at;
+      const jaExpirado=expiresAt&&(expiresAt*1000)<Date.now();
+      if(!sessionData?.session||jaExpirado){
+        const{data:refreshed}=await sb.auth.refreshSession();
+        if(refreshed?.session)sessionData=refreshed;
+      }
+      // NOTA: no painel do Supabase, o campo "Name" da função é apenas um
+      // rótulo de exibição — a rota real (slug da URL) é fixada no momento
+      // da criação e não muda mesmo renomeando o "Name" depois. A função
+      // foi criada com o slug "bright-processor", então chamamos essa rota
+      // aqui, mesmo o nome exibido no painel sendo "create-employee".
+      const res=await fetch(`${SUPABASE_URL}/functions/v1/bright-processor`,{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":`Bearer ${sessionData?.session?.access_token||""}`,
+        },
+        body:JSON.stringify({
+          email:form.email.trim().toLowerCase(),
+          password:form.password,
+          name:form.name.trim(),
+          role:form.role,
+          empresa_id:empresaId,
+        }),
+      });
+      const result=await res.json();
+      if(!result.success){
+        // Mensagem mais clara especificamente para o caso de sessão
+        // expirada — orienta a ação certa (relogar) em vez de deixar o
+        // usuário sem saber o que fazer com um "Não autenticado." seco.
+        const msg=result.message==="Não autenticado."
+          ?"Sua sessão expirou. Saia e entre novamente no app, depois tente cadastrar o funcionário de novo."
+          :(result.message||"Erro ao criar usuário.");
+        setErrors({email:msg});
+        setSaving(false);
+        return;
+      }
+      setSuccess(`Usuário "${form.name}" criado com sucesso!`);
+      setTimeout(()=>setSuccess(""),5000);
+      setForm({name:"",email:"",password:"",role:"employee"});
+      fetchUsers();
+    }catch(e){
+      setErrors({email:"Falha de conexão. Verifique sua internet e tente novamente."});
+    }
+    setSaving(false);
+  };
+
+  const removeUser=async(uid)=>{
+    if(uid===currentUser.id)return;
+    await sb.from('profiles').update({ativo:false}).eq('id',uid);
+    fetchUsers();
+  };
+
+  return(
+    <div className={embedded?"":"scroll screen-enter"}>
+      <div className="glass-card" style={{padding:16,marginBottom:18,background:"rgba(14,165,233,.08)",border:"1px solid rgba(56,189,248,.2)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+          <div style={{width:38,height:38,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(14,165,233,.3)"}}>
+            <Icon name="UserPlus" size={17} color="#fff"/>
+          </div>
+          <div>
+            <div style={{color:"#e0f2fe",fontWeight:800,fontSize:15}}>Adicionar Funcionário</div>
+            <div style={{color:"rgba(186,230,253,.5)",fontSize:12}}>Crie um novo acesso ao sistema</div>
+          </div>
+        </div>
+        {[["name","Nome completo","Maria Silva","text"],["email","E-mail","maria@email.com","email"],["password","Senha (min. 6 chars)","••••••••","password"]].map(([field,label,ph,type])=>(
+          <div key={field} style={{marginBottom:12}}>
+            <label className="lbl">{label}</label>
+            <input className="glass-input" type={type} value={form[field]} onChange={e=>set(field,e.target.value)} placeholder={ph} autoCapitalize="none" style={{borderColor:errors[field]?"rgba(239,68,68,.5)":undefined}}/>
+            {errors[field]&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors[field]}</div>}
+          </div>
+        ))}
+        <div style={{marginBottom:16}}>
+          <label className="lbl">Nível de acesso</label>
+          <div style={{display:"flex",gap:8}}>
+            {[["employee","👷 Funcionário"],["owner","👑 Dono"]].map(([val,lbl])=>(
+              <button key={val} onClick={()=>set("role",val)} style={{flex:1,padding:"10px 0",borderRadius:12,border:`1.5px solid ${form.role===val?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,background:form.role===val?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",color:form.role===val?"#38bdf8":"rgba(186,230,253,.5)",fontWeight:700,fontSize:13,cursor:"pointer",transition:"all .15s"}}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+        </div>
+        {success&&<div style={{background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.3)",borderRadius:12,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><Icon name="CheckCircle" size={15} color="#4ade80"/><span style={{color:"#4ade80",fontSize:13,fontWeight:600}}>{success}</span></div>}
+        <button className="btn-glow" onClick={addUser} disabled={saving}>
+          {saving?<div className="spinner spin"/>:<><Icon name="UserPlus" size={16} color="#fff"/> Criar Usuário</>}
+        </button>
+      </div>
+      <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>Equipe ({users.length})</div>
+      {loading?<div style={{display:"flex",justifyContent:"center",padding:20}}><div className="spinner spin"/></div>
+      :users.map(u=>(
+        <div key={u.id} className="glass-card" style={{marginBottom:10}}>
+          <div style={{padding:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:42,height:42,borderRadius:14,background:u.role==="owner"?"rgba(251,191,36,.15)":"rgba(14,165,233,.12)",border:`1px solid ${u.role==="owner"?"rgba(251,191,36,.3)":"rgba(14,165,233,.25)"}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Icon name={u.role==="owner"?"Shield":"User"} size={18} color={u.role==="owner"?"#fbbf24":"#38bdf8"}/>
+              </div>
+              <div>
+                <div style={{color:u.ativo?"#e0f2fe":"rgba(186,230,253,.3)",fontWeight:800,fontSize:14}}>{u.name}</div>
+                <div style={{color:"rgba(186,230,253,.4)",fontSize:12}}>{u.role==="owner"?"Dono":"Funcionário"}{!u.ativo?" · Inativo":""}</div>
+              </div>
+            </div>
+            {u.id!==currentUser.id
+              ?<button onClick={()=>removeUser(u.id)} style={{padding:"9px 11px",borderRadius:12,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.25)",color:"#f87171",cursor:"pointer",display:"flex",alignItems:"center"}}><Icon name="Trash2" size={14} color="#f87171"/></button>
+              :<span style={{fontSize:11,color:"#38bdf8",fontWeight:700,background:"rgba(14,165,233,.15)",padding:"4px 10px",borderRadius:99,border:"1px solid rgba(56,189,248,.25)"}}>Você</span>
+            }
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MINI BAR CHART (sem lib externa)
+══════════════════════════════════════════════════════════════════════════ */
+function BarChartBar({d,max,color,height,delay}){
+  const pct=d.v/max;
+  const [w,setW]=useState(0);
+  useEffect(()=>{const t=setTimeout(()=>setW(pct),delay);return()=>clearTimeout(t);},[pct,delay]);
+  return(
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+      <div style={{fontSize:9,color:"rgba(186,230,253,.5)",fontWeight:600}}>{d.v>0?fmtBRL(d.v).replace("R$","").trim():""}</div>
+      <div style={{width:"100%",borderRadius:"4px 4px 0 0",background:`${color}22`,position:"relative",height:height-20,display:"flex",alignItems:"flex-end"}}>
+        <div style={{width:"100%",borderRadius:"4px 4px 0 0",background:`linear-gradient(180deg,${color},${color}99)`,height:`${w*100}%`,transition:"height .6s cubic-bezier(.25,.46,.45,.94)"}}/>
+      </div>
+      <div style={{fontSize:9,color:"rgba(186,230,253,.4)",textAlign:"center",lineHeight:1.2}}>{d.l}</div>
+    </div>
+  );
+}
+
+function BarChart({data,color="#0ea5e9",height=80}){
+  const max=Math.max(...data.map(d=>d.v),1);
+  return(
+    <div style={{display:"flex",alignItems:"flex-end",gap:4,height,paddingTop:8}}>
+      {data.map((d,i)=>(
+        <BarChartBar key={`${d.l}-${i}`} d={d} max={max} color={color} height={height} delay={i*60+100}/>
+      ))}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RELATORIOS SCREEN
+══════════════════════════════════════════════════════════════════════════ */
+function RelatoriosScreen({empresaId,embedded}){
+  const [periodo,setPeriodo]=useState("semana");
+  const [movs,setMovs]=useState([]);
+  const [hist,setHist]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    setLoading(true);
+    const dias=periodo==="dia"?1:periodo==="semana"?7:30;
+    const desde=new Date(Date.now()-dias*86400000).toISOString().split("T")[0];
+    Promise.all([
+      sb.from('caixa_movimentos').select('tipo,categoria,valor,data').eq('empresa_id',empresaId).gte('data',desde).order('data'),
+      sb.from('historico').select('type,value,completed_at').eq('empresa_id',empresaId).gte('completed_at',new Date(Date.now()-dias*86400000).toISOString()).order('completed_at'),
+    ]).then(([{data:m},{data:h}])=>{
+      setMovs(m||[]);setHist(h||[]);setLoading(false);
+    });
+  },[empresaId,periodo]);
+
+  const entradas=movs.filter(m=>m.tipo==="entrada").reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const saidas=movs.filter(m=>m.tipo==="saida").reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const saldo=entradas-saidas;
+  const totalAtend=hist.length;
+
+  // Agrupar para o gráfico. Importante: no período de 30 dias, agregamos
+  // por SEMANA (4-5 barras cobrindo os 30 dias reais) em vez de amostrar
+  // apenas 5 dias arbitrários espaçados a cada ~7 dias — a versão anterior
+  // mostrava 5 barras de dias isolados, dando a falsa impressão de ser uma
+  // visão diária completa do mês, quando na real ignorava 25 dos 30 dias.
+  const hoje=new Date();
+  let chartData;
+  if(periodo==="dia"){
+    const key=hoje.toISOString().split("T")[0];
+    const v=movs.filter(m=>m.tipo==="entrada"&&m.data===key).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+    chartData=[{l:"Hoje",v}];
+  }else if(periodo==="semana"){
+    chartData=[6,5,4,3,2,1,0].map(d=>{
+      const dt=new Date(hoje);dt.setDate(dt.getDate()-d);
+      const key=dt.toISOString().split("T")[0];
+      const v=movs.filter(m=>m.tipo==="entrada"&&m.data===key).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+      return{l:["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][dt.getDay()],v};
+    });
+  }else{
+    // 30 dias: agrupado por semana, cobrindo os 30 dias reais sem pular nenhum
+    const semanas=[];
+    for(let w=4;w>=0;w--){
+      const fim=new Date(hoje);fim.setDate(fim.getDate()-w*7);
+      const inicio=new Date(fim);inicio.setDate(inicio.getDate()-6);
+      const inicioKey=inicio.toISOString().split("T")[0];
+      const fimKey=fim.toISOString().split("T")[0];
+      const v=movs.filter(m=>m.tipo==="entrada"&&m.data>=inicioKey&&m.data<=fimKey).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+      semanas.push({l:`${inicio.getDate()}/${inicio.getMonth()+1}`,v});
+    }
+    chartData=semanas;
+  }
+
+  // Por categoria
+  const catMap={};
+  movs.filter(m=>m.tipo==="entrada").forEach(m=>{catMap[m.categoria]=(catMap[m.categoria]||0)+(parseFloat(m.valor)||0);});
+  const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+
+  // Serviços mais realizados
+  const svcMap={};
+  hist.forEach(h=>{svcMap[h.type]=(svcMap[h.type]||0)+1;});
+  const svcs=Object.entries(svcMap).sort((a,b)=>b[1]-a[1]);
+
+  return(
+    <div className={embedded?"":"scroll screen-enter"}>
+      {/* Período */}
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        {[["dia","Hoje"],["semana","7 dias"],["mes","30 dias"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setPeriodo(k)}
+            style={{flex:1,padding:"9px 0",borderRadius:12,border:`1.5px solid ${periodo===k?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,background:periodo===k?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",color:periodo===k?"#38bdf8":"rgba(186,230,253,.5)",fontWeight:700,fontSize:12,cursor:"pointer",transition:"all .15s"}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>:(
+        <>
+          {/* KPIs */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+            {[
+              {l:"Receita",v:fmtBRL(entradas),c:"#4ade80",icon:"TrendingUp"},
+              {l:"Despesas",v:fmtBRL(saidas),c:"#f87171",icon:"MinusCircle"},
+              {l:"Saldo",v:fmtBRL(saldo),c:saldo>=0?"#38bdf8":"#f87171",icon:"Wallet"},
+              {l:"Atendimentos",v:totalAtend,c:"#a78bfa",icon:"Car"},
+            ].map(k=>(
+              <div key={k.l} className="glass-card" style={{padding:14}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                  <span style={{fontSize:11,color:"rgba(186,230,253,.5)",fontWeight:600}}>{k.l}</span>
+                  <Icon name={k.icon} size={13} color={k.c}/>
+                </div>
+                <div style={{fontSize:17,fontWeight:900,color:k.c}}>{k.v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráfico de receita */}
+          <div className="glass-card" style={{padding:16,marginBottom:14}}>
+            <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:12}}>
+              📊 Receita {periodo==="dia"?"de Hoje":periodo==="semana"?"por Dia (últimos 7 dias)":"por Semana (últimos 30 dias)"}
+            </div>
+            <BarChart data={chartData} color="#0ea5e9" height={100}/>
+          </div>
+
+          {/* Serviços mais realizados */}
+          {svcs.length>0&&(
+            <div className="glass-card" style={{padding:16,marginBottom:14}}>
+              <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:12}}>🏆 Serviços Mais Realizados</div>
+              {svcs.map(([nome,qtd],i)=>(
+                <div key={nome} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                  <div style={{width:22,height:22,borderRadius:6,background:"rgba(14,165,233,.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <span style={{fontSize:11,fontWeight:800,color:"#38bdf8"}}>{i+1}</span>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{fontSize:13,color:"#e0f2fe",fontWeight:600}}>{nome}</span>
+                      <span style={{fontSize:12,color:"#38bdf8",fontWeight:700}}>{qtd}x</span>
+                    </div>
+                    <div className="progress-bar">
+                      <div className="progress-fill" style={{width:`${(qtd/svcs[0][1])*100}%`,background:"linear-gradient(90deg,#0ea5e9,#38bdf8)"}}/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Por categoria financeira */}
+          {cats.length>0&&(
+            <div className="glass-card" style={{padding:16,marginBottom:14}}>
+              <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:12}}>💰 Receita por Categoria</div>
+              {cats.map(([cat,val])=>(
+                <div key={cat} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                  <span style={{fontSize:13,color:"rgba(186,230,253,.7)",textTransform:"capitalize"}}>{cat.replace("_"," ")}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:"#4ade80"}}>{fmtBRL(val)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {cats.length===0&&svcs.length===0&&(
+            <div style={{textAlign:"center",color:"rgba(186,230,253,.3)",padding:"30px 0",fontSize:13}}>Nenhum dado no período selecionado</div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SUPPORT SCREEN
+══════════════════════════════════════════════════════════════════════════ */
+function SupportScreen({embedded}){
+  const [open,setOpen]=useState(null);
+  const [form,setForm]=useState({name:"",msg:""});
+  const [sent,setSent]=useState(false);
+  const send=()=>{if(!form.name||!form.msg)return;setSent(true);setTimeout(()=>{setSent(false);setForm({name:"",msg:""});},3000);};
+  return(
+    <div className={embedded?"":"scroll screen-enter"}>
+      <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>Perguntas Frequentes</div>
+      <div style={{marginBottom:20}}>
+        {FAQ.map((item,i)=>(
+          <div key={i} className="glass-card" style={{marginBottom:8}}>
+            <button onClick={()=>setOpen(open===i?null:i)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:"transparent",border:"none",cursor:"pointer",textAlign:"left"}}>
+              <span style={{color:"#bae6fd",fontWeight:600,fontSize:14,flex:1,paddingRight:8}}>{item.q}</span>
+              <Icon name={open===i?"ChevronUp":"ChevronDown"} size={14} color="rgba(186,230,253,.4)"/>
+            </button>
+            {open===i&&<div style={{padding:"0 16px 14px",paddingTop:12,color:"rgba(186,230,253,.6)",fontSize:13,lineHeight:1.65,borderTop:"1px solid rgba(125,211,252,.1)"}}>{item.a}</div>}
+          </div>
+        ))}
+      </div>
+      <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>Contato / Suporte</div>
+      <div className="glass-card" style={{padding:16}}>
+        <input className="glass-input" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Seu nome" style={{marginBottom:10}}/>
+        <textarea className="glass-input" value={form.msg} onChange={e=>setForm(f=>({...f,msg:e.target.value}))} placeholder="Descreva sua dúvida..." rows={3} style={{marginBottom:10,resize:"none"}}/>
+        <button className="btn-glow" onClick={send} style={{background:sent?"linear-gradient(135deg,#16a34a,#15803d)":undefined}}>
+          {sent?<><Icon name="Check" size={15} color="#fff"/> Enviado!</>:<><Icon name="Send" size={15} color="#fff"/> Enviar Mensagem</>}
+        </button>
+      </div>
+      <div style={{textAlign:"center",color:"rgba(186,230,253,.25)",fontSize:11,marginTop:20}}>Lava Rápido SaaS v3.0.0</div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   APP ROOT
+══════════════════════════════════════════════════════════════════════════ */
+function App(){
+  const [session,setSession]=useState(undefined);
+  const [profile,setProfile]=useState(null);
+  const [empresa,setEmpresa]=useState(null);
+  const [assInfo,setAssInfo]=useState(null);
+  const [tab,setTab]=useState("home");
+  const [toast,setToast]=useState(null);
+  const [authReady,setAuthReady]=useState(false);
+  const [weekWeather,setWeekWeather]=useState(null);
+  const [showWeeklyPopup,setShowWeeklyPopup]=useState(false);
+  const [showSupport,setShowSupport]=useState(false);
+
+  // Mostra o popup de resumo semanal uma vez por dia, por empresa — a
+  // chave do localStorage inclui o empresa_id porque, sem isso, trocar de
+  // conta no mesmo navegador (ex: o master testando múltiplas empresas)
+  // faria o app pensar "já mostrei hoje" mesmo sendo uma empresa diferente,
+  // já que o localStorage é vinculado ao navegador, não à conta logada.
+  useEffect(()=>{
+    if(!weekWeather||!profile?.empresa_id)return;
+    const hoje=new Date().toISOString().split("T")[0];
+    const chave=`weeklyWeatherPopupDate_${profile.empresa_id}`;
+    const ultimaVez=localStorage.getItem(chave);
+    if(ultimaVez!==hoje){
+      setShowWeeklyPopup(true);
+      localStorage.setItem(chave,hoje);
+    }
+  },[weekWeather,profile]);
+
+  // Auth listener
+  useEffect(()=>{
+    sb.auth.getSession().then(({data:{session}})=>{
+      setSession(session);
+      setAuthReady(true);
+    });
+    const{data:{subscription}}=sb.auth.onAuthStateChange((_,s)=>{
+      setSession(s);
+      if(!s){setProfile(null);setAssInfo(null);}
+    });
+    return()=>subscription.unsubscribe();
+  },[]);
+
+  // Load profile + assinatura after session
+  useEffect(()=>{
+    if(!session)return;
+    (async()=>{
+      // Tentar buscar perfil com retry (RLS pode demorar após signup)
+      let prof=null;
+      for(let i=0;i<3;i++){
+        const{data,error}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
+        if(data){prof=data;break;}
+        await new Promise(r=>setTimeout(r,600));
+      }
+      // Se ainda null, criar profile básico via upsert
+      if(!prof){
+        const{data:upserted}=await sb.from('profiles').upsert({
+          id:session.user.id,
+          name:session.user.user_metadata?.name||session.user.email?.split('@')[0]||'Usuário',
+          role:session.user.user_metadata?.role||'owner',
+          empresa_id:null
+        },{onConflict:'id'}).select().single();
+        prof=upserted;
+      }
+      setProfile(prof||{id:session.user.id,name:session.user.email?.split('@')[0]||'Usuário',role:'owner',empresa_id:null});
+      if(prof?.empresa_id){
+        const[{data:ass},{data:emp}]=await Promise.all([
+          sb.rpc('fn_assinatura_valida',{p_empresa_id:prof.empresa_id}),
+          sb.from('empresas').select('id,nome_fantasia,telefone').eq('id',prof.empresa_id).single(),
+        ]);
+        setAssInfo(ass);
+        setEmpresa(emp);
+      }
+    })();
+  },[session]);
+
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),2500);};
+  const logout=async()=>{await sb.auth.signOut();setTab("home");};
+
+  // Loading state
+  if(!authReady||session===undefined){
+    return(
+      <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
+        <AquaBg/>
+        <div style={{position:"relative",zIndex:1,textAlign:"center"}}>
+          <div style={{width:72,height:72,borderRadius:24,background:"rgba(14,165,233,.2)",border:"2px solid rgba(56,189,248,.4)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}>
+            <Icon name="Droplets" size={36} color="#38bdf8"/>
+          </div>
+          <div className="spinner spin" style={{margin:"0 auto",width:28,height:28,borderWidth:3}}/>
+        </div>
+      </div>
+    );
+  }
+
+  if(!session) return <LoginScreen onLogin={s=>setSession(s)}/>;
+
+  // Profile ainda carregando
+  if(!profile){
+    return(
+      <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
+        <AquaBg/>
+        <div style={{position:"relative",zIndex:1,textAlign:"center"}}>
+          <div className="spinner spin" style={{margin:"0 auto",width:28,height:28,borderWidth:3}}/>
+          <div style={{color:"rgba(186,230,253,.6)",marginTop:16,fontSize:14}}>Carregando perfil...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Master → painel da plataforma
+  if(profile.role==="master"){
+    return(
+      <div style={{height:"var(--app-height)",width:"100%",display:"flex",flexDirection:"column",overflow:"hidden",position:"relative"}}>
+        <AquaBg/>
+        <div className="glass" style={{padding:"env(safe-area-inset-top,12px) 16px 12px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",zIndex:10,borderTop:"none",borderLeft:"none",borderRight:"none",borderRadius:0}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:22,height:22,borderRadius:7,background:"rgba(251,191,36,.2)",border:"1px solid rgba(251,191,36,.4)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Icon name="Crown" size={12} color="#fbbf24"/>
+              </div>
+              <span style={{color:"#e0f2fe",fontWeight:900,fontSize:18}}>Admin Master</span>
+            </div>
+            <div style={{color:"rgba(186,230,253,.5)",fontSize:12,marginTop:2}}>{profile.name} · Plataforma</div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <div style={{width:36,height:36,borderRadius:12,background:"linear-gradient(135deg,#f59e0b,#d97706)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(245,158,11,.4)"}}>
+              <Icon name="Crown" size={17} color="#fff"/>
+            </div>
+            <button onClick={logout} style={{width:36,height:36,borderRadius:12,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.25)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+              <Icon name="LogOut" size={15} color="#f87171"/>
+            </button>
+          </div>
+        </div>
+        <div style={{flex:"1 1 auto",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column",position:"relative",zIndex:5}}>
+          <MasterScreen/>
+        </div>
+      </div>
+    );
+  }
+
+  // Sem empresa → cadastro
+  if(!profile.empresa_id){
+    return <CadastroEmpresaScreen user={session.user} onComplete={async()=>{
+      // Retry com até 5 tentativas aguardando propagação do RLS
+      let prof=null;
+      for(let i=0;i<5;i++){
+        await new Promise(r=>setTimeout(r,900));
+        const{data}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
+        if(data?.empresa_id){prof=data;break;}
+      }
+      if(prof){
+        setProfile(prof);
+        const{data:ass}=await sb.rpc('fn_assinatura_valida',{p_empresa_id:prof.empresa_id});
+        setAssInfo(ass);
+      } else {
+        // Último recurso: forçar refresh da sessão
+        await sb.auth.refreshSession();
+        window.location.reload();
+      }
+    }}/>;
+  }
+
+  // Assinatura inválida
+  if(assInfo&&!assInfo.valida){
+    return <AssinaturaScreen info={assInfo} onLogout={logout}/>;
+  }
+
+  const isOwner=profile.role==="owner";
+  const ALL_TABS=[
+    {id:"home",    label:"Fila",      icon:"Home",     roles:["owner","employee"]},
+    {id:"new",     label:"Nova",      icon:"Plus",     roles:["owner","employee"]},
+    {id:"crm",     label:"CRM",       icon:"Users",    roles:["owner"]},
+    {id:"history", label:"Histórico", icon:"History",  roles:["employee"]},
+    {id:"config",  label:"Config",    icon:"Settings", roles:["owner"]},
+  ];
+  const TABS=ALL_TABS.filter(t=>t.roles.includes(profile.role));
+  const TITLES={home:"Fila de Lavagem",new:"Nova Lavagem",crm:"CRM / Fidelização",history:"Histórico",config:"Configurações"};
+  const safeTab=TABS.find(t=>t.id===tab)?tab:"home";
+
+  // Trial banner
+  const showTrialBanner=assInfo?.status==="trial"&&(assInfo?.dias_restantes<=7);
+
+  return(
+    <div style={{height:"var(--app-height)",width:"100%",display:"flex",flexDirection:"column",overflow:"hidden",position:"relative"}}>
+      <AquaBg/>
+
+      {/* Área superior: clima + trial — espaçamento próprio, separado visualmente do header */}
+      <div style={{flexShrink:0,position:"relative",zIndex:15,paddingTop:"env(safe-area-inset-top,10px)"}}>
+        <WeatherBanner onWeekForecast={setWeekWeather}/>
+        {showTrialBanner&&<div style={{background:"rgba(251,191,36,.15)",border:"1px solid rgba(251,191,36,.25)",borderRadius:14,padding:"8px 16px",display:"flex",alignItems:"center",gap:8,margin:"8px 14px 0"}}>
+          <Icon name="AlertTriangle" size={14} color="#fbbf24"/>
+          <span style={{fontSize:12,color:"#fbbf24",fontWeight:600}}>Trial expira em {assInfo.dias_restantes} dia{assInfo.dias_restantes!==1?"s":""}. Contate o suporte para assinar.</span>
+        </div>}
+      </div>
+
+      {/* Header — espaçado da área de clima por margin-top, sem mais competir pelo safe-area-top */}
+      <div className="glass" style={{padding:"10px 16px 12px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",zIndex:10,borderTop:"none",borderLeft:"none",borderRight:"none",borderRadius:0,marginTop:6}}>
+        <div>
+          <div style={{color:"#e0f2fe",fontWeight:900,fontSize:18,lineHeight:1,textShadow:"0 0 20px rgba(56,189,248,.3)"}}>{TITLES[safeTab]}</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+            <div style={{width:18,height:18,borderRadius:6,background:isOwner?"rgba(251,191,36,.2)":"rgba(14,165,233,.2)",border:`1px solid ${isOwner?"rgba(251,191,36,.4)":"rgba(14,165,233,.4)"}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Icon name={isOwner?"Shield":"User"} size={10} color={isOwner?"#fbbf24":"#38bdf8"}/>
+            </div>
+            {empresa&&<span style={{fontSize:12,color:"#38bdf8",fontWeight:700}}>{empresa.nome_fantasia}</span>}
+            <span style={{fontSize:11,color:"rgba(186,230,253,.35)"}}>· {profile.name}</span>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:36,height:36,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(14,165,233,.4)"}}>
+            <Icon name="Droplets" size={17} color="#fff"/>
+          </div>
+          <button onClick={()=>setShowSupport(true)} style={{width:36,height:36,borderRadius:12,background:"rgba(56,189,248,.12)",border:"1px solid rgba(56,189,248,.25)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+            <Icon name="Headphones" size={15} color="#38bdf8"/>
+          </button>
+          <button onClick={logout} style={{width:36,height:36,borderRadius:12,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.25)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+            <Icon name="LogOut" size={15} color="#f87171"/>
+          </button>
+        </div>
+      </div>
+
+      {/* Screen — minHeight:0 é a correção crítica: sem isso, este flex item nunca encolhe
+          abaixo do tamanho do seu conteúdo, o que estoura a altura do container pai e
+          empurra a bottom nav para fora da viewport visível em navegadores mobile. */}
+      <div style={{flex:"1 1 auto",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column",position:"relative",zIndex:5}}>
+        {safeTab==="home"    &&<HomeScreen     key="home"    empresaId={profile.empresa_id}/>}
+        {safeTab==="new"     &&<NewWashScreen  key="new"     empresaId={profile.empresa_id} userId={profile.id} onSuccess={()=>{setTab("home");showToast("✅ Veículo adicionado à fila!");}}/>}
+        {safeTab==="crm"     &&isOwner&&<CRMScreen     key="crm"     empresaId={profile.empresa_id}/>}
+        {safeTab==="history" &&!isOwner&&<HistoryScreen key="history" empresaId={profile.empresa_id} isOwner={false}/>}
+        {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} onUpdate={name=>showToast("✅ "+name+" atualizado!")}/>}
+      </div>
+
+      {/* Bottom nav — flexShrink:0 garante que nunca seja comprimida nem empurrada para fora */}
+      <div className="glass" style={{flexShrink:0,display:"flex",padding:`8px 8px env(safe-area-inset-bottom,14px)`,zIndex:10,borderBottom:"none",borderLeft:"none",borderRight:"none",borderRadius:0}}>
+        {TABS.map(({id,label,icon})=>{
+          const active=safeTab===id;
+          return(
+            <button key={id} className="nav-btn" onClick={()=>setTab(id)}>
+              <div className={`nav-icon${active?" active":""}`}>
+                <Icon name={icon} size={16} color={active?"#fff":"rgba(186,230,253,.4)"}/>
+              </div>
+              <span style={{fontSize:10,fontWeight:700,color:active?"#38bdf8":"rgba(186,230,253,.35)"}}>{label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Toast */}
+      {toast&&<div className="toast" style={{position:"fixed",bottom:84,left:"50%",transform:"translateX(-50%)",background:"rgba(15,23,42,.92)",backdropFilter:"blur(16px)",border:"1px solid rgba(56,189,248,.2)",color:"#e0f2fe",fontSize:13,fontWeight:600,padding:"10px 20px",borderRadius:16,boxShadow:"0 8px 24px rgba(0,0,0,.4)",zIndex:99,whiteSpace:"nowrap"}}>{toast}</div>}
+
+      {/* Popup de resumo semanal do clima — aparece uma vez por dia */}
+      {showWeeklyPopup&&<WeeklyWeatherPopup week={weekWeather} onClose={()=>setShowWeeklyPopup(false)}/>}
+
+      {/* Suporte agora acessível direto do cabeçalho, em qualquer tela —
+          não depende mais de navegar até Config para encontrar a aba. */}
+      {showSupport&&(
+        <div style={{position:"fixed",inset:0,zIndex:150,background:"rgba(8,15,28,.85)",backdropFilter:"blur(4px)",display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 12px",flexShrink:0}}>
+            <div style={{color:"#e0f2fe",fontWeight:900,fontSize:18}}>Suporte</div>
+            <button onClick={()=>setShowSupport(false)} style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.08)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+              <Icon name="XCircle" size={16} color="#bae6fd"/>
+            </button>
+          </div>
+          <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
+            <SupportScreen embedded/>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+if("serviceWorker"in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}
+</script>
+</body>
+</html>
