@@ -1018,29 +1018,21 @@ function MasterScreen(){
     }
     setSalvandoPlano(empresa.id);
     try{
-      const ass=empresa.assinaturas?.[0];
       const valorMap={trial:0,basico:49.90,profissional:89.90,enterprise:149.90};
-
-      // Upsert: se já existe uma linha para essa empresa_id, atualiza.
-      // Se não existe, cria. Elimina o erro de "chave duplicada" que
-      // acontecia porque ass?.id chegava undefined e o código tentava
-      // INSERT numa empresa que já tinha registro em assinaturas.
-      const {error}=await sb.from('assinaturas').upsert({
-        empresa_id:empresa.id,
-        plano:novoPlano,
-        status:"ativo",
-        valor:valorMap[novoPlano]||0,
-        data_inicio:ass?.data_inicio||new Date().toISOString().split('T')[0],
-      },{onConflict:"empresa_id"});
+      // Usa RPC com SECURITY DEFINER para contornar o RLS que bloqueava
+      // silenciosamente o upsert direto — o banco verifica internamente
+      // se quem chama é master antes de executar.
+      const {data,error}=await sb.rpc('fn_master_atualizar_plano',{
+        p_empresa_id:empresa.id,
+        p_plano:novoPlano,
+      });
       if(error)throw new Error(error.message);
-
-      const {error:errEmp}=await sb.from('empresas')
-        .update({plano:novoPlano}).eq('id',empresa.id);
-      if(errEmp)throw new Error(errEmp.message);
+      if(!data?.success)throw new Error(data?.message||"Erro ao atualizar plano.");
 
       setEmpresas(prev=>prev.map(emp=>{
         if(emp.id!==empresa.id)return emp;
-        const assAtualizada={...(ass||{}),empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0};
+        const ass=emp.assinaturas?.[0]||{};
+        const assAtualizada={...ass,empresa_id:empresa.id,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0};
         return{...emp,plano:novoPlano,assinaturas:[assAtualizada]};
       }));
       setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
