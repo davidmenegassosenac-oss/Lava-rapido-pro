@@ -1257,19 +1257,33 @@ function MasterScreen(){
 function CarCard({item,onAdvance,onDelete,idx}){
   const [open,setOpen]=useState(false);
   const [loading,setLoading]=useState(false);
+  const [showPgto,setShowPgto]=useState(false);
   const next=STATUS_FLOW[STATUS_FLOW.indexOf(item.status)+1];
   const prog={"Aguardando":15,"Lavando":55,"Concluído":85,"Pago":100};
   const progColor={"Aguardando":"#fbbf24","Lavando":"#0ea5e9","Concluído":"#22c55e","Pago":"#64748b"};
 
-  const handleAdvance=async()=>{
+  const FORMAS=[
+    {id:"pix",    label:"Pix",    icon:"Zap",    color:"#4ade80"},
+    {id:"cartao", label:"Cartão", icon:"CreditCard", color:"#38bdf8"},
+    {id:"dinheiro",label:"Dinheiro",icon:"DollarSign",color:"#fbbf24"},
+  ];
+
+  const handleAdvance=async(formaPgto)=>{
     setLoading(true);
-    await onAdvance(item.id,next,item.status);
+    setShowPgto(false);
+    await onAdvance(item.id,next,item.status,formaPgto||null);
     setLoading(false);
+  };
+
+  const onClickAvancar=()=>{
+    // Só pede forma de pagamento ao marcar como Pago
+    if(next==="Pago"){setShowPgto(true);}
+    else{handleAdvance(null);}
   };
 
   return(
     <div className="glass-card car-enter" style={{marginBottom:12,animationDelay:`${idx*.07}s`,overflow:"hidden"}}>
-      <div style={{padding:14,cursor:"pointer"}} onClick={()=>setOpen(!open)}>
+      <div style={{padding:14,cursor:"pointer"}} onClick={()=>{if(!showPgto)setOpen(!open);}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{width:42,height:42,borderRadius:14,background:`${item.color}22`,border:`1px solid ${item.color}44`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -1288,10 +1302,48 @@ function CarCard({item,onAdvance,onDelete,idx}){
         <div style={{marginTop:10,marginBottom:6}}><ProgressBar pct={prog[item.status]||0} color={progColor[item.status]}/></div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <span style={{fontSize:12,color:"rgba(186,230,253,.5)"}}>{item.client} · {item.type}</span>
-          <span style={{fontSize:13,fontWeight:800,color:"#4ade80"}}>{fmtBRL(item.value)}</span>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {item.forma_pagamento&&(
+              <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
+                background:item.forma_pagamento==="pix"?"rgba(74,222,128,.15)":item.forma_pagamento==="cartao"?"rgba(56,189,248,.15)":"rgba(251,191,36,.15)",
+                color:item.forma_pagamento==="pix"?"#4ade80":item.forma_pagamento==="cartao"?"#38bdf8":"#fbbf24",
+                border:`1px solid ${item.forma_pagamento==="pix"?"rgba(74,222,128,.3)":item.forma_pagamento==="cartao"?"rgba(56,189,248,.3)":"rgba(251,191,36,.3)"}`}}>
+                {item.forma_pagamento==="pix"?"Pix":item.forma_pagamento==="cartao"?"Cartão":"Dinheiro"}
+              </span>
+            )}
+            <span style={{fontSize:13,fontWeight:800,color:"#4ade80"}}>{fmtBRL(item.value)}</span>
+          </div>
         </div>
       </div>
-      {open&&(
+
+      {/* Modal inline de forma de pagamento */}
+      {showPgto&&(
+        <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.2)"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:10,textAlign:"center"}}>
+            💳 Como o cliente vai pagar?
+          </div>
+          <div style={{display:"flex",gap:8,marginBottom:8}}>
+            {FORMAS.map(f=>(
+              <button key={f.id} onClick={()=>handleAdvance(f.id)} disabled={loading}
+                style={{flex:1,padding:"12px 4px",borderRadius:14,cursor:"pointer",
+                  background:`${f.color}18`,border:`1.5px solid ${f.color}44`,
+                  display:"flex",flexDirection:"column",alignItems:"center",gap:5,
+                  opacity:loading?.5:1,transition:"all .15s"}}>
+                <Icon name={f.icon} size={18} color={f.color}/>
+                <span style={{fontSize:12,fontWeight:800,color:f.color}}>{f.label}</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={()=>setShowPgto(false)}
+            style={{width:"100%",padding:"8px 0",borderRadius:12,background:"transparent",
+              border:"1px solid rgba(125,211,252,.15)",color:"rgba(186,230,253,.4)",
+              fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {open&&!showPgto&&(
         <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.15)"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14,fontSize:12}}>
             <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Telefone</span><span style={{color:"#bae6fd",fontWeight:600}}>{item.phone}</span></div>
@@ -1299,7 +1351,7 @@ function CarCard({item,onAdvance,onDelete,idx}){
             {item.criador?.name&&<div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Criado por</span><span style={{color:"#bae6fd",fontWeight:600}}>{item.criador.name}</span></div>}
           </div>
           <div style={{display:"flex",gap:8}}>
-            {next&&<button onClick={handleAdvance} disabled={loading} style={{flex:1,padding:"10px 0",borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",color:"#fff",fontWeight:700,fontSize:12,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,boxShadow:"0 4px 12px rgba(14,165,233,.3)",opacity:loading?.6:1}}>
+            {next&&<button onClick={onClickAvancar} disabled={loading} style={{flex:1,padding:"10px 0",borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",color:"#fff",fontWeight:700,fontSize:12,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,boxShadow:"0 4px 12px rgba(14,165,233,.3)",opacity:loading?.6:1}}>
               {loading?<div className="spinner spin" style={{width:14,height:14}}/>:<><Icon name="Zap" size={13} color="#fff"/> Avançar: {next}</>}
             </button>}
             <button onClick={()=>onDelete(item.id)} style={{padding:"10px 12px",borderRadius:12,background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",cursor:"pointer",display:"flex",alignItems:"center"}}>
@@ -1362,16 +1414,12 @@ function HomeScreen({empresaId}){
     return()=>sb.removeChannel(ch);
   },[fetchQueue,empresaId]);
 
-  const advance=async(id,nextStatus,currentStatus)=>{
+  const advance=async(id,nextStatus,currentStatus,formaPagamento)=>{
     setErrorMsg("");
-    // Lock otimista: o UPDATE só é aplicado se o status no banco ainda for
-    // o mesmo que o app tinha quando o usuário clicou. Isso evita que dois
-    // funcionários avançando o mesmo carro simultaneamente causem updates
-    // duplicados ou pulem um estágio sem perceber — se outro funcionário já
-    // mudou o status entre o clique e o envio, esta query não afeta nenhuma
-    // linha (count=0), e avisamos o usuário para recarregar.
+    const updateData={status:nextStatus,updated_at:new Date().toISOString()};
+    if(nextStatus==="Pago"&&formaPagamento)updateData.forma_pagamento=formaPagamento;
     const{error,count}=await sb.from('ordens_servico')
-      .update({status:nextStatus,updated_at:new Date().toISOString()},{count:'exact'})
+      .update(updateData,{count:'exact'})
       .eq('id',id)
       .eq('status',currentStatus);
     if(error){
@@ -1383,7 +1431,6 @@ function HomeScreen({empresaId}){
       setErrorMsg("Este veículo já foi atualizado por outro usuário. A fila foi recarregada.");
       setTimeout(()=>setErrorMsg(""),5000);
     }
-    // trigger fn_ordem_paga no banco cuida de mover para histórico se Pago
     fetchQueue();
   };
 
