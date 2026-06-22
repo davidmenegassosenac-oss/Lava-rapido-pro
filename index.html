@@ -993,7 +993,15 @@ function MasterScreen(){
   const fetchEmpresas=useCallback(()=>{
     sb.from('empresas').select('*, assinaturas(*)')
       .order('data_criacao',{ascending:false})
-      .then(({data})=>{setEmpresas(data||[]);setLoading(false);});
+      .then(({data})=>{
+        setEmpresas(data||[]);
+        setLoading(false);
+        // DEBUG temporário — mostrar o que chegou para a primeira empresa
+        if(data?.[0]){
+          setToast("DB: "+data[0].nome_fantasia+" ass="+JSON.stringify(data[0].assinaturas?.map(a=>({p:a.plano,s:a.status}))));
+          setTimeout(()=>setToast(""),15000);
+        }
+      });
   },[]);
 
   useEffect(()=>{fetchEmpresas();},[fetchEmpresas]);
