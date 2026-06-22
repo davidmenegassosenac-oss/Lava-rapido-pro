@@ -991,8 +991,10 @@ function MasterScreen(){
   const [toast,setToast]=useState("");
 
   const fetchEmpresas=useCallback(()=>{
-    sb.from('empresas').select('*, assinaturas(*)')
-      .order('data_criacao',{ascending:false})
+    // Usa RPC com SECURITY DEFINER para buscar empresas + assinaturas,
+    // contornando o RLS que bloqueava o SELECT de assinaturas de outras
+    // empresas quando auth.uid() retornava null no contexto do client.
+    sb.rpc('fn_master_listar_empresas')
       .then(({data})=>{setEmpresas(data||[]);setLoading(false);});
   },[]);
 
