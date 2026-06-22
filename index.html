@@ -1021,15 +1021,26 @@ function MasterScreen(){
     setSalvandoPlano(empresa.id);
     try{
       const valorMap={trial:0,basico:49.90,profissional:89.90,enterprise:149.90};
-      // Usa RPC com SECURITY DEFINER para contornar o RLS que bloqueava
-      // silenciosamente o upsert direto — o banco verifica internamente
-      // se quem chama é master antes de executar.
       const {data,error}=await sb.rpc('fn_master_atualizar_plano',{
         p_empresa_id:empresa.id,
         p_plano:novoPlano,
       });
       if(error)throw new Error(error.message);
       if(!data?.success)throw new Error(data?.message||"Erro ao atualizar plano.");
+
+      // Atualiza estado local imediatamente após RPC confirmar sucesso
+      // sem chamar fetchEmpresas (evita sobrescrever com dado antigo do banco)
+      setEmpresas(prev=>prev.map(emp=>{
+        if(emp.id!==empresa.id)return emp;
+        const ass=emp.assinaturas?.[0]||{};
+        return{...emp,plano:novoPlano,assinaturas:[{
+          ...ass,plano:novoPlano,status:"ativo",valor:valorMap[novoPlano]||0
+        }]};
+      }));
+      setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
+      setTimeout(()=>setToast(""),3000);
+      setAlterandoPlano(null);
+      setUsageMap(m=>{const n={...m};delete n[empresa.id];return n;});
     }catch(e){
       setToast("Erro: "+e.message);
       setTimeout(()=>setToast(""),4000);
