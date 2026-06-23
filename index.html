@@ -2041,10 +2041,11 @@ function HistoryScreen({empresaId,embedded,isOwner}){
 /* ══════════════════════════════════════════════════════════════════════════
    CRM SCREEN
 ══════════════════════════════════════════════════════════════════════════ */
-function CRMScreen({empresaId}){
+function CRMScreen({empresaId,onBadgeUpdate}){
   const [min,setMin]=useState(30);
   const [hist,setHist]=useState([]);
   const [loading,setLoading]=useState(true);
+  const [disparados,setDisparados]=useState(new Set());
 
   useEffect(()=>{
     sb.from('historico').select('phone,client,model,plate,type,completed_at').eq('empresa_id',empresaId).order('completed_at',{ascending:false})
@@ -2056,16 +2057,79 @@ function CRMScreen({empresaId}){
   hist.forEach(r=>{if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))map[r.phone]=r;});
   const sumidos=Object.values(map).map(r=>({...r,dias:daysSince(r.completed_at)})).filter(r=>r.dias>=min).sort((a,b)=>b.dias-a.dias);
 
-  const waLink=r=>{
-    // Mensagem com gatilho de desconto + urgência (validade de 7 dias) —
-    // testes de copywriting mostram que oferta concreta + prazo claro
-    // converte mais que convite genérico sem benefício tangível.
+  // Clientes que completaram exatamente 45 dias hoje (±1 dia) — gatilho de ação rápida
+  const gatilho45=useMemo(()=>
+    Object.values(map).map(r=>({...r,dias:daysSince(r.completed_at)}))
+      .filter(r=>r.dias>=44&&r.dias<=46)
+      .sort((a,b)=>b.dias-a.dias)
+  ,[hist]);
+
+  const waLink=(r)=>{
     const msg=encodeURIComponent(`Olá ${r.client}! 👋 Notamos que faz ${r.dias} dias desde a última vez que cuidamos do seu ${r.model} (placa ${r.plate}) aqui no nosso lava-jato. Queremos você de volta! 🎁 Preparamos *10% de desconto* na sua próxima lavagem, válido somente até esta semana. Responda essa mensagem ou venha nos visitar para garantir sua vaga — não queremos que essa oferta acabe sem você aproveitar! 🚗💦✨`);
     return`https://api.whatsapp.com/send?phone=${r.phone}&text=${msg}`;
   };
 
+  const dispararTodos=()=>{
+    gatilho45.forEach(r=>{
+      window.open(waLink(r),"_blank");
+      setDisparados(s=>new Set([...s,r.phone]));
+    });
+    if(onBadgeUpdate)onBadgeUpdate();
+  };
+
   return(
     <div className="scroll screen-enter">
+
+      {/* Painel de Ações Recomendadas — aparece só quando há clientes no gatilho de 45 dias */}
+      {!loading&&gatilho45.length>0&&(
+        <div style={{marginBottom:16,padding:16,borderRadius:20,
+          background:"linear-gradient(135deg,rgba(239,68,68,.15),rgba(251,191,36,.08))",
+          border:"1.5px solid rgba(239,68,68,.35)"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:12}}>
+            <div style={{width:36,height:36,borderRadius:12,background:"rgba(239,68,68,.2)",
+              border:"1px solid rgba(239,68,68,.4)",display:"flex",alignItems:"center",
+              justifyContent:"center",flexShrink:0}}>
+              <Icon name="AlertTriangle" size={18} color="#f87171"/>
+            </div>
+            <div>
+              <div style={{color:"#f87171",fontWeight:800,fontSize:14,marginBottom:2}}>
+                {gatilho45.length} cliente{gatilho45.length>1?"s":""} completou{gatilho45.length>1?"ram":""} 45 dias sumido{gatilho45.length>1?"s":""}
+              </div>
+              <div style={{color:"rgba(186,230,253,.5)",fontSize:12}}>
+                Deseja disparar o lembrete agora?
+              </div>
+            </div>
+          </div>
+          {/* Lista dos clientes no gatilho */}
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
+            {gatilho45.map(r=>(
+              <div key={r.phone} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                padding:"8px 12px",borderRadius:12,background:"rgba(255,255,255,.05)"}}>
+                <div>
+                  <span style={{fontSize:13,fontWeight:700,color:"#e0f2fe"}}>{r.client}</span>
+                  <span style={{fontSize:11,color:"rgba(186,230,253,.4)",marginLeft:8}}>{r.model} · {r.dias}d</span>
+                </div>
+                <a href={waLink(r)} target="_blank" rel="noreferrer"
+                  onClick={()=>setDisparados(s=>new Set([...s,r.phone]))}
+                  style={{padding:"4px 10px",borderRadius:99,background:"rgba(22,163,74,.2)",
+                    border:"1px solid rgba(22,163,74,.4)",color:"#4ade80",
+                    fontSize:11,fontWeight:700,textDecoration:"none",
+                    opacity:disparados.has(r.phone)?.5:1}}>
+                  {disparados.has(r.phone)?"Enviado ✓":"Enviar"}
+                </a>
+              </div>
+            ))}
+          </div>
+          <button onClick={dispararTodos}
+            style={{width:"100%",padding:"12px 0",borderRadius:14,cursor:"pointer",fontWeight:800,fontSize:14,
+              background:"linear-gradient(135deg,#dc2626,#b91c1c)",border:"none",color:"#fff",
+              display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+              boxShadow:"0 6px 18px rgba(239,68,68,.3)"}}>
+            <Icon name="Send" size={16} color="#fff"/>
+            Disparar para todos ({gatilho45.length})
+          </button>
+        </div>
+      )}
       <div className="glass-card" style={{padding:16,marginBottom:18,background:"rgba(124,58,237,.12)",border:"1px solid rgba(167,139,250,.25)"}}>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
           <div style={{width:42,height:42,borderRadius:14,background:"rgba(124,58,237,.2)",border:"1px solid rgba(167,139,250,.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -2847,17 +2911,23 @@ function RelatoriosScreen({empresaId,embedded}){
   const [periodo,setPeriodo]=useState("semana");
   const [movs,setMovs]=useState([]);
   const [hist,setHist]=useState([]);
+  const [folhaTotal,setFolhaTotal]=useState(0);
   const [loading,setLoading]=useState(true);
 
   useEffect(()=>{
     setLoading(true);
     const dias=periodo==="dia"?1:periodo==="semana"?7:30;
     const desde=new Date(Date.now()-dias*86400000).toISOString().split("T")[0];
+    const desdeISO=new Date(Date.now()-dias*86400000).toISOString();
     Promise.all([
       sb.from('caixa_movimentos').select('tipo,categoria,valor,data').eq('empresa_id',empresaId).gte('data',desde).order('data'),
-      sb.from('historico').select('type,value,completed_at').eq('empresa_id',empresaId).gte('completed_at',new Date(Date.now()-dias*86400000).toISOString()).order('completed_at'),
-    ]).then(([{data:m},{data:h}])=>{
-      setMovs(m||[]);setHist(h||[]);setLoading(false);
+      sb.from('historico').select('type,value,completed_at,forma_pagamento').eq('empresa_id',empresaId).gte('completed_at',desdeISO).order('completed_at'),
+      sb.from('folha_pagamentos').select('valor').eq('empresa_id',empresaId).gte('data_pgto',desde),
+    ]).then(([{data:m},{data:h},{data:f}])=>{
+      setMovs(m||[]);
+      setHist(h||[]);
+      setFolhaTotal((f||[]).reduce((s,p)=>s+(parseFloat(p.valor)||0),0));
+      setLoading(false);
     });
   },[empresaId,periodo]);
 
@@ -2866,11 +2936,35 @@ function RelatoriosScreen({empresaId,embedded}){
   const saldo=entradas-saidas;
   const totalAtend=hist.length;
 
-  // Agrupar para o gráfico. Importante: no período de 30 dias, agregamos
-  // por SEMANA (4-5 barras cobrindo os 30 dias reais) em vez de amostrar
-  // apenas 5 dias arbitrários espaçados a cada ~7 dias — a versão anterior
-  // mostrava 5 barras de dias isolados, dando a falsa impressão de ser uma
-  // visão diária completa do mês, quando na real ignorava 25 dos 30 dias.
+  // ── Métricas avançadas via useMemo ─────────────────────────────────────
+
+  // Ticket médio: receita total / número de carros lavados
+  const ticketMedio=useMemo(()=>{
+    const receita=hist.reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+    return hist.length>0?receita/hist.length:0;
+  },[hist]);
+
+  // Quebra por forma de pagamento
+  const pgtoBreakdown=useMemo(()=>{
+    const totalReceitaHist=hist.reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+    const grupos={pix:0,cartao:0,dinheiro:0,sem_info:0};
+    hist.forEach(h=>{
+      const k=h.forma_pagamento||"sem_info";
+      grupos[k]=(grupos[k]||0)+(parseFloat(h.value)||0);
+    });
+    return[
+      {id:"pix",     label:"Pix",         color:"#4ade80", valor:grupos.pix,     pct:totalReceitaHist?Math.round(grupos.pix/totalReceitaHist*100):0},
+      {id:"cartao",  label:"Cartão",       color:"#38bdf8", valor:grupos.cartao,  pct:totalReceitaHist?Math.round(grupos.cartao/totalReceitaHist*100):0},
+      {id:"dinheiro",label:"Dinheiro",     color:"#fbbf24", valor:grupos.dinheiro,pct:totalReceitaHist?Math.round(grupos.dinheiro/totalReceitaHist*100):0},
+      {id:"sem_info",label:"Não informado",color:"rgba(186,230,253,.3)",valor:grupos.sem_info,pct:totalReceitaHist?Math.round(grupos.sem_info/totalReceitaHist*100):0},
+    ].filter(g=>g.valor>0);
+  },[hist]);
+
+  // Lucro líquido estimado = faturamento bruto - custos folha
+  const receitaBruta=hist.reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+  const lucroLiquido=receitaBruta-folhaTotal;
+  const margemLiquida=receitaBruta>0?Math.round(lucroLiquido/receitaBruta*100):null;
+
   const hoje=new Date();
   let chartData;
   if(periodo==="dia"){
@@ -2885,7 +2979,6 @@ function RelatoriosScreen({empresaId,embedded}){
       return{l:["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][dt.getDay()],v};
     });
   }else{
-    // 30 dias: agrupado por semana, cobrindo os 30 dias reais sem pular nenhum
     const semanas=[];
     for(let w=4;w>=0;w--){
       const fim=new Date(hoje);fim.setDate(fim.getDate()-w*7);
@@ -2898,12 +2991,9 @@ function RelatoriosScreen({empresaId,embedded}){
     chartData=semanas;
   }
 
-  // Por categoria
   const catMap={};
   movs.filter(m=>m.tipo==="entrada").forEach(m=>{catMap[m.categoria]=(catMap[m.categoria]||0)+(parseFloat(m.valor)||0);});
   const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
-
-  // Serviços mais realizados
   const svcMap={};
   hist.forEach(h=>{svcMap[h.type]=(svcMap[h.type]||0)+1;});
   const svcs=Object.entries(svcMap).sort((a,b)=>b[1]-a[1]);
@@ -2922,8 +3012,8 @@ function RelatoriosScreen({empresaId,embedded}){
 
       {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>:(
         <>
-          {/* KPIs */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+          {/* KPIs base */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
             {[
               {l:"Receita",v:fmtBRL(entradas),c:"#4ade80",icon:"TrendingUp"},
               {l:"Despesas",v:fmtBRL(saidas),c:"#f87171",icon:"MinusCircle"},
@@ -2939,6 +3029,59 @@ function RelatoriosScreen({empresaId,embedded}){
               </div>
             ))}
           </div>
+
+          {/* ── Ticket médio + Lucro Líquido ── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+            <div className="glass-card" style={{padding:14}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:11,color:"rgba(186,230,253,.5)",fontWeight:600}}>Ticket Médio</span>
+                <Icon name="Tag" size={13} color="#fbbf24"/>
+              </div>
+              <div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>{fmtBRL(ticketMedio)}</div>
+              <div style={{fontSize:10,color:"rgba(186,230,253,.35)",marginTop:4}}>receita ÷ {totalAtend} carro{totalAtend!==1?"s":""}</div>
+            </div>
+            <div className="glass-card" style={{padding:14,
+              background:lucroLiquido>=0?"rgba(74,222,128,.06)":"rgba(248,113,113,.06)",
+              borderColor:lucroLiquido>=0?"rgba(74,222,128,.2)":"rgba(248,113,113,.2)"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:11,color:"rgba(186,230,253,.5)",fontWeight:600}}>Lucro Líquido</span>
+                <Icon name="DollarSign" size={13} color={lucroLiquido>=0?"#4ade80":"#f87171"}/>
+              </div>
+              <div style={{fontSize:17,fontWeight:900,color:lucroLiquido>=0?"#4ade80":"#f87171"}}>{fmtBRL(lucroLiquido)}</div>
+              {margemLiquida!=null&&(
+                <div style={{fontSize:10,color:"rgba(186,230,253,.35)",marginTop:4}}>
+                  margem {margemLiquida}% · folha {fmtBRL(folhaTotal)}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Quebra por forma de pagamento ── */}
+          {pgtoBreakdown.length>0&&(
+            <div className="glass-card" style={{padding:16,marginBottom:14}}>
+              <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:14}}>
+                💳 Métodos de Pagamento
+              </div>
+              {/* Barra empilhada */}
+              <div style={{display:"flex",height:10,borderRadius:99,overflow:"hidden",marginBottom:14,gap:2}}>
+                {pgtoBreakdown.map(g=>(
+                  <div key={g.id} style={{width:`${g.pct}%`,background:g.color,borderRadius:99,transition:"width .6s ease"}}/>
+                ))}
+              </div>
+              {pgtoBreakdown.map(g=>(
+                <div key={g.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:10,height:10,borderRadius:99,background:g.color,flexShrink:0}}/>
+                    <span style={{fontSize:13,color:"#e0f2fe",fontWeight:600}}>{g.label}</span>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <span style={{fontSize:13,fontWeight:800,color:g.color}}>{g.pct}%</span>
+                    <span style={{fontSize:11,color:"rgba(186,230,253,.4)",marginLeft:8}}>{fmtBRL(g.valor)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Gráfico de receita */}
           <div className="glass-card" style={{padding:16,marginBottom:14}}>
@@ -3042,6 +3185,27 @@ function App(){
   const [weekWeather,setWeekWeather]=useState(null);
   const [showWeeklyPopup,setShowWeeklyPopup]=useState(false);
   const [showSupport,setShowSupport]=useState(false);
+  const [crmBadge,setCrmBadge]=useState(0);
+
+  // Conta clientes sumidos (≥30 dias) para o badge do CRM —
+  // roda sempre que o perfil carrega, sem impactar outras queries.
+  useEffect(()=>{
+    if(!profile?.empresa_id||profile.role==="master")return;
+    sb.from("historico")
+      .select("phone,client,model,plate,completed_at")
+      .eq("empresa_id",profile.empresa_id)
+      .order("completed_at",{ascending:false})
+      .then(({data})=>{
+        if(!data)return;
+        const map={};
+        data.forEach(r=>{
+          if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))
+            map[r.phone]=r;
+        });
+        const count=Object.values(map).filter(r=>daysSince(r.completed_at)>=30).length;
+        setCrmBadge(count);
+      });
+  },[profile]);
 
   // Mostra o popup de resumo semanal uma vez por dia, por empresa — a
   // chave do localStorage inclui o empresa_id porque, sem isso, trocar de
@@ -3255,7 +3419,7 @@ function App(){
       <div style={{flex:"1 1 auto",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column",position:"relative",zIndex:5}}>
         {safeTab==="home"    &&<HomeScreen     key="home"    empresaId={profile.empresa_id}/>}
         {safeTab==="new"     &&<NewWashScreen  key="new"     empresaId={profile.empresa_id} userId={profile.id} onSuccess={()=>{setTab("home");showToast("✅ Veículo adicionado à fila!");}}/>}
-        {safeTab==="crm"     &&isOwner&&<CRMScreen     key="crm"     empresaId={profile.empresa_id}/>}
+        {safeTab==="crm"     &&isOwner&&<CRMScreen     key="crm"     empresaId={profile.empresa_id} onBadgeUpdate={()=>setCrmBadge(0)}/>}
         {safeTab==="history"&&<HistoryScreen key="history" empresaId={profile.empresa_id} isOwner={isOwner}/>}
         {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} onUpdate={name=>showToast("✅ "+name+" atualizado!")}/>}
       </div>
@@ -3264,10 +3428,19 @@ function App(){
       <div className="glass" style={{flexShrink:0,display:"flex",padding:`8px 8px env(safe-area-inset-bottom,14px)`,zIndex:10,borderBottom:"none",borderLeft:"none",borderRight:"none",borderRadius:0}}>
         {TABS.map(({id,label,icon})=>{
           const active=safeTab===id;
+          const showBadge=id==="crm"&&crmBadge>0;
           return(
             <button key={id} className="nav-btn" onClick={()=>setTab(id)}>
-              <div className={`nav-icon${active?" active":""}`}>
+              <div className={`nav-icon${active?" active":""}`} style={{position:"relative"}}>
                 <Icon name={icon} size={16} color={active?"#fff":"rgba(186,230,253,.4)"}/>
+                {showBadge&&(
+                  <div style={{position:"absolute",top:-4,right:-4,minWidth:16,height:16,borderRadius:99,
+                    background:"#f87171",border:"2px solid #0c1a2e",
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:9,fontWeight:900,color:"#fff",padding:"0 3px",lineHeight:1}}>
+                    {crmBadge>99?"99+":crmBadge}
+                  </div>
+                )}
               </div>
               <span style={{fontSize:10,fontWeight:700,color:active?"#38bdf8":"rgba(186,230,253,.35)"}}>{label}</span>
             </button>
