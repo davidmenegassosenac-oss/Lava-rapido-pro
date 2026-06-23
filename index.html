@@ -1795,9 +1795,9 @@ function HistoryScreen({empresaId,embedded,isOwner}){
 
   return(
     <div className={embedded?"":"scroll screen-enter"}>
-      {/* Sub-abas */}
+      {/* Sub-abas — Caixa Manual visível apenas para o owner */}
       <div style={{display:"flex",marginBottom:18,borderBottom:"1px solid rgba(125,211,252,.15)"}}>
-        {[["historico","🚗 Lavagens"],["caixa","💰 Caixa Manual"]].map(([k,l])=>(
+        {[["historico","🚗 Lavagens"],...(isOwner?[["caixa","💰 Caixa Manual"]]:[])].map(([k,l])=>(
           <button key={k} onClick={()=>setSubTab(k)}
             className={subTab===k?"tab-active":"tab-inactive"}
             style={{flex:1,padding:"10px 0",fontSize:12,fontWeight:700,background:"transparent",border:"none",cursor:"pointer",transition:"all .2s"}}>
