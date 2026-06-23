@@ -2290,6 +2290,7 @@ function FolhaScreen({empresaId,embedded}){
   const [configForm,setConfigForm]=useState({tipo_pagamento:"diaria",taxa_comissao:""});
   const [savingConfig,setSavingConfig]=useState(false);
   const [savingDias,setSavingDias]=useState(null);
+  const [searchTerm,setSearchTerm]=useState("");
 
   function getSemanaAtual(){
     const d=new Date();
@@ -2449,6 +2450,12 @@ function FolhaScreen({empresaId,embedded}){
   const perfColor=pct==null?"rgba(186,230,253,.4)":pct<=35?"#4ade80":pct<=50?"#fbbf24":"#f87171";
   const perfLabel=pct==null?"Sem faturamento nesta semana":pct<=35?"Operação saudável ✓":pct<=50?"Atenção: folha elevada":"Alerta: folha crítica";
 
+  // Filtro local por nome — sem nova query ao Supabase,
+  // usando os dados já carregados para máxima performance.
+  const funcionariosFiltrados=funcionarios.filter(f=>
+    f.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return(
     <div style={{padding:embedded?"0":"0 0 20px"}}>
       <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
@@ -2496,13 +2503,32 @@ function FolhaScreen({empresaId,embedded}){
         </div>
       )}
 
+      {/* Campo de busca por funcionário */}
+      <div style={{position:"relative",marginBottom:14}}>
+        <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}>
+          <Icon name="Search" size={15} color="rgba(186,230,253,.4)"/>
+        </span>
+        <input
+          className="glass-input"
+          value={searchTerm}
+          onChange={e=>setSearchTerm(e.target.value)}
+          placeholder="Buscar funcionário..."
+          style={{paddingLeft:40}}
+        />
+      </div>
+
       {/* Resumo com saldo + comissão */}
       <div className="glass-card" style={{padding:16,marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
           <span style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.5)"}}>FOLHA DA SEMANA</span>
           <span style={{fontSize:18,fontWeight:900,color:"#f87171"}}>{fmtBRL(totalSemana)}</span>
         </div>
-        {funcionarios.map(f=>{
+        {funcionariosFiltrados.length===0?(
+          <div style={{textAlign:"center",padding:"20px 0",color:"rgba(186,230,253,.3)"}}>
+            <Icon name="Search" size={24} color="rgba(56,189,248,.2)"/>
+            <div style={{fontSize:13,marginTop:8}}>Nenhum funcionário encontrado com este nome</div>
+          </div>
+        ):funcionariosFiltrados.map(f=>{
           const saldo=saldoPorFunc[f.id]||{totalDevido:0,totalPago:0,saldo:0,tipo:"diaria",comissao:0,totalLavagens:0};
           const dias=diasMap[f.id]||0;
           const quitado=dias>0&&saldo.saldo<=0;
