@@ -1255,10 +1255,11 @@ function MasterScreen(){
 /* ══════════════════════════════════════════════════════════════════════════
    CAR CARD
 ══════════════════════════════════════════════════════════════════════════ */
-function CarCard({item,onAdvance,onDelete,onUpdate,idx}){
+function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,idx}){
   const [open,setOpen]=useState(false);
   const [loading,setLoading]=useState(false);
   const [showPgto,setShowPgto]=useState(false);
+  const [showLavador,setShowLavador]=useState(false);
   const [editHora,setEditHora]=useState(false);
   const [horaEntrega,setHoraEntrega]=useState(
     item.hora_entrega?new Date(item.hora_entrega).toTimeString().slice(0,5):""
@@ -1274,9 +1275,10 @@ function CarCard({item,onAdvance,onDelete,onUpdate,idx}){
     {id:"dinheiro",label:"Dinheiro",icon:"DollarSign",color:"#fbbf24"},
   ];
 
-  const handleAdvance=async(formaPgto)=>{
-    setLoading(true);setShowPgto(false);
-    await onAdvance(item.id,next,item.status,formaPgto||null);
+  const handleAdvance=async(formaPgto,lavadoPor)=>{
+    setLoading(true);
+    setShowPgto(false);setShowLavador(false);
+    await onAdvance(item.id,next,item.status,formaPgto||null,lavadoPor||null);
     setLoading(false);
   };
 
@@ -1293,8 +1295,9 @@ function CarCard({item,onAdvance,onDelete,onUpdate,idx}){
   };
 
   const onClickAvancar=()=>{
-    if(next==="Pago"){setShowPgto(true);}
-    else{handleAdvance(null);}
+    if(next==="Lavando"&&funcionarios?.length>0){setShowLavador(true);setOpen(false);}
+    else if(next==="Pago"){setShowPgto(true);}
+    else{handleAdvance(null,null);}
   };
 
   const horaEntregaFmt=item.hora_entrega
@@ -1303,7 +1306,7 @@ function CarCard({item,onAdvance,onDelete,onUpdate,idx}){
 
   return(
     <div className="glass-card car-enter" style={{marginBottom:12,animationDelay:`${idx*.07}s`,overflow:"hidden"}}>
-      <div style={{padding:14,cursor:"pointer"}} onClick={()=>{if(!showPgto&&!editHora)setOpen(!open);}}>
+      <div style={{padding:14,cursor:"pointer"}} onClick={()=>{if(!showPgto&&!showLavador&&!editHora)setOpen(!open);}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{width:42,height:42,borderRadius:14,background:`${item.color}22`,border:`1px solid ${item.color}44`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -1334,6 +1337,13 @@ function CarCard({item,onAdvance,onDelete,onUpdate,idx}){
             <span style={{fontSize:13,fontWeight:800,color:"#4ade80"}}>{fmtBRL(item.value)}</span>
           </div>
         </div>
+        {/* Lavador — visível quando atribuído */}
+        {item.lavador?.name&&(
+          <div style={{marginTop:6,display:"flex",alignItems:"center",gap:5}}>
+            <Icon name="User" size={11} color="#38bdf8"/>
+            <span style={{fontSize:11,color:"#38bdf8",fontWeight:600}}>{item.lavador.name}</span>
+          </div>
+        )}
         {item.observacoes&&(
           <div style={{marginTop:8,padding:"6px 10px",borderRadius:10,background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.2)",display:"flex",alignItems:"flex-start",gap:6}}>
             <Icon name="FileText" size={11} color="#fbbf24"/>
@@ -1369,6 +1379,43 @@ function CarCard({item,onAdvance,onDelete,onUpdate,idx}){
           )}
         </div>
       </div>
+
+      {/* Modal: quem vai lavar? */}
+      {showLavador&&(
+        <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.2)"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:10,textAlign:"center"}}>
+            👤 Quem vai lavar este carro?
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:8}}>
+            {funcionarios.map(f=>(
+              <button key={f.id} onClick={()=>handleAdvance(null,f.id)} disabled={loading}
+                style={{padding:"11px 14px",borderRadius:12,cursor:"pointer",textAlign:"left",
+                  background:"rgba(56,189,248,.1)",border:"1px solid rgba(56,189,248,.25)",
+                  color:"#e0f2fe",fontWeight:700,fontSize:13,opacity:loading?.5:1,
+                  display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:28,height:28,borderRadius:8,background:"rgba(56,189,248,.2)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <Icon name="User" size={13} color="#38bdf8"/>
+                </div>
+                {f.name}
+              </button>
+            ))}
+            <button onClick={()=>handleAdvance(null,null)} disabled={loading}
+              style={{padding:"9px 14px",borderRadius:12,cursor:"pointer",
+                background:"transparent",border:"1px solid rgba(125,211,252,.15)",
+                color:"rgba(186,230,253,.4)",fontWeight:600,fontSize:12}}>
+              Continuar sem atribuir
+            </button>
+          </div>
+          <button onClick={()=>setShowLavador(false)}
+            style={{width:"100%",padding:"8px 0",borderRadius:12,background:"transparent",
+              border:"1px solid rgba(239,68,68,.2)",color:"rgba(248,113,113,.6)",
+              fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {/* Modal: forma de pagamento */}
       {showPgto&&(
         <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.2)"}}>
           <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:10,textAlign:"center"}}>
@@ -1376,7 +1423,7 @@ function CarCard({item,onAdvance,onDelete,onUpdate,idx}){
           </div>
           <div style={{display:"flex",gap:8,marginBottom:8}}>
             {FORMAS.map(f=>(
-              <button key={f.id} onClick={()=>handleAdvance(f.id)} disabled={loading}
+              <button key={f.id} onClick={()=>handleAdvance(f.id,null)} disabled={loading}
                 style={{flex:1,padding:"12px 4px",borderRadius:14,cursor:"pointer",
                   background:`${f.color}18`,border:`1.5px solid ${f.color}44`,
                   display:"flex",flexDirection:"column",alignItems:"center",gap:5,opacity:loading?.5:1}}>
@@ -1387,12 +1434,14 @@ function CarCard({item,onAdvance,onDelete,onUpdate,idx}){
           </div>
           <button onClick={()=>setShowPgto(false)}
             style={{width:"100%",padding:"8px 0",borderRadius:12,background:"transparent",
-              border:"1px solid rgba(125,211,252,.15)",color:"rgba(186,230,253,.4)",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+              border:"1px solid rgba(125,211,252,.15)",color:"rgba(186,230,253,.4)",
+              fontSize:12,fontWeight:600,cursor:"pointer"}}>
             Cancelar
           </button>
         </div>
       )}
-      {open&&!showPgto&&(
+
+      {open&&!showPgto&&!showLavador&&(
         <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.15)"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14,fontSize:12}}>
             <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Telefone</span><span style={{color:"#bae6fd",fontWeight:600}}>{item.phone}</span></div>
@@ -1412,62 +1461,45 @@ function CarCard({item,onAdvance,onDelete,onUpdate,idx}){
     </div>
   );
 }
-
-
-/* ══════════════════════════════════════════════════════════════════════════
-   HOME SCREEN
-══════════════════════════════════════════════════════════════════════════ */
 function HomeScreen({empresaId}){
   const [queue,setQueue]=useState([]);
   const [loading,setLoading]=useState(true);
   const [errorMsg,setErrorMsg]=useState("");
+  const [funcionarios,setFuncionarios]=useState([]);
 
   const fetchQueue=useCallback(async()=>{
-    // Join com profiles para mostrar quem criou cada lavagem — útil para
-    // controle de processo entre múltiplos funcionários da mesma empresa.
-    const{data,error}=await sb.from('ordens_servico').select('*, criador:profiles!criado_por(name)').eq('empresa_id',empresaId).order('created_at',{ascending:true});
+    const{data,error}=await sb.from('ordens_servico').select('*, criador:profiles!criado_por(name), lavador:profiles!lavado_por(name)').eq('empresa_id',empresaId).order('created_at',{ascending:true});
     if(error){setErrorMsg("Não foi possível carregar a fila. Verifique sua conexão.");}
     setQueue(data||[]);setLoading(false);
   },[empresaId]);
 
   useEffect(()=>{
     fetchQueue();
-    // Realtime subscription — usa o payload do evento para atualizar o
-    // estado local de forma incremental (merge), em vez de refazer um
-    // SELECT * completo a cada mudança. Antes, qualquer INSERT/UPDATE/DELETE
-    // em qualquer linha disparava um refetch de toda a tabela para todos os
-    // clientes conectados, multiplicando chamadas à API do Supabase sem
-    // necessidade — relevante para não estourar a cota do plano gratuito.
-    // Apenas em caso de evento inesperado (sem payload reconhecível) cai
-    // no fallback de refetch completo, como rede de segurança.
+    // Buscar funcionários para o modal "quem vai lavar"
+    sb.from('profiles').select('id,name').eq('empresa_id',empresaId).eq('role','employee')
+      .then(({data})=>setFuncionarios(data||[]));
     const ch=sb.channel(`queue_${empresaId}`)
       .on('postgres_changes',{event:'*',schema:'public',table:'ordens_servico',filter:`empresa_id=eq.${empresaId}`},(payload)=>{
         if(payload.eventType==='INSERT'&&payload.new){
-          // Eventos Realtime trazem só a linha pura, sem o join com
-          // profiles — então um INSERT vindo de outro celular não tem
-          // .criador.name ainda. Um refetch leve corrige isso sem
-          // impactar a percepção de "tempo real" (a linha já aparece
-          // na hora, só sem o nome do criador por um instante).
           setQueue(prev=>prev.some(v=>v.id===payload.new.id)?prev:[...prev,payload.new]);
           fetchQueue();
         }else if(payload.eventType==='UPDATE'&&payload.new){
-          // Preserva o campo .criador já carregado anteriormente, já que
-          // o payload do Realtime não inclui dados de tabelas relacionadas.
-          setQueue(prev=>prev.map(v=>v.id===payload.new.id?{...payload.new,criador:v.criador}:v));
+          setQueue(prev=>prev.map(v=>v.id===payload.new.id?{...payload.new,criador:v.criador,lavador:v.lavador}:v));
         }else if(payload.eventType==='DELETE'&&payload.old){
           setQueue(prev=>prev.filter(v=>v.id!==payload.old.id));
         }else{
-          fetchQueue(); // fallback de segurança, raramente acionado
+          fetchQueue();
         }
       })
       .subscribe();
     return()=>sb.removeChannel(ch);
   },[fetchQueue,empresaId]);
 
-  const advance=async(id,nextStatus,currentStatus,formaPagamento)=>{
+  const advance=async(id,nextStatus,currentStatus,formaPagamento,lavadoPor)=>{
     setErrorMsg("");
     const updateData={status:nextStatus,updated_at:new Date().toISOString()};
     if(nextStatus==="Pago"&&formaPagamento)updateData.forma_pagamento=formaPagamento;
+    if(nextStatus==="Lavando"&&lavadoPor)updateData.lavado_por=lavadoPor;
     const{error,count}=await sb.from('ordens_servico')
       .update(updateData,{count:'exact'})
       .eq('id',id)
@@ -1530,7 +1562,7 @@ function HomeScreen({empresaId}){
           <div style={{color:"rgba(186,230,253,.7)",fontWeight:700,fontSize:16}}>Fila vazia</div>
           <div style={{color:"rgba(186,230,253,.4)",fontSize:13,marginTop:6}}>Adicione um veículo na aba Nova Lavagem</div>
         </div>
-      ):(queue.map((v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} onUpdate={(id,patch)=>setQueue(q=>q.map(x=>x.id===id?{...x,...patch}:x))} idx={i}/>))}
+      ):(queue.map((v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} onUpdate={(id,patch)=>setQueue(q=>q.map(x=>x.id===id?{...x,...patch}:x))} funcionarios={funcionarios} idx={i}/>))}
     </div>
   );
 }
@@ -2246,7 +2278,8 @@ function FolhaScreen({empresaId,embedded}){
   const [funcionarios,setFuncionarios]=useState([]);
   const [diarias,setDiarias]=useState({});
   const [pagamentos,setPagamentos]=useState([]);
-  const [diasMap,setDiasMap]=useState({});       // profile_id → dias trabalhados
+  const [diasMap,setDiasMap]=useState({});
+  const [comissoes,setComissoes]=useState({});
   const [performance,setPerformance]=useState(null);
   const [loading,setLoading]=useState(true);
   const [semana,setSemana]=useState(getSemanaAtual());
@@ -2255,6 +2288,9 @@ function FolhaScreen({empresaId,embedded}){
   const [saving,setSaving]=useState(false);
   const [editandoDiaria,setEditandoDiaria]=useState(null);
   const [novaDiaria,setNovaDiaria]=useState("");
+  const [editandoConfig,setEditandoConfig]=useState(null);
+  const [configForm,setConfigForm]=useState({tipo_pagamento:"diaria",taxa_comissao:""});
+  const [savingConfig,setSavingConfig]=useState(false);
   const [savingDias,setSavingDias]=useState(null);
 
   function getSemanaAtual(){
@@ -2263,21 +2299,17 @@ function FolhaScreen({empresaId,embedded}){
     const semNum=Math.ceil(((d-jan1)/86400000+jan1.getDay()+1)/7);
     return `${d.getFullYear()}-W${String(semNum).padStart(2,"0")}`;
   }
-
   function semanaLabel(s){
-    const [ano,w]=s.split("-W");
-    const semNum=parseInt(w);
+    const [ano,w]=s.split("-W");const semNum=parseInt(w);
     const jan1=new Date(parseInt(ano),0,1);
     const diasAteSegunda=(semNum-1)*7-(jan1.getDay()||7)+1;
     const inicio=new Date(jan1.getTime()+diasAteSegunda*86400000);
     const fim=new Date(inicio.getTime()+6*86400000);
     const fmt=d=>`${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
-    return `${fmt(inicio)} – ${fmt(fim)}`;
+    return `${fmt(inicio)} \u2013 ${fmt(fim)}`;
   }
-
   function semanaParaDatas(s){
-    const [ano,w]=s.split("-W");
-    const semNum=parseInt(w);
+    const [ano,w]=s.split("-W");const semNum=parseInt(w);
     const jan1=new Date(parseInt(ano),0,1);
     const diasAteSegunda=(semNum-1)*7-(jan1.getDay()||7)+1;
     const inicio=new Date(jan1.getTime()+diasAteSegunda*86400000);
@@ -2297,30 +2329,51 @@ function FolhaScreen({empresaId,embedded}){
       sb.rpc("fn_performance_semana",{p_empresa_id:empresaId,p_data_inicio:inicio,p_data_fim:fim}),
     ]);
     setFuncionarios(funcs||[]);
-    const dMap={};(dirs||[]).forEach(d=>{dMap[d.profile_id]=d.valor_diaria;});
+    const dMap={};
+    (dirs||[]).forEach(d=>{dMap[d.profile_id]={
+      valor_diaria:d.valor_diaria||0,
+      tipo_pagamento:d.tipo_pagamento||"diaria",
+      taxa_comissao:d.taxa_comissao||0,
+    };});
     setDiarias(dMap);
     setPagamentos(pgtos||[]);
     const dmMap={};(dias||[]).forEach(d=>{dmMap[d.profile_id]=d.dias;});
     setDiasMap(dmMap);
     setPerformance(perf);
+    // Buscar comissões para funcionários com tipo comissao/misto
+    const funcsComissao=(funcs||[]).filter(f=>dMap[f.id]?.tipo_pagamento!=="diaria");
+    if(funcsComissao.length>0){
+      const results=await Promise.all(funcsComissao.map(f=>
+        sb.rpc("fn_comissao_semana",{p_empresa_id:empresaId,p_profile_id:f.id,p_data_inicio:inicio,p_data_fim:fim})
+      ));
+      const cMap={};
+      funcsComissao.forEach((f,i)=>{if(results[i].data)cMap[f.id]=results[i].data;});
+      setComissoes(cMap);
+    }else{setComissoes({});}
     setLoading(false);
   },[empresaId,semana]);
 
   useEffect(()=>{fetchTudo();},[fetchTudo]);
 
-  // ── Saldo por funcionário (Feature 1) ─────────────────────
-  // Calculado localmente sem query extra — usa dados já carregados.
+  // Saldo por funcionário calculado localmente
   const saldoPorFunc=useMemo(()=>{
     return funcionarios.reduce((acc,f)=>{
       const dias=diasMap[f.id]||0;
-      const totalDevido=(diarias[f.id]||0)*dias;
-      const totalPago=pagamentos
-        .filter(p=>p.profile_id===f.id)
-        .reduce((s,p)=>s+parseFloat(p.valor),0);
-      acc[f.id]={totalDevido,totalPago,saldo:totalDevido-totalPago};
+      const cfg=diarias[f.id]||{};
+      const tipo=cfg.tipo_pagamento||"diaria";
+      const valorDiaria=cfg.valor_diaria||0;
+      const taxa=cfg.taxa_comissao||0;
+      const comissao=comissoes[f.id]?.comissao||0;
+      const totalLavagens=comissoes[f.id]?.total_lavagens||0;
+      let totalDevido=0;
+      if(tipo==="diaria")totalDevido=valorDiaria*dias;
+      else if(tipo==="comissao")totalDevido=comissao;
+      else if(tipo==="misto")totalDevido=(valorDiaria*dias)+comissao;
+      const totalPago=pagamentos.filter(p=>p.profile_id===f.id).reduce((s,p)=>s+parseFloat(p.valor),0);
+      acc[f.id]={totalDevido,totalPago,saldo:totalDevido-totalPago,tipo,taxa,comissao,totalLavagens};
       return acc;
     },{});
-  },[funcionarios,diarias,pagamentos,diasMap]);
+  },[funcionarios,diarias,pagamentos,diasMap,comissoes]);
 
   const totalSemana=pagamentos.reduce((s,p)=>s+parseFloat(p.valor),0);
 
@@ -2331,6 +2384,38 @@ function FolhaScreen({empresaId,embedded}){
     },{onConflict:"empresa_id,profile_id,semana_ref"});
     setDiasMap(m=>({...m,[profileId]:parseInt(dias)||0}));
     setSavingDias(null);
+  };
+
+  const salvarDiaria=async(profileId)=>{
+    const v=parseFloat(novaDiaria);if(isNaN(v)||v<0)return;
+    const cfg=diarias[profileId]||{};
+    await sb.from("funcionario_diaria").upsert({
+      empresa_id:empresaId,profile_id:profileId,
+      valor_diaria:v,
+      tipo_pagamento:cfg.tipo_pagamento||"diaria",
+      taxa_comissao:cfg.taxa_comissao||0,
+    },{onConflict:"empresa_id,profile_id"});
+    setDiarias(d=>({...d,[profileId]:{...(d[profileId]||{}),valor_diaria:v}}));
+    setEditandoDiaria(null);
+  };
+
+  const salvarConfig=async(profileId)=>{
+    setSavingConfig(true);
+    const cfg=diarias[profileId]||{};
+    await sb.from("funcionario_diaria").upsert({
+      empresa_id:empresaId,profile_id:profileId,
+      valor_diaria:cfg.valor_diaria||0,
+      tipo_pagamento:configForm.tipo_pagamento,
+      taxa_comissao:parseFloat(configForm.taxa_comissao)||0,
+    },{onConflict:"empresa_id,profile_id"});
+    setDiarias(d=>({...d,[profileId]:{
+      ...(d[profileId]||{}),
+      tipo_pagamento:configForm.tipo_pagamento,
+      taxa_comissao:parseFloat(configForm.taxa_comissao)||0,
+    }}));
+    setEditandoConfig(null);
+    setSavingConfig(false);
+    fetchTudo(); // recarregar comissões com nova taxa
   };
 
   const salvarPagamento=async()=>{
@@ -2344,22 +2429,11 @@ function FolhaScreen({empresaId,embedded}){
       semana_ref:semana,
     });
     setForm({profile_id:"",valor:"",tipo:"pagamento",observacao:""});
-    setShowForm(false);setSaving(false);
-    fetchTudo();
-  };
-
-  const salvarDiaria=async(profileId)=>{
-    const v=parseFloat(novaDiaria);
-    if(isNaN(v)||v<0)return;
-    await sb.from("funcionario_diaria").upsert({
-      empresa_id:empresaId,profile_id:profileId,valor_diaria:v
-    },{onConflict:"empresa_id,profile_id"});
-    setDiarias(d=>({...d,[profileId]:v}));
-    setEditandoDiaria(null);
+    setShowForm(false);setSaving(false);fetchTudo();
   };
 
   const excluirPagamento=async(id)=>{
-    if(!window.confirm("Excluir este lançamento?"))return;
+    if(!window.confirm("Excluir este lan\u00e7amento?"))return;
     await sb.from("folha_pagamentos").delete().eq("id",id);
     fetchTudo();
   };
@@ -2373,14 +2447,12 @@ function FolhaScreen({empresaId,embedded}){
 
   if(loading)return<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>;
 
-  // ── Cor do indicador de performance (Feature 3) ───────────
   const pct=performance?.percentual;
   const perfColor=pct==null?"rgba(186,230,253,.4)":pct<=35?"#4ade80":pct<=50?"#fbbf24":"#f87171";
-  const perfLabel=pct==null?"Sem faturamento nesta semana":pct<=35?"Operação saudável ✓":pct<=50?"Atenção: folha elevada":"Alerta: folha crítica";
+  const perfLabel=pct==null?"Sem faturamento nesta semana":pct<=35?"Opera\u00e7\u00e3o saud\u00e1vel \u2713":pct<=50?"Aten\u00e7\u00e3o: folha elevada":"Alerta: folha cr\u00edtica";
 
   return(
     <div style={{padding:embedded?"0":"0 0 20px"}}>
-      {/* Navegação de semanas */}
       <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
         {semanas.map(s=>(
           <button key={s} onClick={()=>setSemana(s)}
@@ -2393,7 +2465,7 @@ function FolhaScreen({empresaId,embedded}){
         ))}
       </div>
 
-      {/* ── Feature 3: Indicador Custo de Pessoal vs Faturamento ── */}
+      {/* Feature 3: Indicador de performance */}
       {performance&&(
         <div className="glass-card" style={{padding:14,marginBottom:14,
           borderColor:pct!=null&&pct>50?"rgba(248,113,113,.3)":pct!=null&&pct>35?"rgba(251,191,36,.3)":"rgba(125,211,252,.2)"}}>
@@ -2407,11 +2479,8 @@ function FolhaScreen({empresaId,embedded}){
               <div style={{fontSize:17,fontWeight:900,color:"#4ade80"}}>{fmtBRL(performance.faturamento)}</div>
             </div>
             <div style={{textAlign:"center"}}>
-              {pct!=null?(
-                <div style={{fontSize:28,fontWeight:900,color:perfColor}}>{pct}%</div>
-              ):(
-                <div style={{fontSize:13,color:"rgba(186,230,253,.3)"}}>—</div>
-              )}
+              {pct!=null?<div style={{fontSize:28,fontWeight:900,color:perfColor}}>{pct}%</div>
+              :<div style={{fontSize:13,color:"rgba(186,230,253,.3)"}}>\u2014</div>}
               <div style={{fontSize:10,color:"rgba(186,230,253,.4)"}}>da receita</div>
             </div>
             <div style={{textAlign:"right"}}>
@@ -2419,7 +2488,6 @@ function FolhaScreen({empresaId,embedded}){
               <div style={{fontSize:17,fontWeight:900,color:"#f87171"}}>{fmtBRL(performance.folha)}</div>
             </div>
           </div>
-          {/* Barra de progresso visual */}
           {pct!=null&&(
             <div style={{height:6,borderRadius:99,background:"rgba(255,255,255,.08)",overflow:"hidden"}}>
               <div style={{height:"100%",borderRadius:99,width:`${Math.min(pct,100)}%`,
@@ -2430,17 +2498,18 @@ function FolhaScreen({empresaId,embedded}){
         </div>
       )}
 
-      {/* ── Resumo da semana com Feature 1: Saldo Pendente ── */}
+      {/* Resumo com saldo + comissão */}
       <div className="glass-card" style={{padding:16,marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
           <span style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.5)"}}>FOLHA DA SEMANA</span>
           <span style={{fontSize:18,fontWeight:900,color:"#f87171"}}>{fmtBRL(totalSemana)}</span>
         </div>
         {funcionarios.map(f=>{
-          const saldo=saldoPorFunc[f.id]||{totalDevido:0,totalPago:0,saldo:0};
+          const saldo=saldoPorFunc[f.id]||{totalDevido:0,totalPago:0,saldo:0,tipo:"diaria",comissao:0,totalLavagens:0};
           const dias=diasMap[f.id]||0;
           const quitado=dias>0&&saldo.saldo<=0;
           const adiantado=dias>0&&saldo.saldo<0;
+          const cfg=diarias[f.id]||{};
           return(
             <div key={f.id} style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid rgba(125,211,252,.08)"}}>
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
@@ -2455,18 +2524,90 @@ function FolhaScreen({empresaId,embedded}){
                         <input autoFocus value={novaDiaria} onChange={e=>setNovaDiaria(e.target.value)}
                           type="number" style={{width:70,padding:"2px 6px",borderRadius:6,background:"rgba(255,255,255,.1)",border:"1px solid rgba(56,189,248,.4)",color:"#e0f2fe",fontSize:11}}/>
                         <button onClick={()=>salvarDiaria(f.id)} style={{background:"rgba(74,222,128,.2)",border:"none",borderRadius:6,padding:"2px 6px",color:"#4ade80",fontSize:10,fontWeight:700,cursor:"pointer"}}>OK</button>
-                        <button onClick={()=>setEditandoDiaria(null)} style={{background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:11,cursor:"pointer"}}>✕</button>
+                        <button onClick={()=>setEditandoDiaria(null)} style={{background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:11,cursor:"pointer"}}>\u2715</button>
                       </div>
                     ):(
-                      <button onClick={()=>{setEditandoDiaria(f.id);setNovaDiaria(diarias[f.id]||"");}}
-                        style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"center",gap:3,marginTop:2}}>
-                        <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>diária {diarias[f.id]?fmtBRL(diarias[f.id]):"—"}</span>
-                        <Icon name="Edit" size={9} color="rgba(186,230,253,.3)"/>
-                      </button>
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
+                        <button onClick={()=>{setEditandoDiaria(f.id);setNovaDiaria(cfg.valor_diaria||"");}}
+                          style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
+                          <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
+                            {saldo.tipo==="comissao"?`comiss\u00e3o ${saldo.taxa}%`:
+                             saldo.tipo==="misto"?`di\u00e1ria ${cfg.valor_diaria?fmtBRL(cfg.valor_diaria):"\u2014"} + ${saldo.taxa}%`:
+                             `di\u00e1ria ${cfg.valor_diaria?fmtBRL(cfg.valor_diaria):"\u2014"}`}
+                          </span>
+                          <Icon name="Edit" size={9} color="rgba(186,230,253,.3)"/>
+                        </button>
+                        {/* Botão configurar tipo de pagamento */}
+                        <button onClick={()=>{
+                          setConfigForm({tipo_pagamento:cfg.tipo_pagamento||"diaria",taxa_comissao:String(cfg.taxa_comissao||"")});
+                          setEditandoConfig(editandoConfig===f.id?null:f.id);
+                        }}
+                          style={{display:"flex",alignItems:"center",gap:3,padding:"1px 8px",borderRadius:99,cursor:"pointer",
+                            background:saldo.tipo!=="diaria"?"rgba(167,139,250,.15)":"rgba(255,255,255,.04)",
+                            border:`1px solid ${saldo.tipo!=="diaria"?"rgba(167,139,250,.3)":"rgba(125,211,252,.12)"}`}}>
+                          <Icon name="Settings" size={9} color={saldo.tipo!=="diaria"?"#a78bfa":"rgba(186,230,253,.3)"}/>
+                          <span style={{fontSize:10,fontWeight:700,color:saldo.tipo!=="diaria"?"#a78bfa":"rgba(186,230,253,.3)"}}>
+                            {saldo.tipo==="diaria"?"+ comiss\u00e3o":saldo.tipo==="comissao"?"comiss\u00e3o":"misto"}
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                    {/* Painel de configuração de comissão */}
+                    {editandoConfig===f.id&&(
+                      <div style={{marginTop:8,padding:10,borderRadius:10,background:"rgba(167,139,250,.08)",border:"1px solid rgba(167,139,250,.2)"}}>
+                        <div style={{fontSize:11,fontWeight:700,color:"#a78bfa",marginBottom:8}}>Tipo de remuneração</div>
+                        <div style={{display:"flex",gap:4,marginBottom:8}}>
+                          {[["diaria","Di\u00e1ria"],["comissao","Comiss\u00e3o"],["misto","Misto"]].map(([k,l])=>(
+                            <button key={k} onClick={()=>setConfigForm(p=>({...p,tipo_pagamento:k}))}
+                              style={{flex:1,padding:"6px 0",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:700,
+                                border:`1px solid ${configForm.tipo_pagamento===k?"rgba(167,139,250,.6)":"rgba(125,211,252,.15)"}`,
+                                background:configForm.tipo_pagamento===k?"rgba(167,139,250,.2)":"rgba(255,255,255,.04)",
+                                color:configForm.tipo_pagamento===k?"#a78bfa":"rgba(186,230,253,.4)"}}>
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                        {configForm.tipo_pagamento!=="diaria"&&(
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                            <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>Taxa:</span>
+                            <input value={configForm.taxa_comissao}
+                              onChange={e=>setConfigForm(p=>({...p,taxa_comissao:e.target.value}))}
+                              type="number" placeholder="10" min="0" max="100"
+                              style={{width:60,padding:"3px 8px",borderRadius:6,background:"rgba(255,255,255,.1)",
+                                border:"1px solid rgba(167,139,250,.3)",color:"#e0f2fe",fontSize:12}}/>
+                            <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>% por lavagem</span>
+                          </div>
+                        )}
+                        {/* Preview do cálculo */}
+                        {saldo.totalLavagens>0&&configForm.tipo_pagamento!=="diaria"&&(
+                          <div style={{fontSize:11,color:"rgba(186,230,253,.4)",marginBottom:8}}>
+                            {saldo.totalLavagens} lavagens \u2192 comiss\u00e3o estimada {fmtBRL(comissoes[f.id]?.valor_base*(parseFloat(configForm.taxa_comissao)||0)/100||0)}
+                          </div>
+                        )}
+                        <div style={{display:"flex",gap:6}}>
+                          <button onClick={()=>salvarConfig(f.id)} disabled={savingConfig}
+                            style={{flex:1,padding:"6px 0",borderRadius:8,background:"rgba(167,139,250,.2)",
+                              border:"1px solid rgba(167,139,250,.4)",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                            {savingConfig?<div className="spinner spin" style={{width:10,height:10,margin:"0 auto"}}/>:"Salvar"}
+                          </button>
+                          <button onClick={()=>setEditandoConfig(null)}
+                            style={{padding:"6px 12px",borderRadius:8,background:"transparent",
+                              border:"1px solid rgba(125,211,252,.15)",color:"rgba(186,230,253,.4)",fontSize:11,cursor:"pointer"}}>
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {/* Resumo de comissão */}
+                    {saldo.tipo!=="diaria"&&saldo.totalLavagens>0&&(
+                      <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}>
+                        <Icon name="TrendingUp" size={10} color="#a78bfa"/>
+                        <span style={{fontSize:11,color:"#a78bfa"}}>{saldo.totalLavagens} lavagens = {fmtBRL(saldo.comissao)}</span>
+                      </div>
                     )}
                   </div>
                 </div>
-                {/* Badge de saldo — Feature 1 */}
+                {/* Badge de saldo */}
                 {dias>0&&(
                   <div style={{textAlign:"right"}}>
                     {quitado?(
@@ -2475,7 +2616,7 @@ function FolhaScreen({empresaId,embedded}){
                         <span style={{fontSize:12,fontWeight:700,color:"#4ade80"}}>{adiantado?`Adiantado ${fmtBRL(Math.abs(saldo.saldo))}`:"Quitado"}</span>
                       </div>
                     ):(
-                      <div style={{textAlign:"right"}}>
+                      <div>
                         <div style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>Pendente</div>
                         <div style={{fontSize:16,fontWeight:900,color:"#fbbf24"}}>{fmtBRL(saldo.saldo)}</div>
                       </div>
@@ -2483,28 +2624,32 @@ function FolhaScreen({empresaId,embedded}){
                   </div>
                 )}
               </div>
-
-              {/* Linha de dias + valores */}
+              {/* Seletor de dias */}
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                {/* Seletor de dias trabalhados */}
-                <div style={{display:"flex",alignItems:"center",gap:4}}>
-                  <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>Dias:</span>
-                  <div style={{display:"flex",gap:3}}>
-                    {[0,1,2,3,4,5,6,7].map(d=>(
-                      <button key={d} onClick={()=>salvarDias(f.id,d)}
-                        disabled={savingDias===f.id}
-                        style={{width:22,height:22,borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",
-                          border:`1px solid ${dias===d?"rgba(14,165,233,.6)":"rgba(125,211,252,.12)"}`,
-                          background:dias===d?"rgba(14,165,233,.3)":"rgba(255,255,255,.04)",
-                          color:dias===d?"#38bdf8":"rgba(186,230,253,.35)"}}>
-                        {d}
-                      </button>
-                    ))}
+                {saldo.tipo!=="comissao"&&(
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>Dias:</span>
+                    <div style={{display:"flex",gap:3}}>
+                      {[0,1,2,3,4,5,6,7].map(d=>(
+                        <button key={d} onClick={()=>salvarDias(f.id,d)} disabled={savingDias===f.id}
+                          style={{width:22,height:22,borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",
+                            border:`1px solid ${dias===d?"rgba(14,165,233,.6)":"rgba(125,211,252,.12)"}`,
+                            background:dias===d?"rgba(14,165,233,.3)":"rgba(255,255,255,.04)",
+                            color:dias===d?"#38bdf8":"rgba(186,230,253,.35)"}}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                {dias>0&&(
+                )}
+                {dias>0&&saldo.tipo!=="comissao"&&(
                   <span style={{fontSize:11,color:"rgba(186,230,253,.3)"}}>
-                    = {fmtBRL(saldo.totalDevido)} · pago {fmtBRL(saldo.totalPago)}
+                    = {fmtBRL(saldo.totalDevido)} \u00b7 pago {fmtBRL(saldo.totalPago)}
+                  </span>
+                )}
+                {saldo.tipo==="comissao"&&(
+                  <span style={{fontSize:11,color:"rgba(186,230,253,.3)"}}>
+                    Total a receber: {fmtBRL(saldo.totalDevido)} \u00b7 pago {fmtBRL(saldo.totalPago)}
                   </span>
                 )}
               </div>
@@ -2515,10 +2660,9 @@ function FolhaScreen({empresaId,embedded}){
 
       {/* Botão novo lançamento */}
       <button onClick={()=>{
-          if(!showForm)setForm({profile_id:funcionarios[0]?.id||"",valor:String(diarias[funcionarios[0]?.id]||""),tipo:"pagamento",observacao:""});
+          if(!showForm)setForm({profile_id:funcionarios[0]?.id||"",valor:String(diarias[funcionarios[0]?.id]?.valor_diaria||""),tipo:"pagamento",observacao:""});
           setShowForm(v=>!v);
-        }}
-        className="btn-glow" style={{marginBottom:14}}>
+        }} className="btn-glow" style={{marginBottom:14}}>
         <Icon name="Plus" size={16} color="#fff"/>
         {showForm?"Cancelar":"Registrar Pagamento"}
       </button>
@@ -2526,22 +2670,22 @@ function FolhaScreen({empresaId,embedded}){
       {showForm&&(
         <div className="glass-card" style={{padding:16,marginBottom:14}}>
           <div style={{marginBottom:10}}>
-            <label className="lbl">Funcionário</label>
+            <label className="lbl">Funcion\u00e1rio</label>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
               {funcionarios.map(f=>(
-                <button key={f.id} onClick={()=>setForm(p=>({...p,profile_id:f.id,valor:String(diarias[f.id]||p.valor)}))}
+                <button key={f.id} onClick={()=>setForm(p=>({...p,profile_id:f.id,valor:String(diarias[f.id]?.valor_diaria||p.valor)}))}
                   style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",borderRadius:12,cursor:"pointer",
                     border:`1.5px solid ${form.profile_id===f.id?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
                     background:form.profile_id===f.id?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
                     color:form.profile_id===f.id?"#38bdf8":"rgba(186,230,253,.7)",fontWeight:form.profile_id===f.id?700:500,fontSize:13}}>
                   <span>{f.name}</span>
-                  {diarias[f.id]&&<span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>diária {fmtBRL(diarias[f.id])}</span>}
+                  {diarias[f.id]?.valor_diaria&&<span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>di\u00e1ria {fmtBRL(diarias[f.id].valor_diaria)}</span>}
                 </button>
               ))}
             </div>
           </div>
           <div style={{display:"flex",gap:8,marginBottom:10}}>
-            {[["pagamento","💰 Pagamento"],["adiantamento","⚡ Adiantamento"]].map(([k,l])=>(
+            {[["pagamento","\ud83d\udcb0 Pagamento"],["adiantamento","\u26a1 Adiantamento"]].map(([k,l])=>(
               <button key={k} onClick={()=>setForm(p=>({...p,tipo:k}))}
                 style={{flex:1,padding:"9px 0",borderRadius:12,cursor:"pointer",fontSize:12,fontWeight:700,
                   border:`1.5px solid ${form.tipo===k?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
@@ -2557,7 +2701,7 @@ function FolhaScreen({empresaId,embedded}){
               onChange={e=>setForm(p=>({...p,valor:e.target.value}))} placeholder="0,00"/>
           </div>
           <div style={{marginBottom:14}}>
-            <label className="lbl">Observação (opcional)</label>
+            <label className="lbl">Observa\u00e7\u00e3o (opcional)</label>
             <input className="glass-input" type="text" value={form.observacao}
               onChange={e=>setForm(p=>({...p,observacao:e.target.value}))} placeholder="ex: semana completa, adiantamento..."/>
           </div>
@@ -2571,7 +2715,7 @@ function FolhaScreen({empresaId,embedded}){
       {pagamentos.length>0&&(
         <div>
           <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>
-            Lançamentos — {semanaLabel(semana)}
+            Lan\u00e7amentos \u2014 {semanaLabel(semana)}
           </div>
           {pagamentos.map(p=>{
             const func=funcionarios.find(f=>f.id===p.profile_id);
@@ -2584,9 +2728,9 @@ function FolhaScreen({empresaId,embedded}){
                       <Icon name={isAdiant?"Zap":"DollarSign"} size={14} color={isAdiant?"#fbbf24":"#f87171"}/>
                     </div>
                     <div>
-                      <div style={{fontSize:13,fontWeight:700,color:"#e0f2fe"}}>{func?.name||"—"}</div>
+                      <div style={{fontSize:13,fontWeight:700,color:"#e0f2fe"}}>{func?.name||"\u2014"}</div>
                       <div style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
-                        {isAdiant?"Adiantamento":"Pagamento"}{p.observacao&&` · ${p.observacao}`}
+                        {isAdiant?"Adiantamento":"Pagamento"}{p.observacao&&` \u00b7 ${p.observacao}`}
                       </div>
                     </div>
                   </div>
