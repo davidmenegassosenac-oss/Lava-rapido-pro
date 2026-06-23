@@ -1748,6 +1748,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
   const [hist,setHist]=useState([]);
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState("");
+  const [paymentFilter,setPaymentFilter]=useState("todos");
 
   // Caixa manual
   const [movs,setMovs]=useState([]);
@@ -1763,8 +1764,6 @@ function HistoryScreen({empresaId,embedded,isOwner}){
   },[empresaId]);
 
   const fetchMovs=useCallback(async()=>{
-    // select() limitado às colunas realmente usadas na tela — reduz bytes
-    // transferidos, relevante em conexões 3G/4G de campo.
     const{data}=await sb.from('caixa_movimentos').select('id,tipo,categoria,descricao,valor,data').eq('empresa_id',empresaId)
       .gte('data',new Date(Date.now()-30*86400000).toISOString().split("T")[0])
       .order('created_at',{ascending:false});
@@ -1773,7 +1772,26 @@ function HistoryScreen({empresaId,embedded,isOwner}){
 
   useEffect(()=>{if(subTab==="caixa")fetchMovs();},[subTab,fetchMovs]);
 
-  const filtered=hist.filter(h=>h.client?.toLowerCase().includes(search.toLowerCase())||h.plate?.toLowerCase().includes(search.toLowerCase())||h.model?.toLowerCase().includes(search.toLowerCase()));
+  // Filtros cumulativos: busca por texto + forma de pagamento.
+  // useMemo evita recalcular a cada render sem mudança real.
+  const filtered=useMemo(()=>
+    hist.filter(h=>{
+      const matchSearch=
+        h.client?.toLowerCase().includes(search.toLowerCase())||
+        h.plate?.toLowerCase().includes(search.toLowerCase())||
+        h.model?.toLowerCase().includes(search.toLowerCase());
+      const matchPayment=
+        paymentFilter==="todos"||
+        h.forma_pagamento===paymentFilter;
+      return matchSearch&&matchPayment;
+    })
+  ,[hist,search,paymentFilter]);
+
+  // Totalizador recalculado em tempo real conforme filtros ativos
+  const totalFiltrado=useMemo(()=>
+    filtered.reduce((s,h)=>s+(parseFloat(h.value)||0),0)
+  ,[filtered]);
+
   const total=hist.reduce((s,h)=>s+(parseFloat(h.value)||0),0);
   const tod=hist.filter(h=>daysSince(h.completed_at)===0).reduce((s,h)=>s+(parseFloat(h.value)||0),0);
 
@@ -1784,6 +1802,13 @@ function HistoryScreen({empresaId,embedded,isOwner}){
 
   const catEntrada=["lavagem","detalhamento","produto_venda","outro"];
   const catSaida=["produto_compra","despesa","salario","manutencao","outro"];
+
+  const PAYMENT_FILTERS=[
+    {id:"todos",   label:"Todos",    color:"#38bdf8"},
+    {id:"pix",     label:"Pix",      color:"#4ade80"},
+    {id:"dinheiro",label:"Dinheiro", color:"#fbbf24"},
+    {id:"cartao",  label:"Cartão",   color:"#a78bfa"},
+  ];
 
   const saveMov=async()=>{
     if(!form.valor||!form.descricao)return;
@@ -1825,12 +1850,48 @@ function HistoryScreen({empresaId,embedded,isOwner}){
               ))}
             </div>
           )}
-          <div style={{position:"relative",marginBottom:14}}>
+          <div style={{position:"relative",marginBottom:12}}>
             <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)"}}><Icon name="Search" size={14} color="rgba(186,230,253,.4)"/></span>
             <input className="glass-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, placa, modelo..." style={{paddingLeft:38}}/>
           </div>
+
+          {/* Chips de filtro por forma de pagamento */}
+          <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+            {PAYMENT_FILTERS.map(f=>{
+              const ativo=paymentFilter===f.id;
+              return(
+                <button key={f.id} onClick={()=>setPaymentFilter(f.id)}
+                  style={{padding:"5px 14px",borderRadius:99,fontSize:12,fontWeight:700,cursor:"pointer",
+                    border:`1px solid ${ativo?`${f.color}99`:"rgba(125,211,252,.15)"}`,
+                    background:ativo?`${f.color}22`:"rgba(255,255,255,.04)",
+                    color:ativo?f.color:"rgba(186,230,253,.4)",
+                    transition:"all .15s"}}>
+                  {f.label}
+                </button>
+              );
+            })}
+            {/* Totalizador dinâmico — atualiza conforme filtro ativo */}
+            {paymentFilter!=="todos"&&(
+              <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,
+                padding:"5px 14px",borderRadius:99,
+                background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.12)"}}>
+                <span style={{fontSize:11,color:"rgba(186,230,253,.5)",fontWeight:600}}>
+                  Total em {PAYMENT_FILTERS.find(f=>f.id===paymentFilter)?.label}:
+                </span>
+                <span style={{fontSize:13,fontWeight:900,
+                  color:PAYMENT_FILTERS.find(f=>f.id===paymentFilter)?.color}}>
+                  {fmtBRL(totalFiltrado)}
+                </span>
+              </div>
+            )}
+          </div>
+
           {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
-          :filtered.length===0?<div style={{textAlign:"center",color:"rgba(186,230,253,.4)",padding:"40px 0"}}>Nenhum registro encontrado</div>
+          :filtered.length===0?<div style={{textAlign:"center",color:"rgba(186,230,253,.4)",padding:"40px 0"}}>
+            {paymentFilter!=="todos"
+              ?`Nenhuma lavagem com pagamento em ${PAYMENT_FILTERS.find(f=>f.id===paymentFilter)?.label}`
+              :"Nenhum registro encontrado"}
+          </div>
           :filtered.map((h,i)=>{
             const PGTO_STYLE={
               pix:    {color:"#4ade80",bg:"rgba(74,222,128,.15)",border:"rgba(74,222,128,.3)",label:"Pix"},
