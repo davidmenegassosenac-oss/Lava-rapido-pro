@@ -400,6 +400,16 @@ const today=new Date();
 function daysSince(ds){return Math.floor((today-new Date(ds))/86400000);}
 function fmtDate(ds){return new Date(ds).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"});}
 function fmtTime(ds){return ds?new Date(ds).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—";}
+function fmtTempoPatio(entrada,saida){
+  if(!entrada||!saida)return null;
+  const diffMs=new Date(saida)-new Date(entrada);
+  if(diffMs<=0)return null;
+  const mins=Math.round(diffMs/60000);
+  if(mins<60)return{texto:`${mins} min`,alerta:mins>120};
+  const h=Math.floor(mins/60);
+  const m=mins%60;
+  return{texto:m>0?`${h}h ${m}m`:`${h}h`,alerta:mins>120};
+}
 function fmtBRL(v){return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v||0);}
 const SVC_DEFAULT=[
   {label:"Lavagem Simples",value:30},{label:"Lavagem Completa",value:50},
@@ -1971,6 +1981,24 @@ function HistoryScreen({empresaId,embedded,isOwner}){
     {id:"cartao",  label:"Cartão",   color:"#a78bfa"},
   ];
 
+  // Totais por método calculados via useMemo — atualiza automaticamente
+  // quando hist muda (novo dado do Supabase) ou quando a busca filtra.
+  // Usa os dados pré-filtro de texto para mostrar o potencial total de
+  // cada método, não apenas o que está visível após a busca.
+  const totaisPorMetodo=useMemo(()=>{
+    const base=hist.filter(h=>
+      h.client?.toLowerCase().includes(search.toLowerCase())||
+      h.plate?.toLowerCase().includes(search.toLowerCase())||
+      h.model?.toLowerCase().includes(search.toLowerCase())
+    );
+    return{
+      todos: base.reduce((s,h)=>s+(parseFloat(h.value)||0),0),
+      pix:   base.filter(h=>h.forma_pagamento==="pix").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
+      dinheiro:base.filter(h=>h.forma_pagamento==="dinheiro").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
+      cartao:base.filter(h=>h.forma_pagamento==="cartao").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
+    };
+  },[hist,search]);
+
   const saveMov=async()=>{
     if(!form.valor||!form.descricao)return;
     setSaving(true);
@@ -2016,35 +2044,29 @@ function HistoryScreen({empresaId,embedded,isOwner}){
             <input className="glass-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, placa, modelo..." style={{paddingLeft:38}}/>
           </div>
 
-          {/* Chips de filtro por forma de pagamento */}
+          {/* Chips de filtro por forma de pagamento com totais */}
           <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
             {PAYMENT_FILTERS.map(f=>{
               const ativo=paymentFilter===f.id;
+              const total=totaisPorMetodo[f.id]||0;
+              const showTotal=total>0;
               return(
                 <button key={f.id} onClick={()=>setPaymentFilter(f.id)}
-                  style={{padding:"5px 14px",borderRadius:99,fontSize:12,fontWeight:700,cursor:"pointer",
+                  style={{padding:"5px 12px",borderRadius:99,fontSize:12,fontWeight:700,cursor:"pointer",
                     border:`1px solid ${ativo?`${f.color}99`:"rgba(125,211,252,.15)"}`,
                     background:ativo?`${f.color}22`:"rgba(255,255,255,.04)",
                     color:ativo?f.color:"rgba(186,230,253,.4)",
-                    transition:"all .15s"}}>
+                    transition:"all .15s",display:"flex",alignItems:"center",gap:5}}>
                   {f.label}
+                  {showTotal&&(
+                    <span style={{fontSize:10,fontWeight:800,
+                      color:ativo?f.color:"rgba(186,230,253,.3)"}}>
+                      {fmtBRL(total)}
+                    </span>
+                  )}
                 </button>
               );
             })}
-            {/* Totalizador dinâmico — atualiza conforme filtro ativo */}
-            {paymentFilter!=="todos"&&(
-              <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,
-                padding:"5px 14px",borderRadius:99,
-                background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.12)"}}>
-                <span style={{fontSize:11,color:"rgba(186,230,253,.5)",fontWeight:600}}>
-                  Total em {PAYMENT_FILTERS.find(f=>f.id===paymentFilter)?.label}:
-                </span>
-                <span style={{fontSize:13,fontWeight:900,
-                  color:PAYMENT_FILTERS.find(f=>f.id===paymentFilter)?.color}}>
-                  {fmtBRL(totalFiltrado)}
-                </span>
-              </div>
-            )}
           </div>
 
           {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
@@ -2091,7 +2113,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                 {/* Linha de horários + forma de pagamento */}
                 {(h.entrada_at||h.completed_at||pgto)&&(
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:8,borderTop:"1px solid rgba(125,211,252,.08)"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                       {h.entrada_at&&(
                         <div style={{display:"flex",alignItems:"center",gap:4}}>
                           <Icon name="Clock" size={11} color="rgba(186,230,253,.35)"/>
@@ -2108,6 +2130,23 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                           </span>
                         </div>
                       )}
+                      {/* Tempo de Pátio — alerta se >2h */}
+                      {(()=>{
+                        const tp=fmtTempoPatio(h.entrada_at,h.completed_at);
+                        if(!tp)return null;
+                        return(
+                          <div style={{display:"flex",alignItems:"center",gap:3,
+                            padding:"1px 7px",borderRadius:99,
+                            background:tp.alerta?"rgba(251,191,36,.12)":"rgba(255,255,255,.04)",
+                            border:`1px solid ${tp.alerta?"rgba(251,191,36,.3)":"rgba(125,211,252,.1)"}`}}>
+                            <span style={{fontSize:10}}>⏱️</span>
+                            <span style={{fontSize:10,fontWeight:700,
+                              color:tp.alerta?"#fbbf24":"rgba(186,230,253,.4)"}}>
+                              {tp.texto}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
                     {pgto&&(
                       <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
