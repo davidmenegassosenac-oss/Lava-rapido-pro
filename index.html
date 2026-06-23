@@ -419,20 +419,36 @@ const FAQ=[
    TELA DE ASSINATURA BLOQUEADA
 ══════════════════════════════════════════════════════════════════════════ */
 function AssinaturaScreen({info,onLogout}){
+  const isSuspenso=info?.status==="suspenso";
+  const iconColor=isSuspenso?"#64748b":"#f87171";
+  const iconName=isSuspenso?"Lock":"AlertTriangle";
+  const bgColor=isSuspenso?"rgba(100,116,139,.2)":"rgba(239,68,68,.2)";
+  const borderColor=isSuspenso?"rgba(100,116,139,.4)":"rgba(239,68,68,.4)";
+  const glowColor=isSuspenso?"rgba(100,116,139,.2)":"rgba(239,68,68,.2)";
   return(
     <div style={{height:"var(--app-height)",width:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,position:"relative",overflow:"hidden"}}>
       <AquaBg/>
       <div className="login-card" style={{width:"100%",maxWidth:360,position:"relative",zIndex:1,textAlign:"center"}}>
-        <div style={{width:72,height:72,borderRadius:24,background:"rgba(239,68,68,.2)",border:"2px solid rgba(239,68,68,.4)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",boxShadow:"0 0 40px rgba(239,68,68,.2)"}}>
-          <Icon name="AlertTriangle" size={36} color="#f87171"/>
+        <div style={{width:72,height:72,borderRadius:24,background:bgColor,border:`2px solid ${borderColor}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",boxShadow:`0 0 40px ${glowColor}`}}>
+          <Icon name={iconName} size={36} color={iconColor}/>
         </div>
-        <div style={{color:"#e0f2fe",fontWeight:900,fontSize:22,marginBottom:8}}>Acesso Bloqueado</div>
-        <div style={{color:"rgba(186,230,253,.6)",fontSize:14,marginBottom:24,lineHeight:1.6}}>{info?.mensagem||"Sua assinatura está inativa."}</div>
+        <div style={{color:"#e0f2fe",fontWeight:900,fontSize:22,marginBottom:8}}>
+          {isSuspenso?"Acesso Suspenso":"Acesso Bloqueado"}
+        </div>
+        <div style={{color:"rgba(186,230,253,.6)",fontSize:14,marginBottom:24,lineHeight:1.6}}>
+          {isSuspenso
+            ?"O acesso desta conta foi suspenso pelo administrador. Entre em contato com o suporte para regularizar."
+            :info?.mensagem||"Sua assinatura está inativa."}
+        </div>
         <div className="glass" style={{borderRadius:20,padding:20,marginBottom:20}}>
           <div style={{color:"rgba(186,230,253,.5)",fontSize:12,marginBottom:4}}>Status</div>
-          <div style={{color:"#f87171",fontWeight:800,fontSize:16,textTransform:"uppercase"}}>{info?.status||"vencido"}</div>
+          <div style={{color:iconColor,fontWeight:800,fontSize:16,textTransform:"uppercase"}}>{info?.status||"vencido"}</div>
         </div>
-        <div style={{color:"rgba(186,230,253,.5)",fontSize:13,marginBottom:20}}>Entre em contato com o suporte para renovar sua assinatura.</div>
+        <div style={{color:"rgba(186,230,253,.5)",fontSize:13,marginBottom:20}}>
+          {isSuspenso
+            ?"📞 Suporte: entre em contato para reativar o acesso."
+            :"Entre em contato com o suporte para renovar sua assinatura."}
+        </div>
         <button className="btn-glow" onClick={onLogout} style={{background:"linear-gradient(135deg,#64748b,#475569)"}}>
           <Icon name="LogOut" size={16} color="#fff"/> Sair
         </button>
@@ -986,30 +1002,36 @@ function MasterScreen(){
   const [search,setSearch]=useState("");
   const [filtro,setFiltro]=useState("todas");
   const [confirmando,setConfirmando]=useState(null);
-  const [alterandoPlano,setAlterandoPlano]=useState(null); // id da empresa com modal de plano aberto
+  const [alterandoPlano,setAlterandoPlano]=useState(null);
   const [salvandoPlano,setSalvandoPlano]=useState(null);
   const [usageMap,setUsageMap]=useState({});
+  const [billingLogs,setBillingLogs]=useState({});   // empresa_id → logs[]
+  const [loadingLogs,setLoadingLogs]=useState(null);
+  const [showLogs,setShowLogs]=useState(null);       // empresa_id com logs abertos
+  const [suspendendo,setSuspendendo]=useState(null);
   const [toast,setToast]=useState("");
 
   const fetchEmpresas=useCallback(()=>{
-    // Usa RPC com SECURITY DEFINER para buscar empresas + assinaturas,
-    // contornando o RLS que bloqueava o SELECT de assinaturas de outras
-    // empresas quando auth.uid() retornava null no contexto do client.
-    sb.rpc('fn_master_listar_empresas')
+    sb.rpc("fn_master_listar_empresas")
       .then(({data})=>{setEmpresas(data||[]);setLoading(false);});
   },[]);
 
   useEffect(()=>{fetchEmpresas();},[fetchEmpresas]);
 
-  useEffect(()=>{fetchEmpresas();},[fetchEmpresas]);
-
-  // Busca o uso atual (usuários e ordens) de uma empresa específica ao
-  // abrir o modal de plano — evita uma consulta pesada pra todas as
-  // empresas de uma vez, carregando só sob demanda.
   const fetchUsage=async(empresaId)=>{
-    if(usageMap[empresaId])return; // já carregado
-    const {data}=await sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId});
+    if(usageMap[empresaId])return;
+    const{data}=await sb.rpc("fn_status_limites_plano",{p_empresa_id:empresaId});
     if(data)setUsageMap(m=>({...m,[empresaId]:data}));
+  };
+
+  const fetchBillingLogs=async(empresaId)=>{
+    if(billingLogs[empresaId])return;
+    setLoadingLogs(empresaId);
+    const{data}=await sb.from("saas_billing_logs")
+      .select("*").eq("empresa_id",empresaId)
+      .order("created_at",{ascending:false}).limit(10);
+    setBillingLogs(m=>({...m,[empresaId]:data||[]}));
+    setLoadingLogs(null);
   };
 
   const abrirModalPlano=(empresa)=>{
@@ -1024,25 +1046,26 @@ function MasterScreen(){
     setSalvandoPlano(empresa.id);
     try{
       const valorMap={trial:0,basico:49.90,profissional:89.90,enterprise:149.90};
-      const {data,error}=await sb.rpc('fn_master_atualizar_plano',{
-        p_empresa_id:empresa.id,
-        p_plano:novoPlano,
+      const{data,error}=await sb.rpc("fn_master_atualizar_plano",{
+        p_empresa_id:empresa.id,p_plano:novoPlano,
       });
       if(error)throw new Error(error.message);
       if(!data?.success)throw new Error(data?.message||"Erro ao atualizar plano.");
-
-      // Atualiza estado local imediatamente após RPC confirmar sucesso
-      // sem chamar fetchEmpresas (evita sobrescrever com dado antigo do banco)
+      // Log de upgrade/downgrade
+      const assAtual=empresa.assinaturas?.[0];
+      const tipoLog=assAtual?.plano&&assAtual.plano!==novoPlano?
+        (["basico","profissional","enterprise"].indexOf(novoPlano)>["basico","profissional","enterprise"].indexOf(assAtual.plano)?"upgrade":"downgrade")
+        :"pagamento_manual";
+      await sb.from("saas_billing_logs").insert({
+        empresa_id:empresa.id,plano:novoPlano,
+        valor:valorMap[novoPlano]||0,tipo:tipoLog,
+      });
+      setBillingLogs(m=>{const n={...m};delete n[empresa.id];return n;});
       setEmpresas(prev=>prev.map(emp=>{
         if(emp.id!==empresa.id)return emp;
-        const ass=emp.assinaturas?.[0]||{};
         const novoStatus=novoPlano==="trial"?"trial":"ativo";
-        const diasVenc=novoPlano==="trial"?14:30;
-        const novaData=new Date(Date.now()+diasVenc*86400000).toISOString().split("T")[0];
-        return{...emp,plano:novoPlano,assinaturas:[{
-          ...ass,plano:novoPlano,status:novoStatus,valor:valorMap[novoPlano]||0,
-          data_vencimento:novaData,
-        }]};
+        const ass=emp.assinaturas?.[0]||{};
+        return{...emp,plano:novoPlano,assinaturas:[{...ass,plano:novoPlano,status:novoStatus,valor:valorMap[novoPlano]||0}]};
       }));
       setToast(`✅ Plano de ${empresa.nome_fantasia} alterado para ${novoPlano}!`);
       setTimeout(()=>setToast(""),3000);
@@ -1056,40 +1079,92 @@ function MasterScreen(){
   };
 
   const confirmarPagamentoManual=async(empresa)=>{
-    if(!window.confirm(`Confirmar pagamento manual de ${empresa.nome_fantasia}? Isso estende a assinatura por 1 mês a partir de hoje.`))return;
+    if(!window.confirm(`Confirmar pagamento manual de ${empresa.nome_fantasia}?`))return;
     setConfirmando(empresa.id);
     const ass=empresa.assinaturas?.[0];
     const valor=ass?.valor||0;
+    const plano=ass?.plano||"trial";
     try{
       if(ass?.id){
-        await sb.from('assinaturas').update({
-          status:'ativo',
-          data_pagamento:new Date().toISOString().split('T')[0],
-          data_vencimento:new Date(Date.now()+30*86400000).toISOString().split('T')[0],
-        }).eq('id',ass.id);
+        await sb.from("assinaturas").update({
+          status:"ativo",
+          data_pagamento:new Date().toISOString().split("T")[0],
+          data_vencimento:new Date(Date.now()+30*86400000).toISOString().split("T")[0],
+        }).eq("id",ass.id);
       }
-      await sb.rpc('fn_criar_cobranca',{
-        p_empresa_id:empresa.id,
-        p_valor:valor,
-        p_tipo_cobranca:'manual',
-        p_gateway:'manual',
-        p_descricao:'Pagamento Pix confirmado manualmente pelo admin',
-      }).then(async({data})=>{
-        if(data?.cobranca_id){
-          await sb.from('cobrancas').update({
-            status:'pago',
-            data_pagamento:new Date().toISOString().split('T')[0],
-          }).eq('id',data.cobranca_id);
-        }
+      // Registrar no billing log — auditoria financeira
+      await sb.from("saas_billing_logs").insert({
+        empresa_id:empresa.id,plano,valor,
+        tipo:"pagamento_manual",
+        observacao:"Pagamento Pix confirmado manualmente pelo admin",
       });
+      setBillingLogs(m=>{const n={...m};delete n[empresa.id];return n;});
       setToast(`✅ Pagamento de ${empresa.nome_fantasia} confirmado!`);
       setTimeout(()=>setToast(""),3000);
       fetchEmpresas();
     }catch(e){
-      setToast("Erro ao confirmar pagamento. Tente novamente.");
+      setToast("Erro ao confirmar pagamento.");
       setTimeout(()=>setToast(""),3000);
     }
     setConfirmando(null);
+  };
+
+  const toggleSuspensao=async(empresa)=>{
+    const ass=empresa.assinaturas?.[0];
+    const jaSupenso=ass?.status==="suspenso";
+    const acao=jaSupenso?"reativar":"suspender";
+    if(!window.confirm(`${jaSupenso?"Reativar":"Suspender"} acesso de ${empresa.nome_fantasia}?`))return;
+    setSuspendendo(empresa.id);
+    try{
+      if(ass?.id){
+        await sb.from("assinaturas").update({
+          status:jaSupenso?"ativo":"suspenso",
+        }).eq("id",ass.id);
+      }
+      await sb.from("saas_billing_logs").insert({
+        empresa_id:empresa.id,
+        plano:ass?.plano||"trial",
+        valor:0,
+        tipo:jaSupenso?"reativacao":"suspensao",
+        observacao:`Acesso ${jaSupenso?"reativado":"suspenso"} pelo admin master`,
+      });
+      setBillingLogs(m=>{const n={...m};delete n[empresa.id];return n;});
+      setEmpresas(prev=>prev.map(emp=>{
+        if(emp.id!==empresa.id)return emp;
+        const novoStatus=jaSupenso?"ativo":"suspenso";
+        return{...emp,assinaturas:[{...(ass||{}),status:novoStatus}]};
+      }));
+      setToast(`${jaSupenso?"✅ Acesso reativado":"🔒 Acesso suspenso"} — ${empresa.nome_fantasia}`);
+      setTimeout(()=>setToast(""),3000);
+    }catch(e){
+      setToast("Erro: "+e.message);setTimeout(()=>setToast(""),3000);
+    }
+    setSuspendendo(null);
+  };
+
+  // WhatsApp de vencimento
+  const waVencimento=(empresa,diasRest)=>{
+    const ass=empresa.assinaturas?.[0];
+    const plano=ass?.plano||"trial";
+    const nome=empresa.nome_fantasia;
+    const tel=empresa.telefone?.replace(/\D/g,"");
+    if(!tel)return null;
+    const urgencia=diasRest<=3?"⚠️ URGENTE: ":diasRest<=7?"":"";
+    const msg=encodeURIComponent(
+      `${urgencia}Olá ${nome}! 👋 Passando para lembrar que faltam *${diasRest} dia${diasRest!==1?"s":""}* para o vencimento do seu plano *${plano}* no Lava Rápido Pro.\n\n`+
+      `Para renovar e garantir a continuidade do acesso, entre em contato conosco pelo WhatsApp ou realize o pagamento via Pix.\n\n`+
+      `Qualquer dúvida, é só responder esta mensagem! 🚗💧`
+    );
+    return`https://api.whatsapp.com/send?phone=55${tel}&text=${msg}`;
+  };
+
+  // Contadores para os chips de filtro (Feature 2)
+  const counts={
+    todas:empresas.length,
+    trial:empresas.filter(e=>{const s=e.assinaturas?.[0]?.status;return s==="trial"||!s;}).length,
+    ativo:empresas.filter(e=>e.assinaturas?.[0]?.status==="ativo").length,
+    vencido:empresas.filter(e=>e.assinaturas?.[0]?.status==="vencido").length,
+    suspenso:empresas.filter(e=>e.assinaturas?.[0]?.status==="suspenso").length,
   };
 
   const filtradas=empresas.filter(e=>{
@@ -1100,14 +1175,14 @@ function MasterScreen(){
   });
 
   const totalMRR=empresas.reduce((s,e)=>{const a=e.assinaturas?.[0];return s+(a?.status==="ativo"?parseFloat(a?.valor||0):0);},0);
-  const totalAtivas=empresas.filter(e=>e.assinaturas?.[0]?.status==="ativo").length;
-  const totalTrial=empresas.filter(e=>e.assinaturas?.[0]?.status==="trial"||!e.assinaturas?.[0]).length;
+  const totalAtivas=counts.ativo;
+  const totalTrial=counts.trial;
 
   const PLANOS=[
-    {id:"trial",     label:"Trial",        cor:"#fbbf24", usuarios:2,    valor:"Grátis"},
-    {id:"basico",    label:"Básico",       cor:"#38bdf8", usuarios:3,    valor:"R$49,90"},
-    {id:"profissional",label:"Profissional",cor:"#4ade80",usuarios:10,   valor:"R$89,90"},
-    {id:"enterprise",label:"Enterprise",   cor:"#a78bfa", usuarios:999,  valor:"R$149,90"},
+    {id:"trial",      label:"Trial",        cor:"#fbbf24",usuarios:2,   valor:"Grátis"},
+    {id:"basico",     label:"Básico",       cor:"#38bdf8",usuarios:3,   valor:"R$49,90"},
+    {id:"profissional",label:"Profissional",cor:"#4ade80",usuarios:10,  valor:"R$89,90"},
+    {id:"enterprise", label:"Enterprise",   cor:"#a78bfa",usuarios:999, valor:"R$149,90"},
   ];
 
   return(
@@ -1133,14 +1208,16 @@ function MasterScreen(){
         <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)"}}><Icon name="Search" size={14} color="rgba(186,230,253,.4)"/></span>
         <input className="glass-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar empresa..." style={{paddingLeft:38}}/>
       </div>
+
+      {/* Chips com contadores — Feature 2 */}
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
-        {[["todas","Todas"],["trial","Trial"],["ativo","Ativas"],["vencido","Vencidas"]].map(([k,l])=>(
+        {[["todas","Todas"],["trial","Trial"],["ativo","Ativas"],["vencido","Vencidas"],["suspenso","Suspensas"]].map(([k,l])=>(
           <button key={k} onClick={()=>setFiltro(k)}
             style={{padding:"5px 12px",borderRadius:99,fontSize:11,fontWeight:700,cursor:"pointer",
               border:`1px solid ${filtro===k?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
               background:filtro===k?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
               color:filtro===k?"#38bdf8":"rgba(186,230,253,.4)"}}>
-            {l}
+            {l} ({counts[k]||0})
           </button>
         ))}
       </div>
@@ -1153,30 +1230,53 @@ function MasterScreen(){
       :filtradas.map(e=>{
         const ass=e.assinaturas?.[0];
         const planoAtual=ass?.plano||"trial";
-        const statusColor=ass?.status==="ativo"?"#4ade80":ass?.status==="trial"?"#fbbf24":ass?.status==="vencido"?"#f87171":"#64748b";
+        const statusAtual=ass?.status||"sem_plano";
+        const isSuspenso=statusAtual==="suspenso";
+        const statusColor=statusAtual==="ativo"?"#4ade80":statusAtual==="trial"?"#fbbf24":statusAtual==="suspenso"?"#64748b":"#f87171";
         const diasRest=ass?.data_vencimento?Math.max(0,Math.floor((new Date(ass.data_vencimento)-new Date())/86400000)):null;
         const usage=usageMap[e.id];
         const modalAberto=alterandoPlano===e.id;
+        const logsAbertos=showLogs===e.id;
+        const waLink=diasRest!=null?waVencimento(e,diasRest):null;
 
         return(
-          <div key={e.id} className="glass-card" style={{marginBottom:10}}>
+          <div key={e.id} className="glass-card" style={{marginBottom:10,
+            borderColor:isSuspenso?"rgba(100,116,139,.4)":undefined,
+            opacity:isSuspenso?.75:1}}>
             <div style={{padding:14}}>
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
-                <div>
-                  <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14}}>{e.nome_fantasia}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                    {isSuspenso&&<Icon name="Lock" size={12} color="#64748b"/>}
+                    <div style={{color:isSuspenso?"#64748b":"#e0f2fe",fontWeight:800,fontSize:14}}>{e.nome_fantasia}</div>
+                  </div>
                   <div style={{color:"rgba(186,230,253,.45)",fontSize:12}}>{e.email}</div>
                   {e.telefone&&<div style={{color:"rgba(186,230,253,.35)",fontSize:11}}>{e.telefone}</div>}
                 </div>
-                <span style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:700,background:`${statusColor}22`,border:`1px solid ${statusColor}44`,color:statusColor,whiteSpace:"nowrap"}}>
-                  {ass?.status||"sem plano"}
-                </span>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  {/* Botão WhatsApp de vencimento — Feature 1 */}
+                  {waLink&&diasRest<=7&&(
+                    <a href={waLink} target="_blank" rel="noreferrer"
+                      title={`Lembrar ${e.nome_fantasia} sobre vencimento em ${diasRest}d`}
+                      style={{width:30,height:30,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",
+                        background:"rgba(22,163,74,.2)",border:"1px solid rgba(22,163,74,.4)",textDecoration:"none"}}>
+                      <Icon name="MessageCircle" size={14} color="#4ade80"/>
+                    </a>
+                  )}
+                  <span style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:700,
+                    background:`${statusColor}22`,border:`1px solid ${statusColor}44`,color:statusColor,whiteSpace:"nowrap"}}>
+                    {statusAtual}
+                  </span>
+                </div>
               </div>
 
               <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"rgba(186,230,253,.4)",marginBottom:8}}>
                 <span>Plano: <b style={{color:"rgba(186,230,253,.6)"}}>{planoAtual}</b></span>
-                {diasRest!==null&&<span style={{color:diasRest<=3?"#f87171":diasRest<=7?"#fbbf24":"rgba(186,230,253,.4)"}}>
-                  {diasRest}d restantes
-                </span>}
+                {diasRest!=null&&(
+                  <span style={{color:diasRest<=3?"#f87171":diasRest<=7?"#fbbf24":"rgba(186,230,253,.4)"}}>
+                    {diasRest}d restantes
+                  </span>
+                )}
               </div>
 
               {/* Botão Alterar Plano */}
@@ -1191,7 +1291,7 @@ function MasterScreen(){
                 {modalAberto?"Fechar":"Alterar Plano"}
               </button>
 
-              {/* Modal inline de seleção de plano */}
+              {/* Modal inline de plano */}
               {modalAberto&&(
                 <div style={{background:"rgba(8,15,28,.6)",borderRadius:14,padding:12,marginBottom:8,border:"1px solid rgba(125,211,252,.12)"}}>
                   {usage?(
@@ -1210,22 +1310,18 @@ function MasterScreen(){
                       <div className="spinner spin" style={{width:14,height:14,borderWidth:2}}/>
                     </div>
                   )}
-
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
                     {PLANOS.map(p=>{
                       const ativo=planoAtual===p.id;
                       const salvando=salvandoPlano===e.id;
                       return(
-                        <button key={p.id} onClick={()=>!salvando&&salvarPlano(e,p.id)}
-                          disabled={salvando}
+                        <button key={p.id} onClick={()=>!salvando&&salvarPlano(e,p.id)} disabled={salvando}
                           style={{padding:"10px 8px",borderRadius:12,cursor:salvando?"not-allowed":"pointer",
                             background:ativo?`${p.cor}22`:"rgba(255,255,255,.04)",
-                            border:`1.5px solid ${ativo?p.cor:"rgba(125,211,252,.12)"}`,
-                            opacity:salvando?.6:1,transition:"all .15s"}}>
+                            border:`1.5px solid ${ativo?p.cor:"rgba(125,211,252,.12)"}`,opacity:salvando?.6:1}}>
                           <div style={{fontSize:12,fontWeight:800,color:ativo?p.cor:"#e0f2fe",marginBottom:2}}>{p.label}</div>
                           <div style={{fontSize:10,color:"rgba(186,230,253,.5)",fontWeight:600}}>{p.valor} · {p.usuarios===999?"∞":p.usuarios} users</div>
                           {ativo&&<div style={{fontSize:9,color:p.cor,fontWeight:700,marginTop:2}}>✓ ATUAL</div>}
-                          {salvandoPlano===e.id&&!ativo&&<div className="spinner spin" style={{width:10,height:10,borderWidth:1.5,margin:"2px auto 0"}}/>}
                         </button>
                       );
                     })}
@@ -1233,11 +1329,76 @@ function MasterScreen(){
                 </div>
               )}
 
-              <button
-                onClick={()=>confirmarPagamentoManual(e)}
-                disabled={confirmando===e.id}
-                style={{width:"100%",padding:"9px 0",borderRadius:12,background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.3)",color:"#4ade80",fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:confirmando===e.id?.6:1}}>
-                {confirmando===e.id?<div className="spinner spin" style={{width:13,height:13,borderWidth:2}}/>:<><Icon name="CheckCircle" size={13} color="#4ade80"/> Confirmar Pagamento Manual (Pix)</>}
+              {/* Confirmar pagamento Pix */}
+              <button onClick={()=>confirmarPagamentoManual(e)} disabled={confirmando===e.id||isSuspenso}
+                style={{width:"100%",marginBottom:8,padding:"9px 0",borderRadius:12,
+                  background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.3)",
+                  color:"#4ade80",fontWeight:700,fontSize:12,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+                  opacity:(confirmando===e.id||isSuspenso)?.5:1}}>
+                {confirmando===e.id?<div className="spinner spin" style={{width:13,height:13,borderWidth:2}}/>
+                  :<><Icon name="CheckCircle" size={13} color="#4ade80"/> Confirmar Pagamento Manual (Pix)</>}
+              </button>
+
+              {/* Histórico de Faturamento — Feature 3 */}
+              <button onClick={()=>{
+                  const novoEstado=logsAbertos?null:e.id;
+                  setShowLogs(novoEstado);
+                  if(novoEstado)fetchBillingLogs(e.id);
+                }}
+                style={{width:"100%",marginBottom:8,padding:"8px 0",borderRadius:12,
+                  background:"rgba(255,255,255,.03)",border:"1px solid rgba(125,211,252,.1)",
+                  color:"rgba(186,230,253,.4)",fontWeight:700,fontSize:11,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                <Icon name="FileText" size={11} color="rgba(186,230,253,.4)"/>
+                {logsAbertos?"Fechar Histórico":"Histórico de Faturamento"}
+              </button>
+
+              {logsAbertos&&(
+                <div style={{background:"rgba(8,15,28,.5)",borderRadius:12,padding:10,marginBottom:8,border:"1px solid rgba(125,211,252,.1)"}}>
+                  {loadingLogs===e.id?(
+                    <div style={{display:"flex",justifyContent:"center",padding:12}}><div className="spinner spin" style={{width:14,height:14}}/></div>
+                  ):!billingLogs[e.id]?.length?(
+                    <div style={{textAlign:"center",fontSize:12,color:"rgba(186,230,253,.3)",padding:"10px 0"}}>Nenhum registro ainda</div>
+                  ):billingLogs[e.id].map((log,i)=>{
+                    const tipoColor=log.tipo==="pagamento_manual"?"#4ade80":log.tipo==="upgrade"?"#38bdf8":log.tipo==="suspensao"?"#f87171":"#a78bfa";
+                    const tipoLabel={pagamento_manual:"Pix",upgrade:"Upgrade",downgrade:"Downgrade",suspensao:"Suspensão",reativacao:"Reativação"}[log.tipo]||log.tipo;
+                    return(
+                      <div key={log.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                        paddingBottom:i<billingLogs[e.id].length-1?8:0,
+                        marginBottom:i<billingLogs[e.id].length-1?8:0,
+                        borderBottom:i<billingLogs[e.id].length-1?"1px solid rgba(125,211,252,.08)":"none"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <div style={{width:6,height:6,borderRadius:99,background:tipoColor,flexShrink:0}}/>
+                          <div>
+                            <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.7)"}}>
+                              {tipoLabel} · {log.plano}
+                            </div>
+                            <div style={{fontSize:10,color:"rgba(186,230,253,.35)"}}>
+                              {new Date(log.created_at).toLocaleDateString("pt-BR")}
+                            </div>
+                          </div>
+                        </div>
+                        {log.valor>0&&(
+                          <span style={{fontSize:12,fontWeight:800,color:tipoColor}}>{fmtBRL(log.valor)}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Suspensão de acesso — Feature 4 */}
+              <button onClick={()=>toggleSuspensao(e)} disabled={suspendendo===e.id}
+                style={{width:"100%",padding:"9px 0",borderRadius:12,cursor:"pointer",
+                  background:isSuspenso?"rgba(14,165,233,.12)":"rgba(239,68,68,.08)",
+                  border:`1px solid ${isSuspenso?"rgba(14,165,233,.3)":"rgba(239,68,68,.2)"}`,
+                  color:isSuspenso?"#38bdf8":"#f87171",fontWeight:700,fontSize:12,
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+                  opacity:suspendendo===e.id?.5:1}}>
+                {suspendendo===e.id?<div className="spinner spin" style={{width:13,height:13,borderWidth:2}}/>
+                  :<><Icon name={isSuspenso?"CheckCircle":"Lock"} size={13} color={isSuspenso?"#38bdf8":"#f87171"}/>
+                    {isSuspenso?"Reativar Acesso":"Suspender Acesso"}</>}
               </button>
             </div>
           </div>
