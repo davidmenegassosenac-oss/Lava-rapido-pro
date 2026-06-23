@@ -1844,7 +1844,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                   <div>
                     <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14}}>{h.client}</div>
-                    <div style={{color:"rgba(186,230,253,.45)",fontSize:12}}>{h.model} · <span style={{fontFamily:"monospace"}}>{h.plate}</span></div>
+                    <div style={{color:"#e0f2fe",fontWeight:600,fontSize:13}}>{h.model} · <span style={{fontFamily:"monospace",fontWeight:700,letterSpacing:".06em"}}>{h.plate}</span></div>
                     {h.phone&&(
                       <a href={`tel:${h.phone}`}
                         style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:4,
