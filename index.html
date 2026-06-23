@@ -773,7 +773,6 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
     ["empresa","🏢 Empresa",true],
     ["servicos","🔧 Serviços",true],
     ["assinatura","💳 Plano",true],
-    ["historico","📊 Histórico",true],
     ["relatorios","📈 Relatórios",isOwner],
     ["equipe","👥 Equipe",isOwner],
     ["folha","💸 Folha",isOwner],
@@ -971,7 +970,6 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
           agora vivem dentro de Config para simplificar a navegação
           principal. Cada uma é renderizada sem o wrapper "scroll
           screen-enter" próprio, porque já estamos dentro de um. */}
-      {tab==="historico"&&<HistoryScreen empresaId={empresaId} embedded isOwner/>}
       {tab==="relatorios"&&isOwner&&<RelatoriosScreen empresaId={empresaId} embedded/>}
       {tab==="equipe"&&isOwner&&<AdminScreen empresaId={empresaId} currentUser={currentUser} embedded/>}
       {tab==="folha"&&isOwner&&<FolhaScreen empresaId={empresaId} embedded/>}
@@ -2306,7 +2304,7 @@ function FolhaScreen({empresaId,embedded}){
     const inicio=new Date(jan1.getTime()+diasAteSegunda*86400000);
     const fim=new Date(inicio.getTime()+6*86400000);
     const fmt=d=>`${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
-    return `${fmt(inicio)} \u2013 ${fmt(fim)}`;
+    return `${fmt(inicio)} – ${fmt(fim)}`;
   }
   function semanaParaDatas(s){
     const [ano,w]=s.split("-W");const semNum=parseInt(w);
@@ -2433,7 +2431,7 @@ function FolhaScreen({empresaId,embedded}){
   };
 
   const excluirPagamento=async(id)=>{
-    if(!window.confirm("Excluir este lan\u00e7amento?"))return;
+    if(!window.confirm("Excluir este lançamento?"))return;
     await sb.from("folha_pagamentos").delete().eq("id",id);
     fetchTudo();
   };
@@ -2449,7 +2447,7 @@ function FolhaScreen({empresaId,embedded}){
 
   const pct=performance?.percentual;
   const perfColor=pct==null?"rgba(186,230,253,.4)":pct<=35?"#4ade80":pct<=50?"#fbbf24":"#f87171";
-  const perfLabel=pct==null?"Sem faturamento nesta semana":pct<=35?"Opera\u00e7\u00e3o saud\u00e1vel \u2713":pct<=50?"Aten\u00e7\u00e3o: folha elevada":"Alerta: folha cr\u00edtica";
+  const perfLabel=pct==null?"Sem faturamento nesta semana":pct<=35?"Operação saudável ✓":pct<=50?"Atenção: folha elevada":"Alerta: folha crítica";
 
   return(
     <div style={{padding:embedded?"0":"0 0 20px"}}>
@@ -2480,7 +2478,7 @@ function FolhaScreen({empresaId,embedded}){
             </div>
             <div style={{textAlign:"center"}}>
               {pct!=null?<div style={{fontSize:28,fontWeight:900,color:perfColor}}>{pct}%</div>
-              :<div style={{fontSize:13,color:"rgba(186,230,253,.3)"}}>\u2014</div>}
+              :<div style={{fontSize:13,color:"rgba(186,230,253,.3)"}}>—</div>}
               <div style={{fontSize:10,color:"rgba(186,230,253,.4)"}}>da receita</div>
             </div>
             <div style={{textAlign:"right"}}>
@@ -2524,16 +2522,16 @@ function FolhaScreen({empresaId,embedded}){
                         <input autoFocus value={novaDiaria} onChange={e=>setNovaDiaria(e.target.value)}
                           type="number" style={{width:70,padding:"2px 6px",borderRadius:6,background:"rgba(255,255,255,.1)",border:"1px solid rgba(56,189,248,.4)",color:"#e0f2fe",fontSize:11}}/>
                         <button onClick={()=>salvarDiaria(f.id)} style={{background:"rgba(74,222,128,.2)",border:"none",borderRadius:6,padding:"2px 6px",color:"#4ade80",fontSize:10,fontWeight:700,cursor:"pointer"}}>OK</button>
-                        <button onClick={()=>setEditandoDiaria(null)} style={{background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:11,cursor:"pointer"}}>\u2715</button>
+                        <button onClick={()=>setEditandoDiaria(null)} style={{background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:11,cursor:"pointer"}}>✕</button>
                       </div>
                     ):(
                       <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
                         <button onClick={()=>{setEditandoDiaria(f.id);setNovaDiaria(cfg.valor_diaria||"");}}
                           style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
                           <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
-                            {saldo.tipo==="comissao"?`comiss\u00e3o ${saldo.taxa}%`:
-                             saldo.tipo==="misto"?`di\u00e1ria ${cfg.valor_diaria?fmtBRL(cfg.valor_diaria):"\u2014"} + ${saldo.taxa}%`:
-                             `di\u00e1ria ${cfg.valor_diaria?fmtBRL(cfg.valor_diaria):"\u2014"}`}
+                            {saldo.tipo==="comissao"?`comissão ${saldo.taxa}%`:
+                             saldo.tipo==="misto"?`diária ${cfg.valor_diaria?fmtBRL(cfg.valor_diaria):"—"} + ${saldo.taxa}%`:
+                             `diária ${cfg.valor_diaria?fmtBRL(cfg.valor_diaria):"—"}`}
                           </span>
                           <Icon name="Edit" size={9} color="rgba(186,230,253,.3)"/>
                         </button>
@@ -2547,7 +2545,7 @@ function FolhaScreen({empresaId,embedded}){
                             border:`1px solid ${saldo.tipo!=="diaria"?"rgba(167,139,250,.3)":"rgba(125,211,252,.12)"}`}}>
                           <Icon name="Settings" size={9} color={saldo.tipo!=="diaria"?"#a78bfa":"rgba(186,230,253,.3)"}/>
                           <span style={{fontSize:10,fontWeight:700,color:saldo.tipo!=="diaria"?"#a78bfa":"rgba(186,230,253,.3)"}}>
-                            {saldo.tipo==="diaria"?"+ comiss\u00e3o":saldo.tipo==="comissao"?"comiss\u00e3o":"misto"}
+                            {saldo.tipo==="diaria"?"+ comissão":saldo.tipo==="comissao"?"comissão":"misto"}
                           </span>
                         </button>
                       </div>
@@ -2557,7 +2555,7 @@ function FolhaScreen({empresaId,embedded}){
                       <div style={{marginTop:8,padding:10,borderRadius:10,background:"rgba(167,139,250,.08)",border:"1px solid rgba(167,139,250,.2)"}}>
                         <div style={{fontSize:11,fontWeight:700,color:"#a78bfa",marginBottom:8}}>Tipo de remuneração</div>
                         <div style={{display:"flex",gap:4,marginBottom:8}}>
-                          {[["diaria","Di\u00e1ria"],["comissao","Comiss\u00e3o"],["misto","Misto"]].map(([k,l])=>(
+                          {[["diaria","Diária"],["comissao","Comissão"],["misto","Misto"]].map(([k,l])=>(
                             <button key={k} onClick={()=>setConfigForm(p=>({...p,tipo_pagamento:k}))}
                               style={{flex:1,padding:"6px 0",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:700,
                                 border:`1px solid ${configForm.tipo_pagamento===k?"rgba(167,139,250,.6)":"rgba(125,211,252,.15)"}`,
@@ -2581,7 +2579,7 @@ function FolhaScreen({empresaId,embedded}){
                         {/* Preview do cálculo */}
                         {saldo.totalLavagens>0&&configForm.tipo_pagamento!=="diaria"&&(
                           <div style={{fontSize:11,color:"rgba(186,230,253,.4)",marginBottom:8}}>
-                            {saldo.totalLavagens} lavagens \u2192 comiss\u00e3o estimada {fmtBRL(comissoes[f.id]?.valor_base*(parseFloat(configForm.taxa_comissao)||0)/100||0)}
+                            {saldo.totalLavagens} lavagens → comissão estimada {fmtBRL(comissoes[f.id]?.valor_base*(parseFloat(configForm.taxa_comissao)||0)/100||0)}
                           </div>
                         )}
                         <div style={{display:"flex",gap:6}}>
@@ -2644,12 +2642,12 @@ function FolhaScreen({empresaId,embedded}){
                 )}
                 {dias>0&&saldo.tipo!=="comissao"&&(
                   <span style={{fontSize:11,color:"rgba(186,230,253,.3)"}}>
-                    = {fmtBRL(saldo.totalDevido)} \u00b7 pago {fmtBRL(saldo.totalPago)}
+                    = {fmtBRL(saldo.totalDevido)} · pago {fmtBRL(saldo.totalPago)}
                   </span>
                 )}
                 {saldo.tipo==="comissao"&&(
                   <span style={{fontSize:11,color:"rgba(186,230,253,.3)"}}>
-                    Total a receber: {fmtBRL(saldo.totalDevido)} \u00b7 pago {fmtBRL(saldo.totalPago)}
+                    Total a receber: {fmtBRL(saldo.totalDevido)} · pago {fmtBRL(saldo.totalPago)}
                   </span>
                 )}
               </div>
@@ -2670,7 +2668,7 @@ function FolhaScreen({empresaId,embedded}){
       {showForm&&(
         <div className="glass-card" style={{padding:16,marginBottom:14}}>
           <div style={{marginBottom:10}}>
-            <label className="lbl">Funcion\u00e1rio</label>
+            <label className="lbl">Funcionário</label>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
               {funcionarios.map(f=>(
                 <button key={f.id} onClick={()=>setForm(p=>({...p,profile_id:f.id,valor:String(diarias[f.id]?.valor_diaria||p.valor)}))}
@@ -2679,13 +2677,13 @@ function FolhaScreen({empresaId,embedded}){
                     background:form.profile_id===f.id?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
                     color:form.profile_id===f.id?"#38bdf8":"rgba(186,230,253,.7)",fontWeight:form.profile_id===f.id?700:500,fontSize:13}}>
                   <span>{f.name}</span>
-                  {diarias[f.id]?.valor_diaria&&<span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>di\u00e1ria {fmtBRL(diarias[f.id].valor_diaria)}</span>}
+                  {diarias[f.id]?.valor_diaria&&<span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>diária {fmtBRL(diarias[f.id].valor_diaria)}</span>}
                 </button>
               ))}
             </div>
           </div>
           <div style={{display:"flex",gap:8,marginBottom:10}}>
-            {[["pagamento","\ud83d\udcb0 Pagamento"],["adiantamento","\u26a1 Adiantamento"]].map(([k,l])=>(
+            {[["pagamento","💰 Pagamento"],["adiantamento","⚡ Adiantamento"]].map(([k,l])=>(
               <button key={k} onClick={()=>setForm(p=>({...p,tipo:k}))}
                 style={{flex:1,padding:"9px 0",borderRadius:12,cursor:"pointer",fontSize:12,fontWeight:700,
                   border:`1.5px solid ${form.tipo===k?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
@@ -2701,7 +2699,7 @@ function FolhaScreen({empresaId,embedded}){
               onChange={e=>setForm(p=>({...p,valor:e.target.value}))} placeholder="0,00"/>
           </div>
           <div style={{marginBottom:14}}>
-            <label className="lbl">Observa\u00e7\u00e3o (opcional)</label>
+            <label className="lbl">Observação (opcional)</label>
             <input className="glass-input" type="text" value={form.observacao}
               onChange={e=>setForm(p=>({...p,observacao:e.target.value}))} placeholder="ex: semana completa, adiantamento..."/>
           </div>
@@ -2715,7 +2713,7 @@ function FolhaScreen({empresaId,embedded}){
       {pagamentos.length>0&&(
         <div>
           <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>
-            Lan\u00e7amentos \u2014 {semanaLabel(semana)}
+            Lançamentos — {semanaLabel(semana)}
           </div>
           {pagamentos.map(p=>{
             const func=funcionarios.find(f=>f.id===p.profile_id);
@@ -2728,9 +2726,9 @@ function FolhaScreen({empresaId,embedded}){
                       <Icon name={isAdiant?"Zap":"DollarSign"} size={14} color={isAdiant?"#fbbf24":"#f87171"}/>
                     </div>
                     <div>
-                      <div style={{fontSize:13,fontWeight:700,color:"#e0f2fe"}}>{func?.name||"\u2014"}</div>
+                      <div style={{fontSize:13,fontWeight:700,color:"#e0f2fe"}}>{func?.name||"—"}</div>
                       <div style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
-                        {isAdiant?"Adiantamento":"Pagamento"}{p.observacao&&` \u00b7 ${p.observacao}`}
+                        {isAdiant?"Adiantamento":"Pagamento"}{p.observacao&&` · ${p.observacao}`}
                       </div>
                     </div>
                   </div>
@@ -3116,7 +3114,7 @@ function App(){
     {id:"home",    label:"Fila",      icon:"Home",     roles:["owner","employee"]},
     {id:"new",     label:"Nova",      icon:"Plus",     roles:["owner","employee"]},
     {id:"crm",     label:"CRM",       icon:"Users",    roles:["owner"]},
-    {id:"history", label:"Histórico", icon:"History",  roles:["employee"]},
+    {id:"history", label:"Histórico", icon:"History",  roles:["owner","employee"]},
     {id:"config",  label:"Config",    icon:"Settings", roles:["owner"]},
   ];
   const TABS=ALL_TABS.filter(t=>t.roles.includes(profile.role));
@@ -3171,7 +3169,7 @@ function App(){
         {safeTab==="home"    &&<HomeScreen     key="home"    empresaId={profile.empresa_id}/>}
         {safeTab==="new"     &&<NewWashScreen  key="new"     empresaId={profile.empresa_id} userId={profile.id} onSuccess={()=>{setTab("home");showToast("✅ Veículo adicionado à fila!");}}/>}
         {safeTab==="crm"     &&isOwner&&<CRMScreen     key="crm"     empresaId={profile.empresa_id}/>}
-        {safeTab==="history" &&!isOwner&&<HistoryScreen key="history" empresaId={profile.empresa_id} isOwner={false}/>}
+        {safeTab==="history"&&<HistoryScreen key="history" empresaId={profile.empresa_id} isOwner={isOwner}/>}
         {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} onUpdate={name=>showToast("✅ "+name+" atualizado!")}/>}
       </div>
 
