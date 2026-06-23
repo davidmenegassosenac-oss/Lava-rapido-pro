@@ -2244,8 +2244,10 @@ function BarChart({data,color="#0ea5e9",height=80}){
 ══════════════════════════════════════════════════════════════════════════ */
 function FolhaScreen({empresaId,embedded}){
   const [funcionarios,setFuncionarios]=useState([]);
-  const [diarias,setDiarias]=useState({});       // profile_id → valor_diaria
+  const [diarias,setDiarias]=useState({});
   const [pagamentos,setPagamentos]=useState([]);
+  const [diasMap,setDiasMap]=useState({});       // profile_id → dias trabalhados
+  const [performance,setPerformance]=useState(null);
   const [loading,setLoading]=useState(true);
   const [semana,setSemana]=useState(getSemanaAtual());
   const [showForm,setShowForm]=useState(false);
@@ -2253,6 +2255,7 @@ function FolhaScreen({empresaId,embedded}){
   const [saving,setSaving]=useState(false);
   const [editandoDiaria,setEditandoDiaria]=useState(null);
   const [novaDiaria,setNovaDiaria]=useState("");
+  const [savingDias,setSavingDias]=useState(null);
 
   function getSemanaAtual(){
     const d=new Date();
@@ -2264,7 +2267,6 @@ function FolhaScreen({empresaId,embedded}){
   function semanaLabel(s){
     const [ano,w]=s.split("-W");
     const semNum=parseInt(w);
-    // Calcular data de início da semana
     const jan1=new Date(parseInt(ano),0,1);
     const diasAteSegunda=(semNum-1)*7-(jan1.getDay()||7)+1;
     const inicio=new Date(jan1.getTime()+diasAteSegunda*86400000);
@@ -2273,52 +2275,83 @@ function FolhaScreen({empresaId,embedded}){
     return `${fmt(inicio)} – ${fmt(fim)}`;
   }
 
+  function semanaParaDatas(s){
+    const [ano,w]=s.split("-W");
+    const semNum=parseInt(w);
+    const jan1=new Date(parseInt(ano),0,1);
+    const diasAteSegunda=(semNum-1)*7-(jan1.getDay()||7)+1;
+    const inicio=new Date(jan1.getTime()+diasAteSegunda*86400000);
+    const fim=new Date(inicio.getTime()+6*86400000);
+    const fmt=d=>d.toISOString().split("T")[0];
+    return{inicio:fmt(inicio),fim:fmt(fim)};
+  }
+
   const fetchTudo=useCallback(async()=>{
     setLoading(true);
-    const [{data:funcs},{data:dirs},{data:pgtos}]=await Promise.all([
-      sb.from('profiles').select('id,name,role').eq('empresa_id',empresaId).eq('role','employee'),
-      sb.from('funcionario_diaria').select('*').eq('empresa_id',empresaId),
-      sb.from('folha_pagamentos').select('*, pago_por:created_by(name)').eq('empresa_id',empresaId).eq('semana_ref',semana).order('created_at',{ascending:false}),
+    const{inicio,fim}=semanaParaDatas(semana);
+    const[{data:funcs},{data:dirs},{data:pgtos},{data:dias},{data:perf}]=await Promise.all([
+      sb.from("profiles").select("id,name,role").eq("empresa_id",empresaId).eq("role","employee"),
+      sb.from("funcionario_diaria").select("*").eq("empresa_id",empresaId),
+      sb.from("folha_pagamentos").select("*").eq("empresa_id",empresaId).eq("semana_ref",semana).order("created_at",{ascending:false}),
+      sb.from("folha_dias_trabalhados").select("*").eq("empresa_id",empresaId).eq("semana_ref",semana),
+      sb.rpc("fn_performance_semana",{p_empresa_id:empresaId,p_data_inicio:inicio,p_data_fim:fim}),
     ]);
     setFuncionarios(funcs||[]);
-    const dMap={};
-    (dirs||[]).forEach(d=>{dMap[d.profile_id]=d.valor_diaria;});
+    const dMap={};(dirs||[]).forEach(d=>{dMap[d.profile_id]=d.valor_diaria;});
     setDiarias(dMap);
     setPagamentos(pgtos||[]);
+    const dmMap={};(dias||[]).forEach(d=>{dmMap[d.profile_id]=d.dias;});
+    setDiasMap(dmMap);
+    setPerformance(perf);
     setLoading(false);
   },[empresaId,semana]);
 
   useEffect(()=>{fetchTudo();},[fetchTudo]);
 
-  // Total pago na semana por funcionário
-  const totalPorFunc=pagamentos.reduce((acc,p)=>{
-    acc[p.profile_id]=(acc[p.profile_id]||0)+parseFloat(p.valor);
-    return acc;
-  },{});
+  // ── Saldo por funcionário (Feature 1) ─────────────────────
+  // Calculado localmente sem query extra — usa dados já carregados.
+  const saldoPorFunc=useMemo(()=>{
+    return funcionarios.reduce((acc,f)=>{
+      const dias=diasMap[f.id]||0;
+      const totalDevido=(diarias[f.id]||0)*dias;
+      const totalPago=pagamentos
+        .filter(p=>p.profile_id===f.id)
+        .reduce((s,p)=>s+parseFloat(p.valor),0);
+      acc[f.id]={totalDevido,totalPago,saldo:totalDevido-totalPago};
+      return acc;
+    },{});
+  },[funcionarios,diarias,pagamentos,diasMap]);
+
   const totalSemana=pagamentos.reduce((s,p)=>s+parseFloat(p.valor),0);
+
+  const salvarDias=async(profileId,dias)=>{
+    setSavingDias(profileId);
+    await sb.from("folha_dias_trabalhados").upsert({
+      empresa_id:empresaId,profile_id:profileId,semana_ref:semana,dias:parseInt(dias)||0
+    },{onConflict:"empresa_id,profile_id,semana_ref"});
+    setDiasMap(m=>({...m,[profileId]:parseInt(dias)||0}));
+    setSavingDias(null);
+  };
 
   const salvarPagamento=async()=>{
     if(!form.profile_id||!form.valor)return;
     setSaving(true);
-    await sb.from('folha_pagamentos').insert({
-      empresa_id:empresaId,
-      profile_id:form.profile_id,
-      valor:parseFloat(form.valor),
-      tipo:form.tipo,
+    await sb.from("folha_pagamentos").insert({
+      empresa_id:empresaId,profile_id:form.profile_id,
+      valor:parseFloat(form.valor),tipo:form.tipo,
       observacao:form.observacao||null,
       data_pgto:new Date().toISOString().split("T")[0],
       semana_ref:semana,
     });
     setForm({profile_id:"",valor:"",tipo:"pagamento",observacao:""});
-    setShowForm(false);
-    setSaving(false);
+    setShowForm(false);setSaving(false);
     fetchTudo();
   };
 
   const salvarDiaria=async(profileId)=>{
     const v=parseFloat(novaDiaria);
     if(isNaN(v)||v<0)return;
-    await sb.from('funcionario_diaria').upsert({
+    await sb.from("funcionario_diaria").upsert({
       empresa_id:empresaId,profile_id:profileId,valor_diaria:v
     },{onConflict:"empresa_id,profile_id"});
     setDiarias(d=>({...d,[profileId]:v}));
@@ -2327,20 +2360,23 @@ function FolhaScreen({empresaId,embedded}){
 
   const excluirPagamento=async(id)=>{
     if(!window.confirm("Excluir este lançamento?"))return;
-    await sb.from('folha_pagamentos').delete().eq('id',id);
+    await sb.from("folha_pagamentos").delete().eq("id",id);
     fetchTudo();
   };
 
-  // Semanas para navegação (atual + 4 anteriores)
   const semanas=Array.from({length:5},(_,i)=>{
-    const d=new Date();
-    d.setDate(d.getDate()-i*7);
+    const d=new Date();d.setDate(d.getDate()-i*7);
     const jan1=new Date(d.getFullYear(),0,1);
     const n=Math.ceil(((d-jan1)/86400000+jan1.getDay()+1)/7);
     return `${d.getFullYear()}-W${String(n).padStart(2,"0")}`;
   });
 
   if(loading)return<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>;
+
+  // ── Cor do indicador de performance (Feature 3) ───────────
+  const pct=performance?.percentual;
+  const perfColor=pct==null?"rgba(186,230,253,.4)":pct<=35?"#4ade80":pct<=50?"#fbbf24":"#f87171";
+  const perfLabel=pct==null?"Sem faturamento nesta semana":pct<=35?"Operação saudável ✓":pct<=50?"Atenção: folha elevada":"Alerta: folha crítica";
 
   return(
     <div style={{padding:embedded?"0":"0 0 20px"}}>
@@ -2357,43 +2393,124 @@ function FolhaScreen({empresaId,embedded}){
         ))}
       </div>
 
-      {/* Resumo da semana */}
+      {/* ── Feature 3: Indicador Custo de Pessoal vs Faturamento ── */}
+      {performance&&(
+        <div className="glass-card" style={{padding:14,marginBottom:14,
+          borderColor:pct!=null&&pct>50?"rgba(248,113,113,.3)":pct!=null&&pct>35?"rgba(251,191,36,.3)":"rgba(125,211,252,.2)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <span style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.5)",textTransform:"uppercase",letterSpacing:".08em"}}>Custo de Pessoal</span>
+            <span style={{fontSize:11,fontWeight:700,color:perfColor}}>{perfLabel}</span>
+          </div>
+          <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:10}}>
+            <div>
+              <div style={{fontSize:11,color:"rgba(186,230,253,.4)",marginBottom:2}}>Faturamento</div>
+              <div style={{fontSize:17,fontWeight:900,color:"#4ade80"}}>{fmtBRL(performance.faturamento)}</div>
+            </div>
+            <div style={{textAlign:"center"}}>
+              {pct!=null?(
+                <div style={{fontSize:28,fontWeight:900,color:perfColor}}>{pct}%</div>
+              ):(
+                <div style={{fontSize:13,color:"rgba(186,230,253,.3)"}}>—</div>
+              )}
+              <div style={{fontSize:10,color:"rgba(186,230,253,.4)"}}>da receita</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:11,color:"rgba(186,230,253,.4)",marginBottom:2}}>Folha</div>
+              <div style={{fontSize:17,fontWeight:900,color:"#f87171"}}>{fmtBRL(performance.folha)}</div>
+            </div>
+          </div>
+          {/* Barra de progresso visual */}
+          {pct!=null&&(
+            <div style={{height:6,borderRadius:99,background:"rgba(255,255,255,.08)",overflow:"hidden"}}>
+              <div style={{height:"100%",borderRadius:99,width:`${Math.min(pct,100)}%`,
+                background:`linear-gradient(90deg,#4ade80,${pct>50?"#f87171":pct>35?"#fbbf24":"#4ade80"})`,
+                transition:"width .8s ease"}}/>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Resumo da semana com Feature 1: Saldo Pendente ── */}
       <div className="glass-card" style={{padding:16,marginBottom:14}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
           <span style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.5)"}}>FOLHA DA SEMANA</span>
           <span style={{fontSize:18,fontWeight:900,color:"#f87171"}}>{fmtBRL(totalSemana)}</span>
         </div>
-        {funcionarios.map(f=>(
-          <div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:28,height:28,borderRadius:8,background:"rgba(56,189,248,.15)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <Icon name="User" size={13} color="#38bdf8"/>
-              </div>
-              <div>
-                <div style={{fontSize:13,fontWeight:700,color:"#e0f2fe"}}>{f.name}</div>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  {editandoDiaria===f.id?(
-                    <div style={{display:"flex",alignItems:"center",gap:4}}>
-                      <input autoFocus value={novaDiaria} onChange={e=>setNovaDiaria(e.target.value)}
-                        type="number" style={{width:70,padding:"2px 6px",borderRadius:6,background:"rgba(255,255,255,.1)",border:"1px solid rgba(56,189,248,.4)",color:"#e0f2fe",fontSize:11}}/>
-                      <button onClick={()=>salvarDiaria(f.id)} style={{background:"rgba(74,222,128,.2)",border:"none",borderRadius:6,padding:"2px 6px",color:"#4ade80",fontSize:10,fontWeight:700,cursor:"pointer"}}>OK</button>
-                      <button onClick={()=>setEditandoDiaria(null)} style={{background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:10,cursor:"pointer"}}>✕</button>
-                    </div>
-                  ):(
-                    <button onClick={()=>{setEditandoDiaria(f.id);setNovaDiaria(diarias[f.id]||"");}}
-                      style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
-                      <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>diária {diarias[f.id]?fmtBRL(diarias[f.id]):"—"}</span>
-                      <Icon name="Edit" size={9} color="rgba(186,230,253,.3)"/>
-                    </button>
-                  )}
+        {funcionarios.map(f=>{
+          const saldo=saldoPorFunc[f.id]||{totalDevido:0,totalPago:0,saldo:0};
+          const dias=diasMap[f.id]||0;
+          const quitado=dias>0&&saldo.saldo<=0;
+          const adiantado=dias>0&&saldo.saldo<0;
+          return(
+            <div key={f.id} style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid rgba(125,211,252,.08)"}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:30,height:30,borderRadius:8,background:"rgba(56,189,248,.15)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <Icon name="User" size={14} color="#38bdf8"/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:700,color:"#e0f2fe"}}>{f.name}</div>
+                    {editandoDiaria===f.id?(
+                      <div style={{display:"flex",alignItems:"center",gap:4,marginTop:2}}>
+                        <input autoFocus value={novaDiaria} onChange={e=>setNovaDiaria(e.target.value)}
+                          type="number" style={{width:70,padding:"2px 6px",borderRadius:6,background:"rgba(255,255,255,.1)",border:"1px solid rgba(56,189,248,.4)",color:"#e0f2fe",fontSize:11}}/>
+                        <button onClick={()=>salvarDiaria(f.id)} style={{background:"rgba(74,222,128,.2)",border:"none",borderRadius:6,padding:"2px 6px",color:"#4ade80",fontSize:10,fontWeight:700,cursor:"pointer"}}>OK</button>
+                        <button onClick={()=>setEditandoDiaria(null)} style={{background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:11,cursor:"pointer"}}>✕</button>
+                      </div>
+                    ):(
+                      <button onClick={()=>{setEditandoDiaria(f.id);setNovaDiaria(diarias[f.id]||"");}}
+                        style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"center",gap:3,marginTop:2}}>
+                        <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>diária {diarias[f.id]?fmtBRL(diarias[f.id]):"—"}</span>
+                        <Icon name="Edit" size={9} color="rgba(186,230,253,.3)"/>
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {/* Badge de saldo — Feature 1 */}
+                {dias>0&&(
+                  <div style={{textAlign:"right"}}>
+                    {quitado?(
+                      <div style={{display:"flex",alignItems:"center",gap:4,padding:"3px 10px",borderRadius:99,background:"rgba(74,222,128,.15)",border:"1px solid rgba(74,222,128,.3)"}}>
+                        <Icon name="CheckCircle" size={12} color="#4ade80"/>
+                        <span style={{fontSize:12,fontWeight:700,color:"#4ade80"}}>{adiantado?`Adiantado ${fmtBRL(Math.abs(saldo.saldo))}`:"Quitado"}</span>
+                      </div>
+                    ):(
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>Pendente</div>
+                        <div style={{fontSize:16,fontWeight:900,color:"#fbbf24"}}>{fmtBRL(saldo.saldo)}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Linha de dias + valores */}
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                {/* Seletor de dias trabalhados */}
+                <div style={{display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>Dias:</span>
+                  <div style={{display:"flex",gap:3}}>
+                    {[0,1,2,3,4,5,6,7].map(d=>(
+                      <button key={d} onClick={()=>salvarDias(f.id,d)}
+                        disabled={savingDias===f.id}
+                        style={{width:22,height:22,borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",
+                          border:`1px solid ${dias===d?"rgba(14,165,233,.6)":"rgba(125,211,252,.12)"}`,
+                          background:dias===d?"rgba(14,165,233,.3)":"rgba(255,255,255,.04)",
+                          color:dias===d?"#38bdf8":"rgba(186,230,253,.35)"}}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {dias>0&&(
+                  <span style={{fontSize:11,color:"rgba(186,230,253,.3)"}}>
+                    = {fmtBRL(saldo.totalDevido)} · pago {fmtBRL(saldo.totalPago)}
+                  </span>
+                )}
               </div>
             </div>
-            <span style={{fontSize:14,fontWeight:800,color:totalPorFunc[f.id]?"#f87171":"rgba(186,230,253,.3)"}}>
-              {totalPorFunc[f.id]?fmtBRL(totalPorFunc[f.id]):"R$ 0,00"}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Botão novo lançamento */}
@@ -2406,14 +2523,13 @@ function FolhaScreen({empresaId,embedded}){
         {showForm?"Cancelar":"Registrar Pagamento"}
       </button>
 
-      {/* Formulário de lançamento */}
       {showForm&&(
         <div className="glass-card" style={{padding:16,marginBottom:14}}>
           <div style={{marginBottom:10}}>
             <label className="lbl">Funcionário</label>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
               {funcionarios.map(f=>(
-                <button key={f.id} onClick={()=>setForm(p=>({...p,profile_id:f.id,valor:diarias[f.id]||p.valor}))}
+                <button key={f.id} onClick={()=>setForm(p=>({...p,profile_id:f.id,valor:String(diarias[f.id]||p.valor)}))}
                   style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",borderRadius:12,cursor:"pointer",
                     border:`1.5px solid ${form.profile_id===f.id?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
                     background:form.profile_id===f.id?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
@@ -2452,7 +2568,6 @@ function FolhaScreen({empresaId,embedded}){
         </div>
       )}
 
-      {/* Histórico da semana */}
       {pagamentos.length>0&&(
         <div>
           <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>
@@ -2497,6 +2612,7 @@ function FolhaScreen({empresaId,embedded}){
     </div>
   );
 }
+
 
 function RelatoriosScreen({empresaId,embedded}){
   const [periodo,setPeriodo]=useState("semana");
