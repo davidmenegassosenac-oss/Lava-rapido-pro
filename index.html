@@ -1152,20 +1152,75 @@ function MasterScreen(){
     setSuspendendo(null);
   };
 
-  // WhatsApp de vencimento
-  const waVencimento=(empresa,diasRest)=>{
+  // ── Classificação por zona de atenção ─────────────────────────────────
+  // Retorna a zona de urgência de cada empresa para o CRM do admin.
+  const getZona=(empresa)=>{
+    const ass=empresa.assinaturas?.[0];
+    const dias=ass?.data_vencimento
+      ?Math.floor((new Date(ass.data_vencimento)-new Date())/86400000)
+      :null;
+    const plano=ass?.plano||"trial";
+    const status=ass?.status||"trial";
+    if(status==="suspenso")return{zona:"suspenso",dias,cor:"#64748b",label:"Suspenso"};
+    if(dias===null)return null;
+    if(dias<=0)return{zona:"vencido",dias,cor:"#f87171",label:"Vencido"};
+    if(plano==="trial"&&dias<=3)return{zona:"trial_critico",dias,cor:"#f87171",label:`Trial · ${dias}d`};
+    if(plano==="trial"&&dias<=7)return{zona:"trial_alerta",dias,cor:"#fbbf24",label:`Trial · ${dias}d`};
+    if(plano!=="trial"&&dias<=5)return{zona:"renovacao",dias,cor:"#f87171",label:`Vence em ${dias}d`};
+    if(plano!=="trial"&&dias<=10)return{zona:"renovacao_breve",dias,cor:"#fbbf24",label:`Vence em ${dias}d`};
+    return null; // saudável, não precisa ação
+  };
+
+  // Empresas que precisam de ação — ordenadas por urgência
+  const empresasCRM=useMemo(()=>
+    empresas
+      .map(e=>({...e,_zona:getZona(e)}))
+      .filter(e=>e._zona!==null)
+      .sort((a,b)=>{
+        const ord={vencido:0,trial_critico:1,renovacao:2,trial_alerta:3,renovacao_breve:4,suspenso:5};
+        return(ord[a._zona.zona]??9)-(ord[b._zona.zona]??9);
+      })
+  ,[empresas]);
+
+  // ── Gerador de mensagem inteligente por situação ───────────────────────
+  const PIX_KEY="sua.chave@pix.com"; // substitua pela chave real
+  const waVencimento=(empresa)=>{
     const ass=empresa.assinaturas?.[0];
     const plano=ass?.plano||"trial";
     const nome=empresa.nome_fantasia;
     const tel=empresa.telefone?.replace(/\D/g,"");
     if(!tel)return null;
-    const urgencia=diasRest<=3?"⚠️ URGENTE: ":diasRest<=7?"":"";
-    const msg=encodeURIComponent(
-      `${urgencia}Olá ${nome}! 👋 Passando para lembrar que faltam *${diasRest} dia${diasRest!==1?"s":""}* para o vencimento do seu plano *${plano}* no Lava Rápido Pro.\n\n`+
-      `Para renovar e garantir a continuidade do acesso, entre em contato conosco pelo WhatsApp ou realize o pagamento via Pix.\n\n`+
-      `Qualquer dúvida, é só responder esta mensagem! 🚗💧`
-    );
-    return`https://api.whatsapp.com/send?phone=55${tel}&text=${msg}`;
+    const zona=empresa._zona||getZona(empresa);
+    if(!zona)return null;
+    const dias=zona.dias;
+    let msg="";
+    if(zona.zona==="vencido"){
+      msg=
+        `Olá ${nome}, tudo bem? 👋\n\n`+
+        `Identificamos que a assinatura do seu painel *Lava Rápido Pro* expirou.\n\n`+
+        `Os acessos da equipe foram temporariamente suspensos. Para reativar sua fila de lavagens e o histórico agora mesmo, basta realizar o pagamento do plano.\n\n`+
+        `📲 Me responda aqui ou acesse seu painel para regularizar.\n\n`+
+        `Estamos à disposição! 🚗💧`;
+    }else if(zona.zona==="trial_critico"||zona.zona==="trial_alerta"){
+      msg=
+        `Olá ${nome}, aqui é o David do suporte da plataforma! 👋\n\n`+
+        `Notei que o seu período de testes do *Lava Rápido Pro* está terminando em *${dias} dia${dias!==1?"s":""}*.\n\n`+
+        `O que está achando da experiência? Alguma dúvida sobre as funcionalidades?\n\n`+
+        `Se quiser continuar com o sistema, posso te ajudar a escolher o melhor plano para o seu lava-jato. Segue os valores:\n`+
+        `• Básico: R$49,90/mês\n`+
+        `• *Profissional: R$89,90/mês* ⭐\n`+
+        `• Enterprise: R$149,90/mês\n\n`+
+        `Estou à disposição! 😊`;
+    }else{
+      // renovacao ou renovacao_breve
+      msg=
+        `Olá ${nome}, tudo bem? 👋\n\n`+
+        `Passando para lembrar que a assinatura do plano *${plano}* do seu lava-jato vence em *${dias} dia${dias!==1?"s":""}*.\n\n`+
+        `Para manter o fluxo da sua fila e o acesso dos funcionários ativo sem interrupções, você pode realizar a renovação via Pix:\n\n`+
+        `🔑 *Chave Pix:* ${PIX_KEY}\n\n`+
+        `Depois me confirme o pagamento aqui para eu ativar imediatamente! 🚀`;
+    }
+    return`https://api.whatsapp.com/send?phone=55${tel}&text=${encodeURIComponent(msg)}`;
   };
 
   // Contadores para os chips de filtro (Feature 2)
@@ -1236,6 +1291,59 @@ function MasterScreen(){
         {filtradas.length} empresa{filtradas.length!==1?"s":""}
       </div>
 
+      {/* ── Painel CRM — empresas que precisam de ação ── */}
+      {empresasCRM.length>0&&filtro==="todas"&&!search&&(
+        <div style={{marginBottom:16,borderRadius:20,overflow:"hidden",
+          border:"1px solid rgba(248,113,113,.25)",
+          background:"rgba(248,113,113,.05)"}}>
+          <div style={{padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",
+            borderBottom:"1px solid rgba(248,113,113,.15)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <Icon name="AlertTriangle" size={14} color="#f87171"/>
+              <span style={{fontSize:12,fontWeight:800,color:"#f87171"}}>
+                {empresasCRM.length} empresa{empresasCRM.length!==1?"s precisam":"precisa"} de atenção
+              </span>
+            </div>
+            <span style={{fontSize:10,color:"rgba(186,230,253,.4)"}}>CRM Master</span>
+          </div>
+          {empresasCRM.map(e=>{
+            const zona=e._zona;
+            const waLink=waVencimento(e);
+            return(
+              <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                padding:"10px 16px",borderBottom:"1px solid rgba(125,211,252,.06)"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#e0f2fe",
+                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {e.nome_fantasia}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+                    <span style={{fontSize:10,fontWeight:700,padding:"1px 7px",borderRadius:99,
+                      background:`${zona.cor}18`,border:`1px solid ${zona.cor}44`,color:zona.cor}}>
+                      {zona.label}
+                    </span>
+                    <span style={{fontSize:10,color:"rgba(186,230,253,.35)"}}>
+                      {zona.zona==="vencido"?"Acesso bloqueado":
+                       zona.zona.startsWith("trial")?"Converter para pago":"Renovação urgente"}
+                    </span>
+                  </div>
+                </div>
+                {waLink?(
+                  <a href={waLink} target="_blank" rel="noreferrer"
+                    style={{width:34,height:34,borderRadius:10,display:"flex",alignItems:"center",
+                      justifyContent:"center",background:"rgba(22,163,74,.2)",
+                      border:"1px solid rgba(22,163,74,.4)",textDecoration:"none",flexShrink:0,marginLeft:8}}>
+                    <Icon name="MessageCircle" size={16} color="#4ade80"/>
+                  </a>
+                ):(
+                  <div style={{fontSize:10,color:"rgba(186,230,253,.3)",marginLeft:8}}>sem tel.</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
       :filtradas.map(e=>{
         const ass=e.assinaturas?.[0];
@@ -1247,7 +1355,8 @@ function MasterScreen(){
         const usage=usageMap[e.id];
         const modalAberto=alterandoPlano===e.id;
         const logsAbertos=showLogs===e.id;
-        const waLink=diasRest!=null?waVencimento(e,diasRest):null;
+        const zonaCard=getZona({...e,_zona:undefined});
+        const waLink=zonaCard?waVencimento({...e,_zona:zonaCard}):null;
 
         return(
           <div key={e.id} className="glass-card" style={{marginBottom:10,
@@ -1264,10 +1373,10 @@ function MasterScreen(){
                   {e.telefone&&<div style={{color:"rgba(186,230,253,.35)",fontSize:11}}>{e.telefone}</div>}
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                  {/* Botão WhatsApp de vencimento — Feature 1 */}
-                  {waLink&&diasRest<=7&&(
+                  {/* Botão WhatsApp — aparece em qualquer zona de atenção */}
+                  {waLink&&(
                     <a href={waLink} target="_blank" rel="noreferrer"
-                      title={`Lembrar ${e.nome_fantasia} sobre vencimento em ${diasRest}d`}
+                      title={`Enviar mensagem para ${e.nome_fantasia}`}
                       style={{width:30,height:30,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",
                         background:"rgba(22,163,74,.2)",border:"1px solid rgba(22,163,74,.4)",textDecoration:"none"}}>
                       <Icon name="MessageCircle" size={14} color="#4ade80"/>
