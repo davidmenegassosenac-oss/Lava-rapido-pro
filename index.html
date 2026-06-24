@@ -1920,6 +1920,10 @@ function HistoryScreen({empresaId,embedded,isOwner}){
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState("");
   const [paymentFilter,setPaymentFilter]=useState("todos");
+  const [editando,setEditando]=useState(null);     // id do registro em edição
+  const [editForm,setEditForm]=useState({});        // {forma_pagamento, status_pagamento, lavado_por}
+  const [salvandoEdit,setSalvandoEdit]=useState(false);
+  const [funcionarios,setFuncionarios]=useState([]);
 
   // Caixa manual
   const [movs,setMovs]=useState([]);
@@ -1930,8 +1934,12 @@ function HistoryScreen({empresaId,embedded,isOwner}){
   const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
 
   useEffect(()=>{
-    sb.from('historico').select('*, criador:profiles!criado_por(name)').eq('empresa_id',empresaId).order('completed_at',{ascending:false}).limit(100)
+    sb.from('historico').select('*, criador:profiles!criado_por(name), lavador:profiles!lavado_por(name)')
+      .eq('empresa_id',empresaId).order('completed_at',{ascending:false}).limit(100)
       .then(({data})=>{setHist(data||[]);setLoading(false);});
+    // Buscar funcionários para o seletor de edição
+    sb.from('profiles').select('id,name').eq('empresa_id',empresaId).eq('ativo',true)
+      .then(({data})=>setFuncionarios(data||[]));
   },[empresaId]);
 
   const fetchMovs=useCallback(async()=>{
@@ -1943,28 +1951,53 @@ function HistoryScreen({empresaId,embedded,isOwner}){
 
   useEffect(()=>{if(subTab==="caixa")fetchMovs();},[subTab,fetchMovs]);
 
-  // Filtros cumulativos: busca por texto + forma de pagamento.
-  // useMemo evita recalcular a cada render sem mudança real.
+  // Salvar edição — atualiza localmente sem refetch
+  const salvarEdicao=async()=>{
+    if(!editando)return;
+    setSalvandoEdit(true);
+    const{error}=await sb.from('historico').update({
+      forma_pagamento:editForm.forma_pagamento||null,
+      status_pagamento:editForm.status_pagamento||"pago",
+      lavado_por:editForm.lavado_por||null,
+    }).eq('id',editando);
+    if(!error){
+      setHist(prev=>prev.map(h=>h.id===editando?{...h,...editForm}:h));
+      setEditando(null);
+    }
+    setSalvandoEdit(false);
+  };
+
+  const abrirEdicao=(h)=>{
+    setEditForm({
+      forma_pagamento:h.forma_pagamento||"",
+      status_pagamento:h.status_pagamento||"pago",
+      lavado_por:h.lavado_por||"",
+    });
+    setEditando(h.id);
+  };
+
+  // Filtros cumulativos — estornado é excluído dos totais mas ainda aparece na lista
   const filtered=useMemo(()=>
     hist.filter(h=>{
       const matchSearch=
         h.client?.toLowerCase().includes(search.toLowerCase())||
         h.plate?.toLowerCase().includes(search.toLowerCase())||
         h.model?.toLowerCase().includes(search.toLowerCase());
-      const matchPayment=
-        paymentFilter==="todos"||
-        h.forma_pagamento===paymentFilter;
+      const matchPayment=paymentFilter==="todos"||h.forma_pagamento===paymentFilter;
       return matchSearch&&matchPayment;
     })
   ,[hist,search,paymentFilter]);
 
-  // Totalizador recalculado em tempo real conforme filtros ativos
+  // Totalizador exclui estornados — não contam para receita
   const totalFiltrado=useMemo(()=>
-    filtered.reduce((s,h)=>s+(parseFloat(h.value)||0),0)
+    filtered.filter(h=>h.status_pagamento!=="estornado")
+      .reduce((s,h)=>s+(parseFloat(h.value)||0),0)
   ,[filtered]);
 
-  const total=hist.reduce((s,h)=>s+(parseFloat(h.value)||0),0);
-  const tod=hist.filter(h=>daysSince(h.completed_at)===0).reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+  const total=hist.filter(h=>h.status_pagamento!=="estornado")
+    .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+  const tod=hist.filter(h=>daysSince(h.completed_at)===0&&h.status_pagamento!=="estornado")
+    .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
 
   const hoje=new Date().toISOString().split("T")[0];
   const entradasHoje=movs.filter(m=>m.tipo==="entrada"&&m.data===hoje).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
@@ -1981,21 +2014,26 @@ function HistoryScreen({empresaId,embedded,isOwner}){
     {id:"cartao",  label:"Cartão",   color:"#a78bfa"},
   ];
 
-  // Totais por método calculados via useMemo — atualiza automaticamente
-  // quando hist muda (novo dado do Supabase) ou quando a busca filtra.
-  // Usa os dados pré-filtro de texto para mostrar o potencial total de
-  // cada método, não apenas o que está visível após a busca.
+  // Config visual por status_pagamento
+  const STATUS_PGTO={
+    pago:     {label:"Pago",      color:"#4ade80", bg:"rgba(74,222,128,.15)",  border:"rgba(74,222,128,.3)"},
+    pendente: {label:"Fiado",     color:"#fbbf24", bg:"rgba(251,191,36,.15)",  border:"rgba(251,191,36,.3)"},
+    agendado: {label:"Agendado",  color:"#38bdf8", bg:"rgba(56,189,248,.15)",  border:"rgba(56,189,248,.3)"},
+    estornado:{label:"Estornado", color:"#94a3b8", bg:"rgba(148,163,184,.1)",  border:"rgba(148,163,184,.25)"},
+  };
+
   const totaisPorMetodo=useMemo(()=>{
     const base=hist.filter(h=>
-      h.client?.toLowerCase().includes(search.toLowerCase())||
-      h.plate?.toLowerCase().includes(search.toLowerCase())||
-      h.model?.toLowerCase().includes(search.toLowerCase())
+      (h.client?.toLowerCase().includes(search.toLowerCase())||
+       h.plate?.toLowerCase().includes(search.toLowerCase())||
+       h.model?.toLowerCase().includes(search.toLowerCase()))&&
+      h.status_pagamento!=="estornado"
     );
     return{
-      todos: base.reduce((s,h)=>s+(parseFloat(h.value)||0),0),
-      pix:   base.filter(h=>h.forma_pagamento==="pix").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
+      todos:   base.reduce((s,h)=>s+(parseFloat(h.value)||0),0),
+      pix:     base.filter(h=>h.forma_pagamento==="pix").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
       dinheiro:base.filter(h=>h.forma_pagamento==="dinheiro").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
-      cartao:base.filter(h=>h.forma_pagamento==="cartao").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
+      cartao:  base.filter(h=>h.forma_pagamento==="cartao").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
     };
   },[hist,search]);
 
@@ -2082,14 +2120,24 @@ function HistoryScreen({empresaId,embedded,isOwner}){
               dinheiro:{color:"#fbbf24",bg:"rgba(251,191,36,.15)",border:"rgba(251,191,36,.3)",label:"Dinheiro"},
             };
             const pgto=h.forma_pagamento?PGTO_STYLE[h.forma_pagamento]:null;
+            const stPgto=STATUS_PGTO[h.status_pagamento||"pago"]||STATUS_PGTO.pago;
+            const isEstornado=h.status_pagamento==="estornado";
+            const estaEditando=editando===h.id;
             return(
-            <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`}}>
+            <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`,
+              opacity:isEstornado?.6:1,
+              borderColor:isEstornado?"rgba(148,163,184,.2)":undefined}}>
               <div style={{padding:14}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                  <div>
-                    <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14}}>{h.client}</div>
-                    <div style={{color:"#e0f2fe",fontWeight:600,fontSize:13}}>{h.model} · <span style={{fontFamily:"monospace",fontWeight:700,letterSpacing:".06em"}}>{h.plate}</span></div>
-                    {h.phone&&(
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14,
+                      textDecoration:isEstornado?"line-through":"none",
+                      color:isEstornado?"rgba(186,230,253,.4)":"#e0f2fe"}}>{h.client}</div>
+                    <div style={{color:isEstornado?"rgba(186,230,253,.3)":"#e0f2fe",fontWeight:600,fontSize:13,
+                      textDecoration:isEstornado?"line-through":"none"}}>
+                      {h.model} · <span style={{fontFamily:"monospace",fontWeight:700,letterSpacing:".06em"}}>{h.plate}</span>
+                    </div>
+                    {h.phone&&!isEstornado&&(
                       <a href={`tel:${h.phone}`}
                         style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:4,
                           padding:"3px 10px",borderRadius:99,textDecoration:"none",
@@ -2099,17 +2147,102 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                       </a>
                     )}
                   </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontWeight:800,fontSize:14,color:"#4ade80"}}>{fmtBRL(h.value)}</div>
+                  <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                    <div style={{fontWeight:800,fontSize:14,
+                      color:isEstornado?"rgba(186,230,253,.3)":"#4ade80",
+                      textDecoration:isEstornado?"line-through":"none"}}>{fmtBRL(h.value)}</div>
                     <div style={{color:"rgba(186,230,253,.4)",fontSize:11}}>{fmtDate(h.completed_at)}</div>
+                    {/* Botão de edição — só para owner */}
+                    {isOwner&&(
+                      <button onClick={()=>estaEditando?setEditando(null):abrirEdicao(h)}
+                        style={{padding:"3px 8px",borderRadius:8,cursor:"pointer",
+                          background:estaEditando?"rgba(14,165,233,.2)":"rgba(255,255,255,.05)",
+                          border:`1px solid ${estaEditando?"rgba(14,165,233,.4)":"rgba(125,211,252,.15)"}`,
+                          display:"flex",alignItems:"center",gap:4}}>
+                        <Icon name={estaEditando?"X":"Edit"} size={10} color={estaEditando?"#38bdf8":"rgba(186,230,253,.4)"}/>
+                        <span style={{fontSize:10,fontWeight:700,color:estaEditando?"#38bdf8":"rgba(186,230,253,.4)"}}>
+                          {estaEditando?"Fechar":"Editar"}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:h.entrada_at||pgto?8:0}}>
+
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                   <span style={{fontSize:12,color:"rgba(186,230,253,.45)"}}>
-                    {h.type}{h.criador?.name&&<span style={{color:"rgba(186,230,253,.3)"}}> · por {h.criador.name}</span>}
+                    {h.type}
+                    {h.criador?.name&&<span style={{color:"rgba(186,230,253,.3)"}}> · por {h.criador.name}</span>}
+                    {h.lavador?.name&&<span style={{color:"rgba(167,139,250,.5)"}}> · lavou {h.lavador.name}</span>}
                   </span>
-                  <StatusBadge status={h.status||"Pago"}/>
+                  {/* Badge de status_pagamento — substitui o StatusBadge fixo */}
+                  <span style={{fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:99,
+                    background:stPgto.bg,border:`1px solid ${stPgto.border}`,color:stPgto.color,
+                    whiteSpace:"nowrap"}}>
+                    {stPgto.label}
+                  </span>
                 </div>
+
+                {/* Modal de edição inline */}
+                {estaEditando&&(
+                  <div style={{marginBottom:12,padding:12,borderRadius:14,
+                    background:"rgba(14,165,233,.06)",border:"1px solid rgba(14,165,233,.2)"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#38bdf8",marginBottom:10}}>
+                      ✏️ Editar lançamento
+                    </div>
+                    {/* Forma de pagamento */}
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:10,color:"rgba(186,230,253,.5)",fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Forma de Pagamento</div>
+                      <div style={{display:"flex",gap:6}}>
+                        {[["pix","Pix","#4ade80"],["cartao","Cartão","#38bdf8"],["dinheiro","Dinheiro","#fbbf24"],["","Nenhum","rgba(186,230,253,.3)"]].map(([k,l,c])=>(
+                          <button key={k} onClick={()=>setEditForm(f=>({...f,forma_pagamento:k}))}
+                            style={{flex:1,padding:"7px 0",borderRadius:10,cursor:"pointer",fontSize:11,fontWeight:700,
+                              border:`1px solid ${editForm.forma_pagamento===k?c:"rgba(125,211,252,.12)"}`,
+                              background:editForm.forma_pagamento===k?`${c}22`:"rgba(255,255,255,.04)",
+                              color:editForm.forma_pagamento===k?c:"rgba(186,230,253,.35)"}}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Status de pagamento */}
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:10,color:"rgba(186,230,253,.5)",fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Status</div>
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                        {Object.entries(STATUS_PGTO).map(([k,v])=>(
+                          <button key={k} onClick={()=>setEditForm(f=>({...f,status_pagamento:k}))}
+                            style={{flex:1,minWidth:60,padding:"7px 4px",borderRadius:10,cursor:"pointer",fontSize:11,fontWeight:700,
+                              border:`1px solid ${editForm.status_pagamento===k?v.color:"rgba(125,211,252,.12)"}`,
+                              background:editForm.status_pagamento===k?v.bg:"rgba(255,255,255,.04)",
+                              color:editForm.status_pagamento===k?v.color:"rgba(186,230,253,.35)"}}>
+                            {v.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Funcionário que lavou */}
+                    {funcionarios.length>0&&(
+                      <div style={{marginBottom:10}}>
+                        <div style={{fontSize:10,color:"rgba(186,230,253,.5)",fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Quem lavou</div>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {[{id:"",name:"Nenhum"},...funcionarios].map(f=>(
+                            <button key={f.id} onClick={()=>setEditForm(ef=>({...ef,lavado_por:f.id}))}
+                              style={{padding:"6px 10px",borderRadius:10,cursor:"pointer",fontSize:11,fontWeight:700,
+                                border:`1px solid ${editForm.lavado_por===f.id?"rgba(167,139,250,.6)":"rgba(125,211,252,.12)"}`,
+                                background:editForm.lavado_por===f.id?"rgba(167,139,250,.2)":"rgba(255,255,255,.04)",
+                                color:editForm.lavado_por===f.id?"#a78bfa":"rgba(186,230,253,.35)"}}>
+                              {f.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <button onClick={salvarEdicao} disabled={salvandoEdit}
+                      className="btn-glow" style={{padding:"10px 0",fontSize:13,opacity:salvandoEdit?.6:1}}>
+                      {salvandoEdit?<div className="spinner spin"/>:<><Icon name="Save" size={14} color="#fff"/> Salvar alterações</>}
+                    </button>
+                  </div>
+                )}
+
                 {/* Linha de horários + forma de pagamento */}
                 {(h.entrada_at||h.completed_at||pgto)&&(
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:8,borderTop:"1px solid rgba(125,211,252,.08)"}}>
@@ -2130,7 +2263,6 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                           </span>
                         </div>
                       )}
-                      {/* Tempo de Pátio — alerta se >2h */}
                       {(()=>{
                         const tp=fmtTempoPatio(h.entrada_at,h.completed_at);
                         if(!tp)return null;
