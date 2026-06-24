@@ -147,9 +147,9 @@ function App(){
     </div>
   );
 
-  const bNorm=busca.replace(/[^a-zA-Z0-9]/g,"").toUpperCase();
+  const bNorm=busca.trim().toLowerCase();
   const filtrada=bNorm
-    ?fila.filter(c=>c.plate?.replace(/[^a-zA-Z0-9]/g,"").toUpperCase().endsWith(bNorm))
+    ?fila.filter(c=>c.model?.toLowerCase().includes(bNorm))
     :fila;
 
   const porSt=ORDER.reduce((a,s)=>{a[s]=filtrada.filter(c=>c.status===s);return a;},{});
@@ -192,7 +192,7 @@ function App(){
           <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",
             fontSize:15,pointerEvents:"none"}}>🔍</span>
           <input value={busca} onChange={e=>setBusca(e.target.value)}
-            placeholder="Digite as últimas letras da sua placa..."
+            placeholder="Digite o modelo do seu carro (ex: Civic, HB20...)"
             style={{width:"100%",padding:"13px 40px 13px 42px",borderRadius:16,
               background:"rgba(255,255,255,.07)",border:"1px solid rgba(125,211,252,.2)",
               color:"#e0f2fe",outline:"none"}}/>
@@ -210,10 +210,10 @@ function App(){
         <div style={{textAlign:"center",padding:"30px 20px"}}>
           <div style={{fontSize:36,marginBottom:10}}>🔍</div>
           <div style={{color:"rgba(186,230,253,.5)",fontSize:14,fontWeight:600}}>
-            Placa terminando em "{bNorm}" não está na fila
+            Nenhum "{busca.trim()}" na fila no momento
           </div>
           <div style={{color:"rgba(186,230,253,.3)",fontSize:12,marginTop:6}}>
-            Verifique se digitou corretamente.
+            Verifique o modelo ou aguarde — a fila atualiza automaticamente.
           </div>
         </div>
       )}
@@ -240,7 +240,7 @@ function App(){
                 Nenhum veículo aqui no momento
               </div>
             ):carros.map((c,i)=>{
-              const hl=bNorm&&c.plate?.replace(/[^a-zA-Z0-9]/g,"").toUpperCase().endsWith(bNorm);
+              const hl=bNorm&&c.model?.toLowerCase().includes(bNorm);
               const pos=porSt["Aguardando"].findIndex(x=>x.id===c.id);
               const hora=c.hora_entrega
                 ?new Date(c.hora_entrega).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})
