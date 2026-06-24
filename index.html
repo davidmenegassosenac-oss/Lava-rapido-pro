@@ -1533,7 +1533,7 @@ function MasterScreen(){
 /* ══════════════════════════════════════════════════════════════════════════
    CAR CARD
 ══════════════════════════════════════════════════════════════════════════ */
-function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,idx}){
+function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavador,idx}){
   const [open,setOpen]=useState(false);
   const [loading,setLoading]=useState(false);
   const [showPgto,setShowPgto]=useState(false);
@@ -1575,8 +1575,12 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,idx}){
   const isMensalista=item.tipo_contrato==="mensalista";
 
   const onClickAvancar=()=>{
-    if(next==="Lavando"&&funcionarios?.length>0){setShowLavador(true);setOpen(false);}
-    // Mensalista pula o modal de pagamento — fn_ordem_paga define status='agendado' automaticamente
+    // Só abre o modal de seleção de lavador se a empresa tiver
+    // essa opção habilitada. Quando false, avança direto sem modal.
+    if(next==="Lavando"&&selecionarLavador&&funcionarios?.length>0){
+      setShowLavador(true);setOpen(false);
+    }
+    // Mensalista pula o modal de pagamento
     else if(next==="Pago"&&!isMensalista){setShowPgto(true);}
     else{handleAdvance(null,null);}
   };
@@ -1850,7 +1854,7 @@ function HomeScreen({empresaId}){
           <div style={{color:"rgba(186,230,253,.7)",fontWeight:700,fontSize:16}}>Fila vazia</div>
           <div style={{color:"rgba(186,230,253,.4)",fontSize:13,marginTop:6}}>Adicione um veículo na aba Nova Lavagem</div>
         </div>
-      ):(queue.map((v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} onUpdate={(id,patch)=>setQueue(q=>q.map(x=>x.id===id?{...x,...patch}:x))} funcionarios={funcionarios} idx={i}/>))}
+      ):(queue.map((v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} onUpdate={(id,patch)=>setQueue(q=>q.map(x=>x.id===id?{...x,...patch}:x))} funcionarios={funcionarios} selecionarLavador={false} idx={i}/>))}
     </div>
   );
 }
