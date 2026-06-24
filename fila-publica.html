@@ -13,271 +13,283 @@
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Outfit',system-ui,sans-serif;background:#0c1a2e;color:#e0f2fe;min-height:100vh;-webkit-font-smoothing:antialiased}
-    .glass{background:rgba(255,255,255,.06);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(125,211,252,.18);border-radius:20px}
-    .card{background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.12);border-radius:16px;padding:14px;margin-bottom:8px;transition:all .2s}
-    .card.highlight{border-color:rgba(14,165,233,.7);box-shadow:0 0 20px rgba(14,165,233,.25);background:rgba(14,165,233,.08)}
-    .spinner{width:20px;height:20px;border:2px solid rgba(56,189,248,.2);border-top-color:#38bdf8;border-radius:50%;animation:spin .7s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    .pulse{animation:pulse 2s ease-in-out infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-    input{font-family:'Outfit',sans-serif}
-    ::-webkit-scrollbar{width:0}
+    .card{background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.12);border-radius:16px;padding:14px;margin-bottom:8px}
+    .card.hl{border-color:rgba(14,165,233,.7);box-shadow:0 0 20px rgba(14,165,233,.25);background:rgba(14,165,233,.08)}
+    .spin{width:20px;height:20px;border:2px solid rgba(56,189,248,.2);border-top-color:#38bdf8;border-radius:50%;animation:sp .7s linear infinite}
+    @keyframes sp{to{transform:rotate(360deg)}}
+    .pulse{animation:pl 2s ease-in-out infinite}
+    @keyframes pl{0%,100%{opacity:1}50%{opacity:.5}}
+    input{font-family:'Outfit',sans-serif;font-size:16px}
   </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect,useMemo,useCallback}=React;
+const {useState,useEffect,useRef}=React;
 
-const SUPABASE_URL='https://ikahodmuchwitxfvlaop.supabase.co';
-const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrYWhvZG11Y2h3aXR4ZnZsYW9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NDkzMTcsImV4cCI6MjA5NjUyNTMxN30.qRBN7lFQAGeN1phNneqY368dhAMllnAtQgVCb-piDds';
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
+const SURL='https://ikahodmuchwitxfvlaop.supabase.co';
+const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrYWhvZG11Y2h3aXR4ZnZsYW9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NDkzMTcsImV4cCI6MjA5NjUyNTMxN30.qRBN7lFQAGeN1phNneqY368dhAMllnAtQgVCb-piDds';
+const sb=supabase.createClient(SURL,SKEY);
 
-// Mascara placa: exibe apenas os últimos 3 caracteres
-function mascaraPlaca(placa){
-  if(!placa)return"***";
-  const p=placa.replace(/[^a-zA-Z0-9]/g,"");
-  return"***"+p.slice(-3).toUpperCase();
+// Extração segura do parâmetro fora do componente React
+// para evitar qualquer problema de timing com o Babel standalone
+function getEmpresaId(){
+  try{
+    const p=new URLSearchParams(window.location.search);
+    return p.get("empresa")||p.get("e")||null;
+  }catch(e){return null;}
+}
+const EMPRESA_ID=getEmpresaId();
+
+function mascaraPlaca(p){
+  if(!p)return"***";
+  const s=p.replace(/[^a-zA-Z0-9]/g,"");
+  return"***"+s.slice(-3).toUpperCase();
 }
 
-const STATUS_CONFIG={
-  "Aguardando":{emoji:"⏳",label:"Aguardando",cor:"#fbbf24",bg:"rgba(251,191,36,.12)",border:"rgba(251,191,36,.25)"},
-  "Lavando":   {emoji:"🧼",label:"Na Rampa",   cor:"#38bdf8",bg:"rgba(56,189,248,.12)", border:"rgba(56,189,248,.25)"},
-  "Concluído": {emoji:"✅",label:"Pronto",      cor:"#4ade80",bg:"rgba(74,222,128,.12)", border:"rgba(74,222,128,.25)"},
+const ST={
+  Aguardando:{e:"⏳",l:"Aguardando",c:"#fbbf24",bg:"rgba(251,191,36,.12)",b:"rgba(251,191,36,.25)"},
+  Lavando:   {e:"🧼",l:"Na Rampa",  c:"#38bdf8",bg:"rgba(56,189,248,.12)", b:"rgba(56,189,248,.25)"},
+  "Concluído":{e:"✅",l:"Pronto",   c:"#4ade80",bg:"rgba(74,222,128,.12)", b:"rgba(74,222,128,.25)"},
 };
-const STATUS_ORDER=["Aguardando","Lavando","Concluído"];
+const ORDER=["Aguardando","Lavando","Concluído"];
 
 function App(){
   const [fila,setFila]=useState([]);
   const [loading,setLoading]=useState(true);
   const [busca,setBusca]=useState("");
-  const [nomeEmpresa,setNomeEmpresa]=useState("Lava-Jato");
-  const [lastUpdate,setLastUpdate]=useState(null);
-  const [error,setError]=useState("");
-
-  // Lê empresa_id da URL: ?empresa=UUID
-  const empresaId=useMemo(()=>{
-    const p=new URLSearchParams(window.location.search);
-    return p.get("empresa")||p.get("e");
-  },[]);
-
-  const fetchFila=useCallback(async()=>{
-    if(!empresaId){setError("Link inválido. Solicite o link correto ao lava-jato.");setLoading(false);return;}
-    const{data,error:err}=await sb
-      .from('ordens_servico')
-      .select('id,plate,model,status,color,tipo_contrato,created_at,hora_entrega')
-      .eq('empresa_id',empresaId)
-      .in('status',['Aguardando','Lavando','Concluído'])
-      .order('created_at',{ascending:true});
-    if(err){setError("Não foi possível carregar a fila.");setLoading(false);return;}
-    setFila(data||[]);
-    setLastUpdate(new Date());
-    setLoading(false);
-  },[empresaId]);
+  const [nome,setNome]=useState("Lava-Jato");
+  const [updated,setUpdated]=useState(null);
+  const [err,setErr]=useState("");
+  const channelRef=useRef(null);
 
   useEffect(()=>{
-    if(!empresaId)return;
-    // Buscar nome da empresa
-    sb.from('empresas').select('nome_fantasia').eq('id',empresaId).single()
-      .then(({data})=>{if(data)setNomeEmpresa(data.nome_fantasia);});
+    // Verificação antecipada — evita qualquer fetch se não há ID
+    if(!EMPRESA_ID){
+      setErr("Link inválido. Solicite o link correto ao lava-jato.");
+      setLoading(false);
+      return;
+    }
+
+    // Buscar nome da empresa separadamente com tratamento de erro
+    sb.from('empresas')
+      .select('nome_fantasia')
+      .eq('id',EMPRESA_ID)
+      .single()
+      .then(({data})=>{if(data?.nome_fantasia)setNome(data.nome_fantasia);})
+      .catch(()=>{});
+
+    // Fetch principal da fila — sem tipo_contrato para compatibilidade
+    // (coluna adicionada na migration 024; se não existir, não quebra)
+    function fetchFila(){
+      sb.from('ordens_servico')
+        .select('id,plate,model,status,color,created_at,hora_entrega')
+        .eq('empresa_id',EMPRESA_ID)
+        .in('status',['Aguardando','Lavando','Concluído'])
+        .order('created_at',{ascending:true})
+        .then(({data,error})=>{
+          if(error){
+            setErr("Não foi possível carregar a fila. Verifique sua conexão.");
+            setLoading(false);
+            return;
+          }
+          setFila(data||[]);
+          setUpdated(new Date());
+          setLoading(false);
+          setErr("");
+        })
+        .catch(()=>{
+          setErr("Erro de conexão. Tente recarregar a página.");
+          setLoading(false);
+        });
+    }
 
     fetchFila();
 
-    // Realtime — atualiza sem reload
-    const channel=sb.channel('fila-publica-'+empresaId)
-      .on('postgres_changes',{event:'*',schema:'public',table:'ordens_servico',
-        filter:`empresa_id=eq.${empresaId}`},
-        ()=>fetchFila()
-      ).subscribe();
+    // Realtime
+    if(channelRef.current){sb.removeChannel(channelRef.current);}
+    const ch=sb.channel('fp-'+EMPRESA_ID)
+      .on('postgres_changes',{
+        event:'*',schema:'public',
+        table:'ordens_servico',
+        filter:'empresa_id=eq.'+EMPRESA_ID
+      },()=>fetchFila())
+      .subscribe();
+    channelRef.current=ch;
 
-    return()=>{sb.removeChannel(channel);};
-  },[empresaId,fetchFila]);
-
-  // Busca pelas últimas letras/números da placa
-  const buscaNorm=busca.replace(/[^a-zA-Z0-9]/g,"").toUpperCase();
-  const filaFiltrada=buscaNorm
-    ?fila.filter(c=>c.plate?.replace(/[^a-zA-Z0-9]/g,"").toUpperCase().endsWith(buscaNorm))
-    :fila;
-
-  const porStatus=STATUS_ORDER.reduce((acc,s)=>{
-    acc[s]=filaFiltrada.filter(c=>c.status===s);
-    return acc;
-  },{});
-
-  const totalFila=fila.filter(c=>c.status==="Aguardando").length;
-  const totalLavando=fila.filter(c=>c.status==="Lavando").length;
+    return()=>{
+      if(channelRef.current){
+        sb.removeChannel(channelRef.current);
+        channelRef.current=null;
+      }
+    };
+  },[]);
 
   if(loading)return(
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",gap:16}}>
-      <div className="spinner"/>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",
+      justifyContent:"center",height:"100vh",gap:16}}>
+      <div className="spin"/>
       <div style={{color:"rgba(186,230,253,.5)",fontSize:14}}>Carregando fila...</div>
     </div>
   );
 
-  if(error)return(
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",padding:24,textAlign:"center"}}>
-      <div style={{fontSize:40,marginBottom:16}}>🔗</div>
-      <div style={{color:"#f87171",fontWeight:700,fontSize:16,marginBottom:8}}>Link inválido</div>
-      <div style={{color:"rgba(186,230,253,.4)",fontSize:13}}>{error}</div>
+  if(err)return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",
+      justifyContent:"center",height:"100vh",padding:24,textAlign:"center",gap:12}}>
+      <div style={{fontSize:40}}>🔗</div>
+      <div style={{color:"#f87171",fontWeight:700,fontSize:16}}>Ops!</div>
+      <div style={{color:"rgba(186,230,253,.4)",fontSize:13,lineHeight:1.5}}>{err}</div>
+      <button onClick={()=>window.location.reload()}
+        style={{marginTop:8,padding:"10px 24px",borderRadius:99,background:"rgba(56,189,248,.15)",
+          border:"1px solid rgba(56,189,248,.3)",color:"#38bdf8",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+        Tentar novamente
+      </button>
     </div>
   );
 
+  const bNorm=busca.replace(/[^a-zA-Z0-9]/g,"").toUpperCase();
+  const filtrada=bNorm
+    ?fila.filter(c=>c.plate?.replace(/[^a-zA-Z0-9]/g,"").toUpperCase().endsWith(bNorm))
+    :fila;
+
+  const porSt=ORDER.reduce((a,s)=>{a[s]=filtrada.filter(c=>c.status===s);return a;},{});
+  const totalAg=fila.filter(c=>c.status==="Aguardando").length;
+  const totalLv=fila.filter(c=>c.status==="Lavando").length;
+  const totalPr=fila.filter(c=>c.status==="Concluído").length;
+
   return(
-    <div style={{maxWidth:480,margin:"0 auto",padding:"0 0 40px"}}>
-      {/* Cabeçalho */}
-      <div style={{padding:"20px 20px 0"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+    <div style={{maxWidth:480,margin:"0 auto",paddingBottom:40}}>
+      <div style={{padding:"20px 16px 0"}}>
+        {/* Cabeçalho */}
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
           <div>
-            <div style={{fontSize:11,color:"rgba(186,230,253,.4)",fontWeight:600,textTransform:"uppercase",letterSpacing:".1em",marginBottom:2}}>
+            <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:700,
+              textTransform:"uppercase",letterSpacing:".12em",marginBottom:3}}>
               Fila em Tempo Real
             </div>
-            <div style={{fontSize:20,fontWeight:900,color:"#e0f2fe"}}>{nomeEmpresa}</div>
+            <div style={{fontSize:20,fontWeight:900,color:"#e0f2fe"}}>{nome}</div>
           </div>
-          {/* Indicador ao vivo */}
-          <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:99,
+          <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:99,
             background:"rgba(74,222,128,.1)",border:"1px solid rgba(74,222,128,.25)"}}>
             <div className="pulse" style={{width:7,height:7,borderRadius:99,background:"#4ade80"}}/>
-            <span style={{fontSize:11,fontWeight:700,color:"#4ade80"}}>AO VIVO</span>
+            <span style={{fontSize:11,fontWeight:800,color:"#4ade80"}}>AO VIVO</span>
           </div>
         </div>
 
-        {/* KPIs rápidos */}
-        <div style={{display:"flex",gap:8,marginTop:14,marginBottom:16}}>
-          {[
-            {label:"Na fila",val:totalFila,cor:"#fbbf24"},
-            {label:"Lavando",val:totalLavando,cor:"#38bdf8"},
-            {label:"Prontos", val:porStatus["Concluído"].length,cor:"#4ade80"},
-          ].map(k=>(
-            <div key={k.label} style={{flex:1,padding:"10px 8px",borderRadius:14,textAlign:"center",
+        {/* KPIs */}
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
+          {[{l:"Na fila",v:totalAg,c:"#fbbf24"},{l:"Lavando",v:totalLv,c:"#38bdf8"},{l:"Prontos",v:totalPr,c:"#4ade80"}].map(k=>(
+            <div key={k.l} style={{flex:1,padding:"10px 8px",borderRadius:14,textAlign:"center",
               background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)"}}>
-              <div style={{fontSize:22,fontWeight:900,color:k.cor}}>{k.val}</div>
-              <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:600,marginTop:2}}>{k.label}</div>
+              <div style={{fontSize:22,fontWeight:900,color:k.c}}>{k.v}</div>
+              <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:600,marginTop:2}}>{k.l}</div>
             </div>
           ))}
         </div>
 
-        {/* Busca por placa */}
+        {/* Busca */}
         <div style={{position:"relative",marginBottom:20}}>
-          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16}}>🔍</span>
+          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",
+            fontSize:15,pointerEvents:"none"}}>🔍</span>
           <input value={busca} onChange={e=>setBusca(e.target.value)}
             placeholder="Digite as últimas letras da sua placa..."
-            style={{width:"100%",padding:"13px 14px 13px 42px",borderRadius:16,
+            style={{width:"100%",padding:"13px 40px 13px 42px",borderRadius:16,
               background:"rgba(255,255,255,.07)",border:"1px solid rgba(125,211,252,.2)",
-              color:"#e0f2fe",fontSize:14,outline:"none",
-              boxShadow:busca?"0 0 0 2px rgba(14,165,233,.3)":"none",
-              transition:"box-shadow .2s"}}/>
+              color:"#e0f2fe",outline:"none"}}/>
           {busca&&(
             <button onClick={()=>setBusca("")}
-              style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",
-                background:"transparent",border:"none",color:"rgba(186,230,253,.4)",
-                fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+              style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
+                background:"transparent",border:"none",color:"rgba(186,230,253,.5)",
+                fontSize:20,cursor:"pointer",lineHeight:1}}>×</button>
           )}
         </div>
       </div>
 
-      {/* Sem resultados na busca */}
-      {buscaNorm&&filaFiltrada.length===0&&(
+      {/* Sem resultado na busca */}
+      {bNorm&&filtrada.length===0&&(
         <div style={{textAlign:"center",padding:"30px 20px"}}>
-          <div style={{fontSize:36,marginBottom:12}}>🔍</div>
+          <div style={{fontSize:36,marginBottom:10}}>🔍</div>
           <div style={{color:"rgba(186,230,253,.5)",fontSize:14,fontWeight:600}}>
-            Placa terminando em "{buscaNorm}" não está na fila
+            Placa terminando em "{bNorm}" não está na fila
           </div>
           <div style={{color:"rgba(186,230,253,.3)",fontSize:12,marginTop:6}}>
-            Verifique se digitou corretamente ou tente novamente mais tarde.
+            Verifique se digitou corretamente.
           </div>
         </div>
       )}
 
-      {/* Seções por status */}
-      {STATUS_ORDER.map(status=>{
-        const carros=porStatus[status];
-        const cfg=STATUS_CONFIG[status];
-        if(carros.length===0&&!buscaNorm)return null;
+      {/* Seções */}
+      {ORDER.map(status=>{
+        const carros=porSt[status];
+        const cfg=ST[status];
+        if(!cfg)return null;
+        if(carros.length===0&&!bNorm)return null;
         return(
           <div key={status} style={{padding:"0 16px",marginBottom:20}}>
-            {/* Header da seção */}
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-              <span style={{fontSize:18}}>{cfg.emoji}</span>
-              <span style={{fontSize:13,fontWeight:800,color:cfg.cor}}>{cfg.label}</span>
-              <div style={{flex:1,height:1,background:`${cfg.cor}30`}}/>
-              <span style={{fontSize:12,fontWeight:700,
-                padding:"2px 9px",borderRadius:99,
-                background:cfg.bg,border:`1px solid ${cfg.border}`,
-                color:cfg.cor}}>
+              <span style={{fontSize:18}}>{cfg.e}</span>
+              <span style={{fontSize:13,fontWeight:800,color:cfg.c}}>{cfg.l}</span>
+              <div style={{flex:1,height:1,background:cfg.c+"30"}}/>
+              <span style={{fontSize:12,fontWeight:700,padding:"2px 9px",borderRadius:99,
+                background:cfg.bg,border:"1px solid "+cfg.b,color:cfg.c}}>
                 {carros.length}
               </span>
             </div>
-
             {carros.length===0?(
-              <div style={{textAlign:"center",padding:"16px 0",color:"rgba(186,230,253,.25)",fontSize:12}}>
+              <div style={{textAlign:"center",padding:"14px 0",color:"rgba(186,230,253,.25)",fontSize:12}}>
                 Nenhum veículo aqui no momento
               </div>
             ):carros.map((c,i)=>{
-              const isHighlight=buscaNorm&&c.plate?.replace(/[^a-zA-Z0-9]/g,"").toUpperCase().endsWith(buscaNorm);
-              const isMensalista=c.tipo_contrato==="mensalista";
-              const posicao=porStatus["Aguardando"].findIndex(x=>x.id===c.id);
-              const horaEntrega=c.hora_entrega
+              const hl=bNorm&&c.plate?.replace(/[^a-zA-Z0-9]/g,"").toUpperCase().endsWith(bNorm);
+              const pos=porSt["Aguardando"].findIndex(x=>x.id===c.id);
+              const hora=c.hora_entrega
                 ?new Date(c.hora_entrega).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})
                 :null;
               return(
-                <div key={c.id} className={`card${isHighlight?" highlight":""}`}
-                  style={{animationDelay:`${i*.05}s`}}>
+                <div key={c.id} className={"card"+(hl?" hl":"")}>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    {/* Ícone colorido */}
                     <div style={{width:40,height:40,borderRadius:12,flexShrink:0,
-                      background:`${c.color||"#38bdf8"}22`,
-                      border:`1px solid ${c.color||"#38bdf8"}44`,
+                      background:(c.color||"#38bdf8")+"22",
+                      border:"1px solid "+(c.color||"#38bdf8")+"44",
                       display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>
                       🚗
                     </div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{fontSize:14,fontWeight:800,color:"#e0f2fe"}}>
-                          {mascaraPlaca(c.plate)}
-                        </span>
-                        {isMensalista&&(
-                          <span style={{fontSize:10,fontWeight:700,padding:"1px 7px",borderRadius:99,
-                            background:"rgba(167,139,250,.15)",border:"1px solid rgba(167,139,250,.3)",
-                            color:"#a78bfa"}}>Mensalista</span>
-                        )}
+                      <div style={{fontSize:14,fontWeight:800,color:"#e0f2fe"}}>
+                        {mascaraPlaca(c.plate)}
                       </div>
-                      <div style={{fontSize:12,color:"rgba(186,230,253,.5)",marginTop:2}}>
+                      <div style={{fontSize:12,color:"rgba(186,230,253,.5)",marginTop:1}}>
                         {c.model}
-                        {horaEntrega&&<span style={{color:"#38bdf8",marginLeft:6}}>· ⏰ {horaEntrega}</span>}
+                        {hora&&<span style={{color:"#38bdf8",marginLeft:6}}>· ⏰ {hora}</span>}
                       </div>
                     </div>
-                    {/* Posição na fila ou status */}
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      {status==="Aguardando"&&posicao>=0&&(
-                        <div style={{fontSize:11,color:"rgba(186,230,253,.35)"}}>
-                          {posicao===0?"Próximo":"#"+(posicao+1)+" na fila"}
+                    <div style={{textAlign:"right",flexShrink:0,fontSize:11}}>
+                      {status==="Aguardando"&&(
+                        <div style={{color:"rgba(186,230,253,.4)"}}>
+                          {pos===0?"Próximo":"#"+(pos+1)+" na fila"}
                         </div>
                       )}
                       {status==="Lavando"&&(
-                        <div className="pulse" style={{fontSize:11,color:"#38bdf8",fontWeight:700}}>
-                          Em lavagem
-                        </div>
+                        <div className="pulse" style={{color:"#38bdf8",fontWeight:700}}>Em lavagem</div>
                       )}
                       {status==="Concluído"&&(
-                        <div style={{fontSize:11,color:"#4ade80",fontWeight:700}}>Aguardando</div>
+                        <div style={{color:"#4ade80",fontWeight:700}}>Pronto!</div>
                       )}
                     </div>
                   </div>
-
-                  {/* Mensagem de destaque quando encontrou a placa */}
-                  {isHighlight&&(
+                  {hl&&(
                     <div style={{marginTop:10,padding:"10px 12px",borderRadius:12,
                       background:"rgba(14,165,233,.15)",border:"1px solid rgba(14,165,233,.35)"}}>
-                      <div style={{fontSize:13,fontWeight:700,color:"#38bdf8",marginBottom:2}}>
-                        {status==="Aguardando"&&`⏳ Seu veículo está na fila${posicao===0?" — próximo a ser atendido!":` — posição ${posicao+1}`}`}
+                      <div style={{fontSize:13,fontWeight:700,color:"#38bdf8",marginBottom:3}}>
+                        {status==="Aguardando"&&("⏳ Seu veículo está na fila"+(pos===0?" — próximo!":" — posição "+(pos+1)))}
                         {status==="Lavando"&&"🧼 Seu veículo está sendo lavado agora!"}
                         {status==="Concluído"&&"✅ Seu veículo está pronto para retirada!"}
                       </div>
                       <div style={{fontSize:11,color:"rgba(56,189,248,.7)"}}>
-                        {status==="Aguardando"&&posicao===0&&"Previsão: em breve!"}
-                        {status==="Aguardando"&&posicao>0&&`Previsão: ~${posicao*20} min`}
+                        {status==="Aguardando"&&pos===0&&"Previsão: em breve!"}
+                        {status==="Aguardando"&&pos>0&&("Previsão: ~"+(pos*20)+" min")}
                         {status==="Lavando"&&"Previsão média: 25 min"}
-                        {status==="Concluído"&&"Pode vir buscar 🎉"}
+                        {status==="Concluído"&&"Pode vir buscar agora 🎉"}
                       </div>
                     </div>
                   )}
@@ -289,9 +301,9 @@ function App(){
       })}
 
       {/* Fila vazia */}
-      {!buscaNorm&&fila.length===0&&(
+      {!bNorm&&fila.length===0&&(
         <div style={{textAlign:"center",padding:"50px 20px"}}>
-          <div style={{fontSize:48,marginBottom:16}}>🚗</div>
+          <div style={{fontSize:48,marginBottom:14}}>🚗</div>
           <div style={{fontSize:16,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:6}}>
             Fila vazia!
           </div>
@@ -302,12 +314,14 @@ function App(){
       )}
 
       {/* Rodapé */}
-      <div style={{textAlign:"center",padding:"0 20px",marginTop:10}}>
-        <div style={{fontSize:11,color:"rgba(186,230,253,.2)"}}>
-          Atualizado às {lastUpdate?.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
-          {" · "}Powered by Lava Rápido Pro
+      {updated&&(
+        <div style={{textAlign:"center",padding:"0 20px",marginTop:8}}>
+          <div style={{fontSize:11,color:"rgba(186,230,253,.2)"}}>
+            Atualizado às {updated.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
+            {" · "}Lava Rápido Pro
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
