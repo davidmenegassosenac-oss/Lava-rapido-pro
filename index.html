@@ -737,7 +737,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
   const [newSvc,setNewSvc]=useState({nome:"",valor:""});
   const [saving,setSaving]=useState(false);
   const [success,setSuccess]=useState("");
-  const [tab,setTab]=useState("empresa");
+  const [tab,setTab]=useState("relatorios");
   const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
 
   useEffect(()=>{
