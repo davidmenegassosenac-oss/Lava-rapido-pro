@@ -737,6 +737,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
   const [newSvc,setNewSvc]=useState({nome:"",valor:""});
   const [saving,setSaving]=useState(false);
   const [success,setSuccess]=useState("");
+  const [errMsg,setErrMsg]=useState("");
   const [tab,setTab]=useState("relatorios");
   const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
 
@@ -747,15 +748,9 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
         setForm({nome_fantasia:data?.nome_fantasia||"",telefone:data?.telefone||"",razao_social:data?.razao_social||"",cnpj:data?.cnpj||""});
       });
     sb.rpc('fn_assinatura_valida',{p_empresa_id:empresaId}).then(({data})=>setAss(data));
-    // Quotas do plano (usuários e ordens/mês) — RPC criada para fechar a
-    // lacuna de segurança onde limites existiam no schema mas nunca eram
-    // exibidos nem verificados em lugar nenhum.
     sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId}).then(({data,error})=>{
       if(!error)setLimites(data);
     });
-    // Histórico de cobranças — funciona independente do checkout final
-    // (cartão recorrente ou Pix manual), pois lê direto da tabela
-    // `cobrancas`, que é populada pelo webhook do gateway de pagamento.
     sb.rpc('fn_listar_cobrancas',{p_empresa_id:empresaId}).then(({data,error})=>{
       if(!error)setCobrancas(data||[]);
     });
@@ -764,18 +759,47 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
   },[empresaId]);
 
   const saveEmpresa=async()=>{
+    const nome=form.nome_fantasia.trim();
+    if(!nome){setErrMsg("O nome do lava-jato é obrigatório.");return;}
     setSaving(true);
-    await sb.from('empresas').update({
-      nome_fantasia:form.nome_fantasia.trim(),
-      telefone:form.telefone.trim(),
+    setErrMsg("");
+    setSuccess("");
+
+    // Verificar nome duplicado em outras empresas (case-insensitive)
+    const{data:dupl,error:duplErr}=await sb
+      .from('empresas')
+      .select('id')
+      .ilike('nome_fantasia',nome)
+      .neq('id',empresaId)
+      .limit(1);
+
+    if(duplErr){
+      setErrMsg("Erro ao verificar nome. Tente novamente.");
+      setSaving(false);return;
+    }
+    if(dupl&&dupl.length>0){
+      setErrMsg("Este nome já está sendo usado por outra empresa na plataforma.");
+      setSaving(false);return;
+    }
+
+    // Persistir no banco
+    const{error}=await sb.from('empresas').update({
+      nome_fantasia:nome,
+      telefone:form.telefone.trim()||null,
       razao_social:form.razao_social.trim()||null,
       cnpj:form.cnpj.trim()||null,
-      updated_at:new Date().toISOString()
+      updated_at:new Date().toISOString(),
     }).eq('id',empresaId);
-    setSuccess("Dados salvos com sucesso!");
-    setTimeout(()=>setSuccess(""),3000);
+
+    if(error){
+      setErrMsg("Erro ao salvar: "+error.message);
+      setSaving(false);return;
+    }
+
+    setSuccess("✅ Dados salvos com sucesso!");
+    setTimeout(()=>setSuccess(""),4000);
+    if(onUpdate)onUpdate(nome);
     setSaving(false);
-    if(onUpdate)onUpdate(form.nome_fantasia.trim());
   };
 
   const addSvc=async()=>{
@@ -830,6 +854,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
               <input className="glass-input" value={form[field]} onChange={e=>setF(field,e.target.value)} placeholder={ph}/>
             </div>
           ))}
+          {errMsg&&<div style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",borderRadius:12,padding:"10px 14px",marginBottom:14,color:"#f87171",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:8}}><Icon name="AlertTriangle" size={14} color="#f87171"/>{errMsg}</div>}
           {success&&<div style={{background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.3)",borderRadius:12,padding:"10px 14px",marginBottom:14,color:"#4ade80",fontSize:13,fontWeight:600}}>{success}</div>}
           <button className="btn-glow" onClick={saveEmpresa} disabled={saving}>
             {saving?<div className="spinner spin"/>:<><Icon name="Check" size={16} color="#fff"/> Salvar Alterações</>}
