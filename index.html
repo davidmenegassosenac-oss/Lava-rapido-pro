@@ -3153,153 +3153,232 @@ function FolhaScreen({empresaId,embedded}){
           const quitado=dias>0&&saldo.saldo<=0;
           const adiantado=dias>0&&saldo.saldo<0;
           const cfg=diarias[f.id]||{};
+          const tipoLabel=saldo.tipo==="comissao"?`${saldo.taxa}% comissão`:
+                          saldo.tipo==="misto"?`${cfg.valor_diaria?fmtBRL(cfg.valor_diaria):"—"} + ${saldo.taxa}%`:
+                          cfg.valor_diaria?fmtBRL(cfg.valor_diaria):"—";
           return(
             <div key={f.id} style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid rgba(125,211,252,.08)"}}>
-              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:30,height:30,borderRadius:8,background:"rgba(56,189,248,.15)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <Icon name="User" size={14} color="#38bdf8"/>
+
+              {/* ── Linha 1: Avatar + Nome + Tipo + Badge ── */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:36,height:36,borderRadius:10,background:"rgba(56,189,248,.15)",
+                    border:"1px solid rgba(56,189,248,.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <Icon name="User" size={16} color="#38bdf8"/>
                   </div>
                   <div>
-                    <div style={{fontSize:14,fontWeight:700,color:"#e0f2fe"}}>{f.name}</div>
-                    {editandoDiaria===f.id?(
-                      <div style={{display:"flex",alignItems:"center",gap:4,marginTop:2}}>
-                        <input autoFocus value={novaDiaria} onChange={e=>setNovaDiaria(e.target.value)}
-                          type="number" style={{width:70,padding:"2px 6px",borderRadius:6,background:"rgba(255,255,255,.1)",border:"1px solid rgba(56,189,248,.4)",color:"#e0f2fe",fontSize:11}}/>
-                        <button onClick={()=>salvarDiaria(f.id)} style={{background:"rgba(74,222,128,.2)",border:"none",borderRadius:6,padding:"2px 6px",color:"#4ade80",fontSize:10,fontWeight:700,cursor:"pointer"}}>OK</button>
-                        <button onClick={()=>setEditandoDiaria(null)} style={{background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:11,cursor:"pointer"}}>✕</button>
-                      </div>
-                    ):(
-                      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
+                    <div style={{fontSize:14,fontWeight:800,color:"#e0f2fe"}}>{f.name}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+                      {editandoDiaria===f.id?(
+                        <div style={{display:"flex",alignItems:"center",gap:4}}>
+                          <input autoFocus value={novaDiaria} onChange={e=>setNovaDiaria(e.target.value)}
+                            type="number" style={{width:64,padding:"2px 6px",borderRadius:6,
+                              background:"rgba(255,255,255,.1)",border:"1px solid rgba(56,189,248,.4)",
+                              color:"#e0f2fe",fontSize:12}}/>
+                          <button onClick={()=>salvarDiaria(f.id)}
+                            style={{background:"rgba(74,222,128,.2)",border:"none",borderRadius:6,
+                              padding:"3px 8px",color:"#4ade80",fontSize:11,fontWeight:700,cursor:"pointer"}}>OK</button>
+                          <button onClick={()=>setEditandoDiaria(null)}
+                            style={{background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:12,cursor:"pointer"}}>✕</button>
+                        </div>
+                      ):(
                         <button onClick={()=>{setEditandoDiaria(f.id);setNovaDiaria(cfg.valor_diaria||"");}}
-                          style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
-                          <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
-                            {saldo.tipo==="comissao"?`comissão ${saldo.taxa}%`:
-                             saldo.tipo==="misto"?`diária ${cfg.valor_diaria?fmtBRL(cfg.valor_diaria):"—"} + ${saldo.taxa}%`:
-                             `diária ${cfg.valor_diaria?fmtBRL(cfg.valor_diaria):"—"}`}
-                          </span>
-                          <Icon name="Edit" size={9} color="rgba(186,230,253,.3)"/>
+                          style={{background:"transparent",border:"none",padding:0,cursor:"pointer",
+                            display:"flex",alignItems:"center",gap:3}}>
+                          <span style={{fontSize:11,color:"rgba(186,230,253,.45)"}}>{tipoLabel}</span>
+                          <Icon name="Edit" size={9} color="rgba(186,230,253,.25)"/>
                         </button>
-                        {/* Botão configurar tipo de pagamento */}
-                        <button onClick={()=>{
+                      )}
+                      {/* Botão de configuração — abre BottomSheet */}
+                      <button onClick={()=>{
                           setConfigForm({tipo_pagamento:cfg.tipo_pagamento||"diaria",taxa_comissao:String(cfg.taxa_comissao||"")});
                           setEditandoConfig(editandoConfig===f.id?null:f.id);
                         }}
-                          style={{display:"flex",alignItems:"center",gap:3,padding:"1px 8px",borderRadius:99,cursor:"pointer",
-                            background:saldo.tipo!=="diaria"?"rgba(167,139,250,.15)":"rgba(255,255,255,.04)",
-                            border:`1px solid ${saldo.tipo!=="diaria"?"rgba(167,139,250,.3)":"rgba(125,211,252,.12)"}`}}>
-                          <Icon name="Settings" size={9} color={saldo.tipo!=="diaria"?"#a78bfa":"rgba(186,230,253,.3)"}/>
-                          <span style={{fontSize:10,fontWeight:700,color:saldo.tipo!=="diaria"?"#a78bfa":"rgba(186,230,253,.3)"}}>
-                            {saldo.tipo==="diaria"?"+ comissão":saldo.tipo==="comissao"?"comissão":"misto"}
-                          </span>
-                        </button>
-                      </div>
-                    )}
-                    {/* Painel de configuração de comissão */}
-                    {editandoConfig===f.id&&(
-                      <div style={{marginTop:8,padding:10,borderRadius:10,background:"rgba(167,139,250,.08)",border:"1px solid rgba(167,139,250,.2)"}}>
-                        <div style={{fontSize:11,fontWeight:700,color:"#a78bfa",marginBottom:8}}>Tipo de remuneração</div>
-                        <div style={{display:"flex",gap:4,marginBottom:8}}>
-                          {[["diaria","Diária"],["comissao","Comissão"],["misto","Misto"]].map(([k,l])=>(
-                            <button key={k} onClick={()=>setConfigForm(p=>({...p,tipo_pagamento:k}))}
-                              style={{flex:1,padding:"6px 0",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:700,
-                                border:`1px solid ${configForm.tipo_pagamento===k?"rgba(167,139,250,.6)":"rgba(125,211,252,.15)"}`,
-                                background:configForm.tipo_pagamento===k?"rgba(167,139,250,.2)":"rgba(255,255,255,.04)",
-                                color:configForm.tipo_pagamento===k?"#a78bfa":"rgba(186,230,253,.4)"}}>
-                              {l}
-                            </button>
-                          ))}
-                        </div>
-                        {configForm.tipo_pagamento!=="diaria"&&(
-                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-                            <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>Taxa:</span>
-                            <input value={configForm.taxa_comissao}
-                              onChange={e=>setConfigForm(p=>({...p,taxa_comissao:e.target.value}))}
-                              type="number" placeholder="10" min="0" max="100"
-                              style={{width:60,padding:"3px 8px",borderRadius:6,background:"rgba(255,255,255,.1)",
-                                border:"1px solid rgba(167,139,250,.3)",color:"#e0f2fe",fontSize:12}}/>
-                            <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>% por lavagem</span>
-                          </div>
-                        )}
-                        {/* Preview do cálculo */}
-                        {saldo.totalLavagens>0&&configForm.tipo_pagamento!=="diaria"&&(
-                          <div style={{fontSize:11,color:"rgba(186,230,253,.4)",marginBottom:8}}>
-                            {saldo.totalLavagens} lavagens → comissão estimada {fmtBRL(comissoes[f.id]?.valor_base*(parseFloat(configForm.taxa_comissao)||0)/100||0)}
-                          </div>
-                        )}
-                        <div style={{display:"flex",gap:6}}>
-                          <button onClick={()=>salvarConfig(f.id)} disabled={savingConfig}
-                            style={{flex:1,padding:"6px 0",borderRadius:8,background:"rgba(167,139,250,.2)",
-                              border:"1px solid rgba(167,139,250,.4)",color:"#a78bfa",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                            {savingConfig?<div className="spinner spin" style={{width:10,height:10,margin:"0 auto"}}/>:"Salvar"}
-                          </button>
-                          <button onClick={()=>setEditandoConfig(null)}
-                            style={{padding:"6px 12px",borderRadius:8,background:"transparent",
-                              border:"1px solid rgba(125,211,252,.15)",color:"rgba(186,230,253,.4)",fontSize:11,cursor:"pointer"}}>
-                            Cancelar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {/* Resumo de comissão */}
+                        style={{display:"flex",alignItems:"center",gap:3,padding:"2px 8px",borderRadius:99,cursor:"pointer",
+                          background:saldo.tipo!=="diaria"?"rgba(167,139,250,.15)":"rgba(255,255,255,.04)",
+                          border:`1px solid ${saldo.tipo!=="diaria"?"rgba(167,139,250,.3)":"rgba(125,211,252,.1)"}`}}>
+                        <Icon name="Settings" size={9} color={saldo.tipo!=="diaria"?"#a78bfa":"rgba(186,230,253,.3)"}/>
+                        <span style={{fontSize:10,fontWeight:700,
+                          color:saldo.tipo!=="diaria"?"#a78bfa":"rgba(186,230,253,.3)"}}>
+                          {saldo.tipo==="diaria"?"+ comissão":saldo.tipo==="comissao"?"comissão":"misto"}
+                        </span>
+                      </button>
+                    </div>
+                    {/* Mini badge de comissão */}
                     {saldo.tipo!=="diaria"&&saldo.totalLavagens>0&&(
-                      <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}>
-                        <Icon name="TrendingUp" size={10} color="#a78bfa"/>
-                        <span style={{fontSize:11,color:"#a78bfa"}}>{saldo.totalLavagens} lavagens = {fmtBRL(saldo.comissao)}</span>
+                      <div style={{display:"flex",alignItems:"center",gap:4,marginTop:3}}>
+                        <Icon name="TrendingUp" size={9} color="#a78bfa"/>
+                        <span style={{fontSize:10,color:"#a78bfa"}}>{saldo.totalLavagens} lavagens = {fmtBRL(saldo.comissao)}</span>
                       </div>
                     )}
                   </div>
                 </div>
-                {/* Badge de saldo */}
+
+                {/* Badge de saldo — direita */}
                 {dias>0&&(
-                  <div style={{textAlign:"right"}}>
-                    {quitado?(
-                      <div style={{display:"flex",alignItems:"center",gap:4,padding:"3px 10px",borderRadius:99,background:"rgba(74,222,128,.15)",border:"1px solid rgba(74,222,128,.3)"}}>
-                        <Icon name="CheckCircle" size={12} color="#4ade80"/>
-                        <span style={{fontSize:12,fontWeight:700,color:"#4ade80"}}>{adiantado?`Adiantado ${fmtBRL(Math.abs(saldo.saldo))}`:"Quitado"}</span>
-                      </div>
-                    ):(
-                      <div>
-                        <div style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>Pendente</div>
-                        <div style={{fontSize:16,fontWeight:900,color:"#fbbf24"}}>{fmtBRL(saldo.saldo)}</div>
-                      </div>
-                    )}
-                  </div>
+                  quitado?(
+                    <div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:99,
+                      background:adiantado?"rgba(56,189,248,.12)":"rgba(74,222,128,.12)",
+                      border:`1px solid ${adiantado?"rgba(56,189,248,.3)":"rgba(74,222,128,.25)"}`}}>
+                      <Icon name="CheckCircle" size={11} color={adiantado?"#38bdf8":"#4ade80"}/>
+                      <span style={{fontSize:11,fontWeight:800,color:adiantado?"#38bdf8":"#4ade80",whiteSpace:"nowrap"}}>
+                        {adiantado?`Adiantado ${fmtBRL(Math.abs(saldo.saldo))}`:"Quitado"}
+                      </span>
+                    </div>
+                  ):(
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:600}}>Pendente</div>
+                      <div style={{fontSize:17,fontWeight:900,color:"#fbbf24"}}>{fmtBRL(saldo.saldo)}</div>
+                    </div>
+                  )
                 )}
               </div>
-              {/* Seletor de dias */}
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+
+              {/* ── Linha 2: Seletor +/- dias + resumo financeiro ── */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                {/* Seletor +/- minimalista */}
                 {saldo.tipo!=="comissao"&&(
-                  <div style={{display:"flex",alignItems:"center",gap:4}}>
-                    <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>Dias:</span>
-                    <div style={{display:"flex",gap:3}}>
-                      {[0,1,2,3,4,5,6,7].map(d=>(
-                        <button key={d} onClick={()=>salvarDias(f.id,d)} disabled={savingDias===f.id}
-                          style={{width:22,height:22,borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",
-                            border:`1px solid ${dias===d?"rgba(14,165,233,.6)":"rgba(125,211,252,.12)"}`,
-                            background:dias===d?"rgba(14,165,233,.3)":"rgba(255,255,255,.04)",
-                            color:dias===d?"#38bdf8":"rgba(186,230,253,.35)"}}>
-                          {d}
-                        </button>
-                      ))}
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <button
+                      onClick={()=>dias>0&&salvarDias(f.id,dias-1)}
+                      disabled={dias===0||savingDias===f.id}
+                      style={{width:30,height:30,borderRadius:10,cursor:dias>0?"pointer":"not-allowed",
+                        background:"rgba(255,255,255,.06)",border:"1px solid rgba(125,211,252,.15)",
+                        color:dias>0?"#e0f2fe":"rgba(186,230,253,.2)",fontSize:16,fontWeight:700,
+                        display:"flex",alignItems:"center",justifyContent:"center",opacity:dias===0?.4:1}}>
+                      −
+                    </button>
+                    <div style={{textAlign:"center",minWidth:52}}>
+                      {savingDias===f.id?(
+                        <div className="spinner spin" style={{width:14,height:14,margin:"0 auto"}}/>
+                      ):(
+                        <>
+                          <div style={{fontSize:18,fontWeight:900,color:"#38bdf8",lineHeight:1}}>{dias}</div>
+                          <div style={{fontSize:10,color:"rgba(186,230,253,.4)",marginTop:1}}>
+                            {dias===1?"dia":"dias"}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <button
+                      onClick={()=>dias<7&&salvarDias(f.id,dias+1)}
+                      disabled={dias===7||savingDias===f.id}
+                      style={{width:30,height:30,borderRadius:10,cursor:dias<7?"pointer":"not-allowed",
+                        background:"rgba(255,255,255,.06)",border:"1px solid rgba(125,211,252,.15)",
+                        color:dias<7?"#e0f2fe":"rgba(186,230,253,.2)",fontSize:16,fontWeight:700,
+                        display:"flex",alignItems:"center",justifyContent:"center",opacity:dias===7?.4:1}}>
+                      +
+                    </button>
+                  </div>
+                )}
+
+                {/* Mini-grade financeira */}
+                {dias>0&&(
+                  <div style={{display:"flex",gap:14,marginLeft:"auto"}}>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:600,marginBottom:1}}>A receber</div>
+                      <div style={{fontSize:13,fontWeight:800,color:"rgba(186,230,253,.7)"}}>{fmtBRL(saldo.totalDevido)}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:600,marginBottom:1}}>Pago</div>
+                      <div style={{fontSize:13,fontWeight:800,color:"#f87171"}}>{fmtBRL(saldo.totalPago)}</div>
                     </div>
                   </div>
                 )}
-                {dias>0&&saldo.tipo!=="comissao"&&(
-                  <span style={{fontSize:11,color:"rgba(186,230,253,.3)"}}>
-                    = {fmtBRL(saldo.totalDevido)} · pago {fmtBRL(saldo.totalPago)}
-                  </span>
-                )}
-                {saldo.tipo==="comissao"&&(
-                  <span style={{fontSize:11,color:"rgba(186,230,253,.3)"}}>
-                    Total a receber: {fmtBRL(saldo.totalDevido)} · pago {fmtBRL(saldo.totalPago)}
-                  </span>
+                {saldo.tipo==="comissao"&&dias===0&&(
+                  <div style={{display:"flex",gap:14,marginLeft:"auto"}}>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:600,marginBottom:1}}>A receber</div>
+                      <div style={{fontSize:13,fontWeight:800,color:"rgba(186,230,253,.7)"}}>{fmtBRL(saldo.totalDevido)}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:600,marginBottom:1}}>Pago</div>
+                      <div style={{fontSize:13,fontWeight:800,color:"#f87171"}}>{fmtBRL(saldo.totalPago)}</div>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* ── BottomSheet de configuração de remuneração ── */}
+      {editandoConfig&&(
+        <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}
+          onClick={()=>setEditandoConfig(null)}>
+          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.5)",backdropFilter:"blur(4px)"}}/>
+          <div onClick={e=>e.stopPropagation()}
+            style={{position:"relative",background:"linear-gradient(180deg,#0f1f38,#0c1a2e)",
+              borderRadius:"24px 24px 0 0",padding:24,
+              border:"1px solid rgba(125,211,252,.15)",borderBottom:"none",
+              boxShadow:"0 -20px 60px rgba(0,0,0,.5)"}}>
+            {/* Handle */}
+            <div style={{width:40,height:4,borderRadius:99,background:"rgba(125,211,252,.2)",margin:"0 auto 20px"}}/>
+            <div style={{fontSize:15,fontWeight:800,color:"#e0f2fe",marginBottom:4}}>
+              Tipo de Remuneração
+            </div>
+            <div style={{fontSize:12,color:"rgba(186,230,253,.4)",marginBottom:20}}>
+              {funcionarios.find(f=>f.id===editandoConfig)?.name}
+            </div>
+            {/* Tipo */}
+            <div style={{display:"flex",gap:8,marginBottom:20}}>
+              {[["diaria","📅 Diária","Valor fixo por dia"],
+                ["comissao","💹 Comissão","% por lavagem"],
+                ["misto","🔀 Misto","Diária + %"]].map(([k,l,sub])=>(
+                <button key={k} onClick={()=>setConfigForm(p=>({...p,tipo_pagamento:k}))}
+                  style={{flex:1,padding:"12px 6px",borderRadius:14,cursor:"pointer",
+                    border:`1.5px solid ${configForm.tipo_pagamento===k?"rgba(167,139,250,.6)":"rgba(125,211,252,.12)"}`,
+                    background:configForm.tipo_pagamento===k?"rgba(167,139,250,.2)":"rgba(255,255,255,.04)"}}>
+                  <div style={{fontSize:13,fontWeight:800,
+                    color:configForm.tipo_pagamento===k?"#a78bfa":"#e0f2fe",marginBottom:3}}>{l}</div>
+                  <div style={{fontSize:10,color:"rgba(186,230,253,.35)"}}>{sub}</div>
+                </button>
+              ))}
+            </div>
+            {/* Taxa */}
+            {configForm.tipo_pagamento!=="diaria"&&(
+              <div style={{marginBottom:20}}>
+                <label className="lbl">Taxa de Comissão</label>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <input value={configForm.taxa_comissao}
+                    onChange={e=>setConfigForm(p=>({...p,taxa_comissao:e.target.value}))}
+                    type="number" placeholder="10" min="0" max="100" className="glass-input"
+                    style={{flex:1}}/>
+                  <span style={{fontSize:14,fontWeight:700,color:"rgba(186,230,253,.5)",whiteSpace:"nowrap"}}>
+                    % / lavagem
+                  </span>
+                </div>
+                {(()=>{
+                  const func=funcionarios.find(f=>f.id===editandoConfig);
+                  const s=func?saldoPorFunc[func.id]:null;
+                  if(!s||s.totalLavagens===0)return null;
+                  const est=comissoes[func.id]?.valor_base*(parseFloat(configForm.taxa_comissao)||0)/100||0;
+                  return(
+                    <div style={{marginTop:8,fontSize:11,color:"rgba(186,230,253,.4)"}}>
+                      {s.totalLavagens} lavagens esta semana → comissão estimada{" "}
+                      <b style={{color:"#a78bfa"}}>{fmtBRL(est)}</b>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setEditandoConfig(null)}
+                style={{flex:1,padding:"14px 0",borderRadius:16,cursor:"pointer",fontWeight:700,fontSize:14,
+                  background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.15)",color:"rgba(186,230,253,.4)"}}>
+                Cancelar
+              </button>
+              <button onClick={()=>salvarConfig(editandoConfig)} disabled={savingConfig}
+                style={{flex:2,padding:"14px 0",borderRadius:16,cursor:"pointer",fontWeight:800,fontSize:14,
+                  background:"linear-gradient(135deg,#7c3aed,#6d28d9)",border:"none",color:"#fff",
+                  boxShadow:"0 6px 20px rgba(124,58,237,.4)",opacity:savingConfig?.6:1}}>
+                {savingConfig?<div className="spinner spin" style={{width:16,height:16,margin:"0 auto"}}/>:"Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Botão novo lançamento */}
       <button onClick={()=>{
