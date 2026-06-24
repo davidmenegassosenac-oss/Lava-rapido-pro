@@ -1463,9 +1463,12 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,idx}){
     setEditHora(false);setSavingHora(false);
   };
 
+  const isMensalista=item.tipo_contrato==="mensalista";
+
   const onClickAvancar=()=>{
     if(next==="Lavando"&&funcionarios?.length>0){setShowLavador(true);setOpen(false);}
-    else if(next==="Pago"){setShowPgto(true);}
+    // Mensalista pula o modal de pagamento — fn_ordem_paga define status='agendado' automaticamente
+    else if(next==="Pago"&&!isMensalista){setShowPgto(true);}
     else{handleAdvance(null,null);}
   };
 
@@ -1488,6 +1491,13 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,idx}){
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <StatusBadge status={item.status}/>
+            {isMensalista&&(
+              <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:99,
+                background:"rgba(167,139,250,.15)",border:"1px solid rgba(167,139,250,.3)",
+                color:"#a78bfa",whiteSpace:"nowrap"}}>
+                Mensalista
+              </span>
+            )}
             <Icon name={open?"ChevronUp":"ChevronDown"} size={14} color="rgba(186,230,253,.4)"/>
           </div>
         </div>
@@ -1751,6 +1761,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   const [errors,setErrors]=useState({});
   const [loading,setLoading]=useState(false);
   const [svcs,setSvcs]=useState(SVC_DEFAULT);
+  const [tipoContrato,setTipoContrato]=useState("avulso");
   const [limitError,setLimitError]=useState("");
 
   useEffect(()=>{
@@ -1799,7 +1810,8 @@ function NewWashScreen({empresaId,userId,onSuccess}){
       color,
       observacoes:getVal("observacoes")||null,
       status:"Aguardando",
-      criado_por:userId||null
+      criado_por:userId||null,
+      tipo_contrato:tipoContrato,
     });
     setLoading(false);
     if(error){
@@ -1813,6 +1825,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
     Object.values(refs).forEach(r=>{if(r.current)r.current.value="";});
     setSelectedSvcs([]);
     setColor(CAR_COLORS[0]);
+    setTipoContrato("avulso");
     setErrors({});
     onSuccess();
   };
@@ -1888,6 +1901,33 @@ function NewWashScreen({empresaId,userId,onSuccess}){
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {CAR_COLORS.map(c=><button key={c} onClick={()=>setColor(c)} style={{width:34,height:34,borderRadius:99,background:c,border:`3px solid ${color===c?"#fff":"transparent"}`,cursor:"pointer",boxShadow:color===c?`0 0 12px ${c}88`:"none",transition:"all .15s"}}/>)}
         </div>
+      </div>
+      {/* Tipo de contrato */}
+      <div style={{marginBottom:14}}>
+        <label className="lbl">Tipo de Cliente</label>
+        <div style={{display:"flex",gap:8}}>
+          {[["avulso","🚗 Avulso","rgba(56,189,248,.15)","#38bdf8"],["mensalista","📋 Mensalista","rgba(167,139,250,.15)","#a78bfa"]].map(([k,l,bg,cor])=>(
+            <button key={k} onClick={()=>setTipoContrato(k)}
+              style={{flex:1,padding:"12px 8px",borderRadius:14,cursor:"pointer",fontWeight:700,fontSize:13,
+                border:`1.5px solid ${tipoContrato===k?cor:"rgba(125,211,252,.15)"}`,
+                background:tipoContrato===k?bg:"rgba(255,255,255,.04)",
+                color:tipoContrato===k?cor:"rgba(186,230,253,.4)",transition:"all .15s",
+                display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+              {l}
+              <span style={{fontSize:10,fontWeight:500,
+                color:tipoContrato===k?`${cor}cc`:"rgba(186,230,253,.25)"}}>
+                {k==="avulso"?"Paga na hora":"Cobrado depois"}
+              </span>
+            </button>
+          ))}
+        </div>
+        {tipoContrato==="mensalista"&&(
+          <div style={{marginTop:8,padding:"6px 12px",borderRadius:10,
+            background:"rgba(167,139,250,.08)",border:"1px solid rgba(167,139,250,.2)",
+            fontSize:11,color:"rgba(167,139,250,.7)"}}>
+            ℹ️ Será lançado como <b>Agendado</b> no histórico — sem solicitar forma de pagamento.
+          </div>
+        )}
       </div>
       {/* Observações */}
       <div style={{marginBottom:20}}>
