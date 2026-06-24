@@ -796,12 +796,12 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
   };
 
   const ALL_CONFIG_TABS=[
-    ["empresa","🏢 Empresa",true],
-    ["servicos","🔧 Serviços",true],
-    ["assinatura","💳 Plano",true],
     ["relatorios","📈 Relatórios",isOwner],
-    ["equipe","👥 Equipe",isOwner],
     ["folha","💸 Folha",isOwner],
+    ["equipe","👥 Equipe",isOwner],
+    ["servicos","🔧 Serviços",true],
+    ["empresa","🏢 Empresa",true],
+    ["assinatura","💳 Plano",true],
   ].filter(([,,show])=>show);
 
   return(
