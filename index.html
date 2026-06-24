@@ -2008,10 +2008,14 @@ function HistoryScreen({empresaId,embedded,isOwner}){
   };
 
   const abrirEdicao=(h)=>{
+    // h.lavado_por pode vir como UUID direto ou estar ausente quando
+    // o join aninhado (lavador:profiles!lavado_por) é usado.
+    // Garantimos o UUID lendo o campo direto do registro.
+    const lavadoPorId=h.lavado_por||"";
     setEditForm({
-      forma_pagamento:h.forma_pagamento||"",
+      forma_pagamento:h.forma_pagamento||"",   // "" = Nenhum
       status_pagamento:h.status_pagamento||"pago",
-      lavado_por:h.lavado_por||"",
+      lavado_por:lavadoPorId,
     });
     setEditando(h.id);
   };
@@ -2232,10 +2236,15 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                     {/* Forma de pagamento */}
                     <div style={{marginBottom:10}}>
                       <div style={{fontSize:10,color:"rgba(186,230,253,.5)",fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Forma de Pagamento</div>
-                      <div style={{display:"flex",gap:6}}>
-                        {[["pix","Pix","#4ade80"],["cartao","Cartão","#38bdf8"],["dinheiro","Dinheiro","#fbbf24"],["","Nenhum","rgba(186,230,253,.3)"]].map(([k,l,c])=>(
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                        {[
+                          {id:"pix",     label:"Pix",     cor:"#4ade80"},
+                          {id:"cartao",  label:"Cartão",  cor:"#38bdf8"},
+                          {id:"dinheiro",label:"Dinheiro",cor:"#fbbf24"},
+                          {id:"",        label:"Nenhum",  cor:"#94a3b8"},
+                        ].map(({id:k,label:l,cor:c})=>(
                           <button key={k} onClick={()=>setEditForm(f=>({...f,forma_pagamento:k}))}
-                            style={{flex:1,padding:"7px 0",borderRadius:10,cursor:"pointer",fontSize:11,fontWeight:700,
+                            style={{flex:1,padding:"7px 4px",borderRadius:10,cursor:"pointer",fontSize:11,fontWeight:700,
                               border:`1px solid ${editForm.forma_pagamento===k?c:"rgba(125,211,252,.12)"}`,
                               background:editForm.forma_pagamento===k?`${c}22`:"rgba(255,255,255,.04)",
                               color:editForm.forma_pagamento===k?c:"rgba(186,230,253,.35)"}}>
