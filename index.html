@@ -792,7 +792,11 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
     }).eq('id',empresaId);
 
     if(error){
-      setErrMsg("Erro ao salvar: "+error.message);
+      if(error.code==="23505"||error.message?.includes("unique")||error.message?.includes("duplicate")){
+        setErrMsg("Este nome de lava-jato já está sendo utilizado por outra empresa.");
+      }else{
+        setErrMsg("Erro ao salvar: "+error.message);
+      }
       setSaving(false);return;
     }
 
@@ -4019,7 +4023,7 @@ function App(){
         {safeTab==="new"     &&<NewWashScreen  key="new"     empresaId={profile.empresa_id} userId={profile.id} onSuccess={()=>{setTab("home");showToast("✅ Veículo adicionado à fila!");}}/>}
         {safeTab==="crm"     &&isOwner&&<CRMScreen     key="crm"     empresaId={profile.empresa_id} onBadgeUpdate={()=>setCrmBadge(0)}/>}
         {safeTab==="history"&&<HistoryScreen key="history" empresaId={profile.empresa_id} isOwner={isOwner}/>}
-        {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} onUpdate={name=>showToast("✅ "+name+" atualizado!")}/>}
+        {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} onUpdate={name=>{setEmpresa(e=>({...e,nome_fantasia:name}));showToast("✅ "+name+" atualizado!");}}/>}
       </div>
 
       {/* Bottom nav — flexShrink:0 garante que nunca seja comprimida nem empurrada para fora */}
