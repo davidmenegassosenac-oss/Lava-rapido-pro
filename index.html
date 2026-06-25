@@ -951,9 +951,9 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
 
           <div style={{fontSize:11,fontWeight:700,color:"rgba(186,230,253,.4)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:12}}>Planos Disponíveis</div>
           {[
-            {nome:"Básico",valor:"R$ 49,90/mês",recursos:["Até 3 usuários","200 ordens/mês","Fila + Histórico + CRM"],color:"#38bdf8"},
-            {nome:"Profissional",valor:"R$ 89,90/mês",recursos:["Até 10 usuários","1.000 ordens/mês","Tudo + Relatórios + Equipe"],color:"#4ade80"},
-            {nome:"Enterprise",valor:"R$ 149,90/mês",recursos:["Usuários ilimitados","Ordens ilimitadas","Tudo + API + Whitelabel"],color:"#a78bfa"},
+            {nome:"Básico",valor:"R$ 49,90/mês",recursos:["⏳ Fila Inteligente e Histórico em Tempo Real","🚗 Até 200 lavagens controladas no mês","👥 Acesso para até 3 funcionários/caixas","📱 Fim das planilhas de papel borradas"],color:"#38bdf8"},
+            {nome:"Profissional",valor:"R$ 89,90/mês",recursos:["🚀 Até 1.000 lavagens mensais (Para pátios movimentados)","💰 Gestão automática de Diárias, Comissões e Folha","📊 Relatórios de Faturamento por método de pagamento","👥 Até 10 funcionários conectados simultaneamente"],color:"#4ade80"},
+            {nome:"Enterprise",valor:"R$ 149,90/mês",recursos:["♾️ Lavagens e Funcionários ilimitados","💬 CRM com mensagens automáticas para o WhatsApp dos clientes","🌐 Link da Fila Pública (Seu cliente vê o movimento de casa)","📈 Relatório avançado de Metas e Clientes Mensalistas"],color:"#a78bfa"},
           ].map(p=>(
             <div key={p.nome} className="glass-card" style={{marginBottom:10,border:`1px solid ${p.color}33`}}>
               <div style={{padding:14}}>
