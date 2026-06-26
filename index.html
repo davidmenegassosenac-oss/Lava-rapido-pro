@@ -912,6 +912,8 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     setSvcs(s=>s.filter(x=>x.id!==id));
   };
 
+  const{hasFeature}=useFeatureGate(plano||"trial");
+
   const ALL_CONFIG_TABS=[
     ["relatorios","📈 Relatórios",isOwner],
     ["folha","💸 Folha",isOwner],
@@ -920,8 +922,6 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     ["empresa","🏢 Empresa",true],
     ["assinatura","💳 Plano",true],
   ].filter(([,,show])=>show);
-
-  const{hasFeature}=useFeatureGate(plano||"trial");
 
   return(
     <div className="scroll screen-enter">
@@ -4130,33 +4130,35 @@ function App(){
 
       {/* Bottom nav — flexShrink:0 garante que nunca seja comprimida nem empurrada para fora */}
       <div className="glass" style={{flexShrink:0,display:"flex",padding:`8px 8px env(safe-area-inset-bottom,14px)`,zIndex:10,borderBottom:"none",borderLeft:"none",borderRight:"none",borderRadius:0}}>
-        {TABS.map(({id,label,icon})=>{
-          const active=safeTab===id;
-          const showBadge=id==="crm"&&crmBadge>0;
+        {(()=>{
           const planoAtual=assInfo?.plano||"trial";
           const{hasFeature}=useFeatureGate(planoAtual);
-          const featureKey=id==="crm"?"crm":null;
-          const bloqueado=featureKey&&!hasFeature(featureKey);
-          return(
-            <button key={id} className="nav-btn" onClick={()=>{
-              if(bloqueado){showToast("🔒 CRM disponível no Plano Enterprise. Acesse Config → Plano para fazer upgrade.");}
-              else setTab(id);
-            }}>
-              <div className={`nav-icon${active&&!bloqueado?" active":""}`} style={{position:"relative",opacity:bloqueado?.5:1}}>
-                <Icon name={bloqueado?"Lock":icon} size={16} color={active&&!bloqueado?"#fff":"rgba(186,230,253,.4)"}/>
-                {showBadge&&!bloqueado&&(
-                  <div style={{position:"absolute",top:-4,right:-4,minWidth:16,height:16,borderRadius:99,
-                    background:"#f87171",border:"2px solid #0c1a2e",
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:9,fontWeight:900,color:"#fff",padding:"0 3px",lineHeight:1}}>
-                    {crmBadge>99?"99+":crmBadge}
-                  </div>
-                )}
-              </div>
-              <span style={{fontSize:10,fontWeight:700,color:active&&!bloqueado?"#38bdf8":"rgba(186,230,253,.35)"}}>{label}</span>
-            </button>
-          );
-        })}
+          return TABS.map(({id,label,icon})=>{
+            const active=safeTab===id;
+            const showBadge=id==="crm"&&crmBadge>0;
+            const featureKey=id==="crm"?"crm":null;
+            const bloqueado=featureKey&&!hasFeature(featureKey);
+            return(
+              <button key={id} className="nav-btn" onClick={()=>{
+                if(bloqueado){showToast("🔒 CRM disponível no Plano Enterprise. Acesse Config → Plano para fazer upgrade.");}
+                else setTab(id);
+              }}>
+                <div className={`nav-icon${active&&!bloqueado?" active":""}`} style={{position:"relative",opacity:bloqueado?.5:1}}>
+                  <Icon name={bloqueado?"Lock":icon} size={16} color={active&&!bloqueado?"#fff":"rgba(186,230,253,.4)"}/>
+                  {showBadge&&!bloqueado&&(
+                    <div style={{position:"absolute",top:-4,right:-4,minWidth:16,height:16,borderRadius:99,
+                      background:"#f87171",border:"2px solid #0c1a2e",
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:9,fontWeight:900,color:"#fff",padding:"0 3px",lineHeight:1}}>
+                      {crmBadge>99?"99+":crmBadge}
+                    </div>
+                  )}
+                </div>
+                <span style={{fontSize:10,fontWeight:700,color:active&&!bloqueado?"#38bdf8":"rgba(186,230,253,.35)"}}>{label}</span>
+              </button>
+            );
+          });
+        })()}
       </div>
 
       {/* Toast */}
