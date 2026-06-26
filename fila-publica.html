@@ -61,18 +61,25 @@ function BuscaEmpresaScreen({onSelect}){
   const [q,setQ]=useState("");
   const [resultados,setResultados]=useState([]);
   const [loading,setLoading]=useState(false);
+  const [errBusca,setErrBusca]=useState("");
   const timerRef=useRef(null);
 
   useEffect(()=>{
     clearTimeout(timerRef.current);
-    if(q.trim().length<2){setResultados([]);return;}
+    if(q.trim().length<2){setResultados([]);setErrBusca("");return;}
     timerRef.current=setTimeout(async()=>{
-      setLoading(true);
-      const{data}=await sb.from("empresas")
-        .select("id,nome_fantasia,telefone")
-        .ilike("nome_fantasia",`%${q.trim()}%`)
-        .limit(8);
-      setResultados(data||[]);
+      setLoading(true);setErrBusca("");
+      try{
+        const{data,error}=await sb.from("empresas")
+          .select("id,nome_fantasia,telefone")
+          .ilike("nome_fantasia",`%${q.trim()}%`)
+          .limit(8);
+        if(error)throw error;
+        setResultados(data||[]);
+      }catch(e){
+        setErrBusca("Erro ao buscar. Verifique sua conexão e tente novamente.");
+        setResultados([]);
+      }
       setLoading(false);
     },400);
     return()=>clearTimeout(timerRef.current);
@@ -118,7 +125,8 @@ function BuscaEmpresaScreen({onSelect}){
           </button>
         ))}
 
-        {!loading&&q.length>=2&&resultados.length===0&&(
+        {errBusca&&<div style={{padding:"12px 14px",borderRadius:12,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",fontSize:13,marginBottom:10}}>{errBusca}</div>}
+        {!loading&&!errBusca&&q.length>=2&&resultados.length===0&&(
           <div style={{textAlign:"center",padding:"24px 0",color:"rgba(186,230,253,.3)",fontSize:14}}>
             Nenhum lava-jato encontrado com este nome
           </div>
@@ -500,15 +508,26 @@ function FilaScreen({empresa,onVoltar}){
 // ── App principal ───────────────────────────────────────────────────────────
 function App(){
   const [empresa,setEmpresa]=useState(null);
+  const [initLoading,setInitLoading]=useState(!!getUrlEmpresaId());
 
-  // Checar URL ao iniciar — compatibilidade com links existentes
   useEffect(()=>{
     const id=getUrlEmpresaId();
-    if(id){
-      sb.from("empresas").select("id,nome_fantasia,telefone").eq("id",id).single()
-        .then(({data})=>{if(data)setEmpresa(data);});
-    }
+    if(!id){setInitLoading(false);return;}
+    sb.from("empresas").select("id,nome_fantasia,telefone").eq("id",id).single()
+      .then(({data})=>{
+        if(data)setEmpresa(data);
+        setInitLoading(false);
+      })
+      .catch(()=>setInitLoading(false));
   },[]);
+
+  if(initLoading)return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",
+      justifyContent:"center",height:"100vh",gap:16}}>
+      <div className="spin"/>
+      <div style={{color:"rgba(186,230,253,.4)",fontSize:14}}>Carregando...</div>
+    </div>
+  );
 
   if(empresa){
     return <FilaScreen empresa={empresa} onVoltar={()=>setEmpresa(null)}/>;
