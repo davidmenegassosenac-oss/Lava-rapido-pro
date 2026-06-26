@@ -1658,7 +1658,7 @@ function MasterScreen(){
           </div>
         );
       })}
-      {toast&&<div className="toast" style={{position:"fixed",bottom:84,left:"50%",transform:"translateX(-50%)",background:"rgba(15,23,42,.92)",backdropFilter:"blur(16px)",border:"1px solid rgba(56,189,248,.2)",color:"#e0f2fe",fontSize:13,fontWeight:600,padding:"10px 20px",borderRadius:16,boxShadow:"0 8px 24px rgba(0,0,0,.4)",zIndex:99,whiteSpace:"nowrap"}}>{toast}</div>}
+      {toast&&<div className="toast" style={{position:"fixed",bottom:84,left:"50%",transform:"translateX(-50%)",background:"rgba(15,23,42,.92)",backdropFilter:"blur(16px)",border:"1px solid rgba(56,189,248,.2)",color:"#e0f2fe",fontSize:13,fontWeight:600,padding:"10px 20px",borderRadius:16,boxShadow:"0 8px 24px rgba(0,0,0,.4)",zIndex:99,maxWidth:"calc(100vw - 32px)",textAlign:"center",lineHeight:1.4}}>{toast}</div>}
     </div>
   );
 }
@@ -4142,7 +4142,7 @@ function App(){
           return(
             <button key={id} className="nav-btn" onClick={()=>{
               if(bloqueado){
-                showToast("🔒 CRM é exclusivo do Plano Enterprise — inclui alertas automáticos de clientes sumidos via WhatsApp. Acesse Config → Plano para fazer upgrade.");
+                showToast("🔒 CRM exclusivo do Plano Enterprise. Acesse Config → Plano para fazer upgrade.");
               }
               else setTab(id);
             }}>
@@ -4175,7 +4175,7 @@ function App(){
       </div>
 
       {/* Toast */}
-      {toast&&<div className="toast" style={{position:"fixed",bottom:84,left:"50%",transform:"translateX(-50%)",background:"rgba(15,23,42,.92)",backdropFilter:"blur(16px)",border:"1px solid rgba(56,189,248,.2)",color:"#e0f2fe",fontSize:13,fontWeight:600,padding:"10px 20px",borderRadius:16,boxShadow:"0 8px 24px rgba(0,0,0,.4)",zIndex:99,whiteSpace:"nowrap"}}>{toast}</div>}
+      {toast&&<div className="toast" style={{position:"fixed",bottom:84,left:"50%",transform:"translateX(-50%)",background:"rgba(15,23,42,.92)",backdropFilter:"blur(16px)",border:"1px solid rgba(56,189,248,.2)",color:"#e0f2fe",fontSize:13,fontWeight:600,padding:"10px 20px",borderRadius:16,boxShadow:"0 8px 24px rgba(0,0,0,.4)",zIndex:99,maxWidth:"calc(100vw - 32px)",textAlign:"center",lineHeight:1.4}}>{toast}</div>}
 
       {/* Popup de resumo semanal do clima — aparece uma vez por dia */}
       {showWeeklyPopup&&<WeeklyWeatherPopup week={weekWeather} onClose={()=>setShowWeeklyPopup(false)}/>}
