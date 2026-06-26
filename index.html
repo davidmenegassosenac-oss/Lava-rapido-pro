@@ -417,18 +417,22 @@ const FEATURE_PLANO_MINIMO={
 const PLANO_NOME={trial:"Trial",basico:"Básico",profissional:"Profissional",enterprise:"Enterprise"};
 
 function useFeatureGate(plano){
-  const features=PLAN_FEATURES[plano]||PLAN_FEATURES.trial;
-  const hasFeature=React.useCallback((f)=>features.includes(f),[features]);
+  const hasFeature=React.useCallback((f)=>checkFeature(plano,f),[plano]);
   const planoMinimo=React.useCallback((f)=>FEATURE_PLANO_MINIMO[f]||"profissional",[]);
   return{hasFeature,planoMinimo};
 }
 
-// Componente de bloqueio de upgrade — abordagem "cadeado visível"
+// Função pura — sem hooks, sem violações
+function checkFeature(plano, feature){
+  const features=PLAN_FEATURES[plano]||PLAN_FEATURES.trial;
+  return features.includes(feature);
+}
+
 function UpgradeGate({feature,plano,children,onUpgrade}){
-  const{hasFeature,planoMinimo}=useFeatureGate(plano);
   const[showModal,setShowModal]=React.useState(false);
-  if(hasFeature(feature))return children;
-  const minimo=planoMinimo(feature);
+  const allowed=checkFeature(plano,feature);
+  const minimo=FEATURE_PLANO_MINIMO[feature]||"profissional";
+  if(allowed)return children;
   return(
     <>
       <div onClick={()=>setShowModal(true)} style={{position:"relative",cursor:"pointer",opacity:.6,filter:"grayscale(.4)"}}>
@@ -912,8 +916,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     setSvcs(s=>s.filter(x=>x.id!==id));
   };
 
-  const{hasFeature}=useFeatureGate(plano||"trial");
-
+  const planoAtual=plano||"trial";
   const ALL_CONFIG_TABS=[
     ["relatorios","📈 Relatórios",isOwner],
     ["folha","💸 Folha",isOwner],
@@ -927,7 +930,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     <div className="scroll screen-enter">
       <div style={{display:"flex",width:"100%",marginBottom:18,borderBottom:"1px solid rgba(125,211,252,.15)",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
         {ALL_CONFIG_TABS.map(([k,l])=>{
-          const bloqueado=!hasFeature(k);
+          const bloqueado=!checkFeature(planoAtual,k);
           const minimo=FEATURE_PLANO_MINIMO[k];
           return(
             <button key={k} onClick={()=>{
@@ -4065,7 +4068,7 @@ function App(){
   }
 
   const isOwner=profile.role==="owner";
-  const{hasFeature:hasFeatureApp}=useFeatureGate(assInfo?.plano||"trial");
+  const planoApp=assInfo?.plano||"trial";
   const ALL_TABS=[
     {id:"home",    label:"Fila",      icon:"Home",     roles:["owner","employee"]},
     {id:"new",     label:"Nova",      icon:"Plus",     roles:["owner","employee"]},
@@ -4134,7 +4137,7 @@ function App(){
         {TABS.map(({id,label,icon})=>{
           const active=safeTab===id;
           const showBadge=id==="crm"&&crmBadge>0;
-          const bloqueado=id==="crm"&&!hasFeatureApp("crm");
+          const bloqueado=id==="crm"&&!checkFeature(planoApp,"crm");
           return(
             <button key={id} className="nav-btn" onClick={()=>{
               if(bloqueado){showToast("🔒 CRM disponível no Plano Enterprise. Acesse Config → Plano para fazer upgrade.");}
