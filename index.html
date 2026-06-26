@@ -400,6 +400,95 @@ const today=new Date();
 function daysSince(ds){return Math.floor((today-new Date(ds))/86400000);}
 function fmtDate(ds){return new Date(ds).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"});}
 function fmtTime(ds){return ds?new Date(ds).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—";}
+
+// ── Feature Gate — controle de acesso por plano ───────────────────────────
+// Hierarquia cumulativa: enterprise inclui tudo do profissional,
+// profissional inclui tudo do básico, trial tem acesso básico.
+const PLAN_FEATURES={
+  trial:         ["fila","historico","cadastrar_carros"],
+  basico:        ["fila","historico","cadastrar_carros","servicos"],
+  profissional:  ["fila","historico","cadastrar_carros","servicos","folha","relatorios","equipe"],
+  enterprise:    ["fila","historico","cadastrar_carros","servicos","folha","relatorios","equipe","crm","fila_publica"],
+};
+const FEATURE_PLANO_MINIMO={
+  folha:"profissional",relatorios:"profissional",equipe:"profissional",
+  crm:"enterprise",fila_publica:"enterprise",
+};
+const PLANO_NOME={trial:"Trial",basico:"Básico",profissional:"Profissional",enterprise:"Enterprise"};
+
+function useFeatureGate(plano){
+  const features=PLAN_FEATURES[plano]||PLAN_FEATURES.trial;
+  const hasFeature=React.useCallback((f)=>features.includes(f),[features]);
+  const planoMinimo=React.useCallback((f)=>FEATURE_PLANO_MINIMO[f]||"profissional",[]);
+  return{hasFeature,planoMinimo};
+}
+
+// Componente de bloqueio de upgrade — abordagem "cadeado visível"
+function UpgradeGate({feature,plano,children,onUpgrade}){
+  const{hasFeature,planoMinimo}=useFeatureGate(plano);
+  const[showModal,setShowModal]=React.useState(false);
+  if(hasFeature(feature))return children;
+  const minimo=planoMinimo(feature);
+  return(
+    <>
+      <div onClick={()=>setShowModal(true)} style={{position:"relative",cursor:"pointer",opacity:.6,filter:"grayscale(.4)"}}>
+        {children}
+        <div style={{position:"absolute",inset:0,borderRadius:"inherit",display:"flex",alignItems:"center",
+          justifyContent:"center",background:"rgba(12,26,46,.6)",backdropFilter:"blur(2px)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:99,
+            background:"rgba(251,191,36,.15)",border:"1px solid rgba(251,191,36,.3)"}}>
+            <Icon name="Lock" size={11} color="#fbbf24"/>
+            <span style={{fontSize:10,fontWeight:800,color:"#fbbf24"}}>{PLANO_NOME[minimo]}</span>
+          </div>
+        </div>
+      </div>
+      {showModal&&(
+        <div style={{position:"fixed",inset:0,zIndex:999,display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+          onClick={()=>setShowModal(false)}>
+          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)"}}/>
+          <div onClick={e=>e.stopPropagation()}
+            style={{position:"relative",width:"100%",maxWidth:480,background:"linear-gradient(180deg,#0f1f38,#0c1a2e)",
+              borderRadius:"24px 24px 0 0",padding:28,border:"1px solid rgba(251,191,36,.25)",borderBottom:"none",
+              boxShadow:"0 -20px 60px rgba(0,0,0,.5)"}}>
+            <div style={{width:40,height:4,borderRadius:99,background:"rgba(125,211,252,.2)",margin:"0 auto 20px"}}/>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+              <div style={{width:44,height:44,borderRadius:14,background:"rgba(251,191,36,.15)",
+                border:"1px solid rgba(251,191,36,.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Icon name="Lock" size={22} color="#fbbf24"/>
+              </div>
+              <div>
+                <div style={{fontSize:16,fontWeight:900,color:"#e0f2fe",marginBottom:2}}>
+                  Disponível no Plano {PLANO_NOME[minimo]}
+                </div>
+                <div style={{fontSize:12,color:"rgba(186,230,253,.5)"}}>
+                  Seu plano atual não inclui esta funcionalidade.
+                </div>
+              </div>
+            </div>
+            <div style={{padding:"12px 14px",borderRadius:14,background:"rgba(251,191,36,.08)",
+              border:"1px solid rgba(251,191,36,.15)",marginBottom:20,fontSize:12,color:"rgba(186,230,253,.6)",lineHeight:1.6}}>
+              {minimo==="profissional"&&"O Plano Profissional inclui Folha de Pagamento, Gestão de Equipe, Relatórios Financeiros e muito mais por R$\u00a089,90/mês."}
+              {minimo==="enterprise"&&"O Plano Enterprise inclui CRM com WhatsApp automático, Fila Pública para seus clientes e tudo ilimitado por R$\u00a0149,90/mês."}
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowModal(false)}
+                style={{flex:1,padding:"13px 0",borderRadius:16,cursor:"pointer",fontWeight:700,fontSize:13,
+                  background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.15)",color:"rgba(186,230,253,.4)"}}>
+                Agora não
+              </button>
+              <button onClick={()=>{setShowModal(false);if(onUpgrade)onUpgrade();}}
+                style={{flex:2,padding:"13px 0",borderRadius:16,cursor:"pointer",fontWeight:800,fontSize:14,
+                  background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",color:"#fff",
+                  boxShadow:"0 6px 20px rgba(245,158,11,.35)"}}>
+                🚀 Ver planos de upgrade
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 function fmtTempoPatio(entrada,saida){
   if(!entrada||!saida)return null;
   const diffMs=new Date(saida)-new Date(entrada);
@@ -727,7 +816,7 @@ function TermosModal({onClose,onAceitar}){
 /* ══════════════════════════════════════════════════════════════════════════
    CONFIGURAÇÕES SCREEN — personalização da empresa
 ══════════════════════════════════════════════════════════════════════════ */
-function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
+function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [empresa,setEmpresa]=useState(null);
   const [ass,setAss]=useState(null);
   const [limites,setLimites]=useState(null);
@@ -832,21 +921,34 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner}){
     ["assinatura","💳 Plano",true],
   ].filter(([,,show])=>show);
 
+  const{hasFeature}=useFeatureGate(plano||"trial");
+
   return(
     <div className="scroll screen-enter">
-      {/* Tabs — fileira única com scroll horizontal, sem agrupamento por categoria.
-          width:"100%" + minWidth:"max-content" nos botões é necessário: sem isso,
-          alguns navegadores mobile encolhem os itens extras em vez de permitir
-          scroll horizontal, fazendo abas "desaparecerem" visualmente mesmo
-          existindo no DOM. */}
       <div style={{display:"flex",width:"100%",marginBottom:18,borderBottom:"1px solid rgba(125,211,252,.15)",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-        {ALL_CONFIG_TABS.map(([k,l])=>(
-          <button key={k} onClick={()=>setTab(k)}
-            className={tab===k?"tab-active":"tab-inactive"}
-            style={{flex:"0 0 auto",minWidth:"max-content",padding:"10px 16px",fontSize:12,fontWeight:700,background:"transparent",border:"none",cursor:"pointer",transition:"all .2s",whiteSpace:"nowrap"}}>
-            {l}
-          </button>
-        ))}
+        {ALL_CONFIG_TABS.map(([k,l])=>{
+          const bloqueado=!hasFeature(k);
+          const minimo=FEATURE_PLANO_MINIMO[k];
+          return(
+            <button key={k} onClick={()=>{
+              if(bloqueado){if(onUpgrade)onUpgrade(k);}
+              else setTab(k);
+            }}
+              className={tab===k&&!bloqueado?"tab-active":"tab-inactive"}
+              style={{flex:"0 0 auto",minWidth:"max-content",padding:"10px 16px",fontSize:12,fontWeight:700,
+                background:"transparent",border:"none",cursor:"pointer",transition:"all .2s",
+                whiteSpace:"nowrap",opacity:bloqueado?.55:1,
+                display:"flex",alignItems:"center",gap:5}}>
+              {bloqueado&&<Icon name="Lock" size={10} color="#fbbf24"/>}
+              {l}
+              {bloqueado&&minimo&&(
+                <span style={{fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:99,
+                  background:"rgba(251,191,36,.15)",border:"1px solid rgba(251,191,36,.3)",
+                  color:"#fbbf24",marginLeft:2}}>{PLANO_NOME[minimo]}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab Empresa */}
@@ -4023,7 +4125,7 @@ function App(){
         {safeTab==="new"     &&<NewWashScreen  key="new"     empresaId={profile.empresa_id} userId={profile.id} onSuccess={()=>{setTab("home");showToast("✅ Veículo adicionado à fila!");}}/>}
         {safeTab==="crm"     &&isOwner&&<CRMScreen     key="crm"     empresaId={profile.empresa_id} onBadgeUpdate={()=>setCrmBadge(0)}/>}
         {safeTab==="history"&&<HistoryScreen key="history" empresaId={profile.empresa_id} isOwner={isOwner}/>}
-        {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} onUpdate={name=>{setEmpresa(e=>({...e,nome_fantasia:name}));showToast("✅ "+name+" atualizado!");}}/>}
+        {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} plano={assInfo?.plano||"trial"} onUpgrade={()=>setTab("config")} onUpdate={name=>{setEmpresa(e=>({...e,nome_fantasia:name}));showToast("✅ "+name+" atualizado!");}}/>}
       </div>
 
       {/* Bottom nav — flexShrink:0 garante que nunca seja comprimida nem empurrada para fora */}
@@ -4031,11 +4133,18 @@ function App(){
         {TABS.map(({id,label,icon})=>{
           const active=safeTab===id;
           const showBadge=id==="crm"&&crmBadge>0;
+          const planoAtual=assInfo?.plano||"trial";
+          const{hasFeature}=useFeatureGate(planoAtual);
+          const featureKey=id==="crm"?"crm":null;
+          const bloqueado=featureKey&&!hasFeature(featureKey);
           return(
-            <button key={id} className="nav-btn" onClick={()=>setTab(id)}>
-              <div className={`nav-icon${active?" active":""}`} style={{position:"relative"}}>
-                <Icon name={icon} size={16} color={active?"#fff":"rgba(186,230,253,.4)"}/>
-                {showBadge&&(
+            <button key={id} className="nav-btn" onClick={()=>{
+              if(bloqueado){showToast("🔒 CRM disponível no Plano Enterprise. Acesse Config → Plano para fazer upgrade.");}
+              else setTab(id);
+            }}>
+              <div className={`nav-icon${active&&!bloqueado?" active":""}`} style={{position:"relative",opacity:bloqueado?.5:1}}>
+                <Icon name={bloqueado?"Lock":icon} size={16} color={active&&!bloqueado?"#fff":"rgba(186,230,253,.4)"}/>
+                {showBadge&&!bloqueado&&(
                   <div style={{position:"absolute",top:-4,right:-4,minWidth:16,height:16,borderRadius:99,
                     background:"#f87171",border:"2px solid #0c1a2e",
                     display:"flex",alignItems:"center",justifyContent:"center",
@@ -4044,7 +4153,7 @@ function App(){
                   </div>
                 )}
               </div>
-              <span style={{fontSize:10,fontWeight:700,color:active?"#38bdf8":"rgba(186,230,253,.35)"}}>{label}</span>
+              <span style={{fontSize:10,fontWeight:700,color:active&&!bloqueado?"#38bdf8":"rgba(186,230,253,.35)"}}>{label}</span>
             </button>
           );
         })}
