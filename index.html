@@ -405,10 +405,10 @@ function fmtTime(ds){return ds?new Date(ds).toLocaleTimeString("pt-BR",{hour:"2-
 // Hierarquia cumulativa: enterprise inclui tudo do profissional,
 // profissional inclui tudo do básico, trial tem acesso básico.
 const PLAN_FEATURES={
-  trial:         ["fila","historico","cadastrar_carros"],
-  basico:        ["fila","historico","cadastrar_carros","servicos"],
-  profissional:  ["fila","historico","cadastrar_carros","servicos","folha","relatorios","equipe"],
-  enterprise:    ["fila","historico","cadastrar_carros","servicos","folha","relatorios","equipe","crm","fila_publica"],
+  trial:         ["fila","historico","cadastrar_carros","servicos","empresa","assinatura"],
+  basico:        ["fila","historico","cadastrar_carros","servicos","empresa","assinatura"],
+  profissional:  ["fila","historico","cadastrar_carros","servicos","empresa","assinatura","folha","relatorios","equipe"],
+  enterprise:    ["fila","historico","cadastrar_carros","servicos","empresa","assinatura","folha","relatorios","equipe","crm","fila_publica"],
 };
 const FEATURE_PLANO_MINIMO={
   folha:"profissional",relatorios:"profissional",equipe:"profissional",
@@ -831,7 +831,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [saving,setSaving]=useState(false);
   const [success,setSuccess]=useState("");
   const [errMsg,setErrMsg]=useState("");
-  const [tab,setTab]=useState("relatorios");
+  const [tab,setTab]=useState("empresa");
   const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
 
   useEffect(()=>{
