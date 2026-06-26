@@ -4,137 +4,118 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Fila em Tempo Real</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Outfit',system-ui,sans-serif;background:#0c1a2e;color:#e0f2fe;min-height:100vh;-webkit-font-smoothing:antialiased}
-    .glass{background:rgba(255,255,255,.06);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(125,211,252,.18);border-radius:20px}
-    .card{background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.12);border-radius:16px;padding:14px;margin-bottom:8px}
+    .card{background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.12);border-radius:16px;padding:14px;margin-bottom:8px;transition:border-color .2s}
     .card.hl{border-color:rgba(14,165,233,.7);box-shadow:0 0 20px rgba(14,165,233,.25);background:rgba(14,165,233,.08)}
-    .inp{width:100%;padding:13px 16px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid rgba(125,211,252,.2);color:#e0f2fe;font-family:'Outfit',sans-serif;font-size:15px;outline:none}
-    .inp:focus{border-color:rgba(14,165,233,.5);box-shadow:0 0 0 2px rgba(14,165,233,.15)}
-    .btn{width:100%;padding:14px;border-radius:16px;border:none;font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;cursor:pointer}
-    .btn-primary{background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff;box-shadow:0 6px 20px rgba(14,165,233,.35)}
-    .btn-ghost{background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.15)!important;color:rgba(186,230,253,.5)}
-    .spin{width:20px;height:20px;border:2px solid rgba(56,189,248,.2);border-top-color:#38bdf8;border-radius:50%;animation:sp .7s linear infinite;margin:0 auto}
+    .inp{width:100%;padding:13px 16px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid rgba(125,211,252,.2);color:#e0f2fe;font-family:'Outfit',sans-serif;font-size:16px;outline:none;-webkit-appearance:none}
+    .inp:focus{border-color:rgba(14,165,233,.5)}
+    .btn{width:100%;padding:14px;border-radius:16px;border:none;font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+    .spin{width:22px;height:22px;border:2.5px solid rgba(56,189,248,.2);border-top-color:#38bdf8;border-radius:50%;animation:sp .7s linear infinite}
     @keyframes sp{to{transform:rotate(360deg)}}
     .pulse{animation:pl 2s ease-in-out infinite}
     @keyframes pl{0%,100%{opacity:1}50%{opacity:.5}}
-    .lbl{font-size:11px;font-weight:700;color:rgba(186,230,253,.5);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:6px}
-    ::-webkit-scrollbar{width:0}
+    #root{min-height:100vh}
   </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const {useState,useEffect,useRef,useCallback,useMemo}=React;
+<div id="root">
+  <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
+    <div class="spin"></div>
+    <div style="color:rgba(186,230,253,.4);font-size:14px;font-family:Outfit,sans-serif">Carregando...</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.0/babel.min.js"></script>
+<script>
+// Confirmar que tudo carregou antes de rodar o app
+window.addEventListener('load', function() {
+  if (!window.React || !window.ReactDOM || !window.supabase || !window.Babel) {
+    document.getElementById('root').innerHTML =
+      '<div style="padding:24px;color:#f87171;font-family:Outfit,sans-serif">'+
+      '❌ Falha ao carregar bibliotecas. Verifique sua conexão e recarregue a página.</div>';
+  }
+});
+</script>
+<script type="text/babel" data-presets="react">
+const {useState,useEffect,useRef,useCallback}=React;
 
 const SURL='https://ikahodmuchwitxfvlaop.supabase.co';
 const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrYWhvZG11Y2h3aXR4ZnZsYW9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NDkzMTcsImV4cCI6MjA5NjUyNTMxN30.qRBN7lFQAGeN1phNneqY368dhAMllnAtQgVCb-piDds';
 const sb=supabase.createClient(SURL,SKEY);
 
-function getUrlEmpresaId(){
-  try{const p=new URLSearchParams(window.location.search);return p.get("empresa")||p.get("e")||null;}
+function getEmpresaId(){
+  try{return new URLSearchParams(window.location.search).get('empresa')||null;}
   catch(e){return null;}
 }
 
 function mascaraPlaca(p){
-  if(!p)return"***";
-  const s=p.replace(/[^a-zA-Z0-9]/g,"");
-  return"***"+s.slice(-3).toUpperCase();
+  if(!p)return'***';
+  return'***'+p.replace(/[^a-zA-Z0-9]/g,'').slice(-3).toUpperCase();
 }
 
-const ST={
-  Aguardando:{e:"⏳",l:"Aguardando",c:"#fbbf24",bg:"rgba(251,191,36,.12)",b:"rgba(251,191,36,.25)"},
-  Lavando:   {e:"🧼",l:"Na Rampa",  c:"#38bdf8",bg:"rgba(56,189,248,.12)", b:"rgba(56,189,248,.25)"},
-  "Concluído":{e:"✅",l:"Pronto",   c:"#4ade80",bg:"rgba(74,222,128,.12)", b:"rgba(74,222,128,.25)"},
+const ST_CFG={
+  Aguardando:{e:'⏳',l:'Aguardando',c:'#fbbf24',bg:'rgba(251,191,36,.12)',b:'rgba(251,191,36,.25)'},
+  Lavando:   {e:'🧼',l:'Na Rampa',  c:'#38bdf8',bg:'rgba(56,189,248,.12)', b:'rgba(56,189,248,.25)'},
+  Concluído: {e:'✅',l:'Pronto',    c:'#4ade80',bg:'rgba(74,222,128,.12)', b:'rgba(74,222,128,.25)'},
 };
-const ORDER=["Aguardando","Lavando","Concluído"];
+const ORDEM=['Aguardando','Lavando','Concluído'];
 
-// ── Tela de busca de empresa ────────────────────────────────────────────────
-function BuscaEmpresaScreen({onSelect}){
-  const [q,setQ]=useState("");
-  const [resultados,setResultados]=useState([]);
-  const [loading,setLoading]=useState(false);
-  const [errBusca,setErrBusca]=useState("");
-  const timerRef=useRef(null);
+/* ── Busca de empresa ── */
+function BuscaScreen({onSelect}){
+  const [q,setQ]=useState('');
+  const [res,setRes]=useState([]);
+  const [load,setLoad]=useState(false);
+  const [erro,setErro]=useState('');
+  const t=useRef(null);
 
   useEffect(()=>{
-    clearTimeout(timerRef.current);
-    if(q.trim().length<2){setResultados([]);setErrBusca("");return;}
-    timerRef.current=setTimeout(async()=>{
-      setLoading(true);setErrBusca("");
-      try{
-        const{data,error}=await sb.from("empresas")
-          .select("id,nome_fantasia,telefone")
-          .ilike("nome_fantasia",`%${q.trim()}%`)
-          .limit(8);
-        if(error)throw error;
-        setResultados(data||[]);
-      }catch(e){
-        setErrBusca("Erro ao buscar. Verifique sua conexão e tente novamente.");
-        setResultados([]);
-      }
-      setLoading(false);
+    clearTimeout(t.current);
+    if(q.trim().length<2){setRes([]);return;}
+    t.current=setTimeout(async()=>{
+      setLoad(true);setErro('');
+      const{data,error}=await sb.from('empresas')
+        .select('id,nome_fantasia,telefone')
+        .ilike('nome_fantasia','%'+q.trim()+'%')
+        .limit(8);
+      setLoad(false);
+      if(error){setErro('Erro ao buscar. Tente novamente.');return;}
+      setRes(data||[]);
     },400);
-    return()=>clearTimeout(timerRef.current);
+    return()=>clearTimeout(t.current);
   },[q]);
 
   return(
-    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",
-      alignItems:"center",justifyContent:"flex-start",padding:"60px 20px 40px"}}>
-      {/* Logo */}
-      <div style={{textAlign:"center",marginBottom:40}}>
-        <div style={{fontSize:48,marginBottom:12}}>🚗💧</div>
-        <div style={{fontSize:24,fontWeight:900,color:"#e0f2fe",marginBottom:6}}>
-          Fila em Tempo Real
-        </div>
-        <div style={{fontSize:14,color:"rgba(186,230,253,.4)"}}>
-          Acompanhe seu veículo sem sair de casa
-        </div>
+    <div style={{minHeight:'100vh',padding:'50px 20px 40px',display:'flex',flexDirection:'column',alignItems:'center'}}>
+      <div style={{textAlign:'center',marginBottom:36}}>
+        <div style={{fontSize:48,marginBottom:10}}>🚗💧</div>
+        <div style={{fontSize:22,fontWeight:900,color:'#e0f2fe',marginBottom:4}}>Fila em Tempo Real</div>
+        <div style={{fontSize:13,color:'rgba(186,230,253,.4)'}}>Acompanhe seu carro sem sair de casa</div>
       </div>
-
-      {/* Campo de busca */}
-      <div style={{width:"100%",maxWidth:440}}>
-        <div style={{position:"relative",marginBottom:16}}>
-          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:18,pointerEvents:"none"}}>🔍</span>
-          <input value={q} onChange={e=>setQ(e.target.value)}
-            placeholder="Digite o nome do lava-jato..."
-            className="inp" style={{paddingLeft:46,fontSize:16}}
-            autoFocus/>
-        </div>
-
-        {/* Loading */}
-        {loading&&<div style={{textAlign:"center",padding:20}}><div className="spin"/></div>}
-
-        {/* Resultados */}
-        {!loading&&resultados.map(e=>(
+      <div style={{width:'100%',maxWidth:440}}>
+        <input value={q} onChange={e=>setQ(e.target.value)}
+          placeholder='Digite o nome do lava-jato...'
+          className='inp' style={{marginBottom:12}} autoFocus/>
+        {load&&<div style={{textAlign:'center',padding:20}}><div className='spin' style={{margin:'0 auto'}}/></div>}
+        {erro&&<div style={{padding:'10px 14px',borderRadius:12,background:'rgba(239,68,68,.12)',
+          border:'1px solid rgba(239,68,68,.3)',color:'#f87171',fontSize:13,marginBottom:10}}>{erro}</div>}
+        {res.map(e=>(
           <button key={e.id} onClick={()=>onSelect(e)}
-            style={{width:"100%",marginBottom:8,padding:"14px 16px",borderRadius:16,cursor:"pointer",
-              background:"rgba(255,255,255,.05)",border:"1px solid rgba(125,211,252,.15)",
-              textAlign:"left",transition:"all .15s"}}
-            onMouseEnter={el=>el.currentTarget.style.background="rgba(14,165,233,.1)"}
-            onMouseLeave={el=>el.currentTarget.style.background="rgba(255,255,255,.05)"}>
-            <div style={{fontSize:15,fontWeight:800,color:"#e0f2fe"}}>{e.nome_fantasia}</div>
-            {e.telefone&&<div style={{fontSize:12,color:"rgba(186,230,253,.4)",marginTop:2}}>📞 {e.telefone}</div>}
+            style={{width:'100%',marginBottom:8,padding:'14px 16px',borderRadius:16,cursor:'pointer',
+              background:'rgba(255,255,255,.05)',border:'1px solid rgba(125,211,252,.15)',
+              textAlign:'left',color:'#e0f2fe'}}>
+            <div style={{fontSize:15,fontWeight:800}}>{e.nome_fantasia}</div>
+            {e.telefone&&<div style={{fontSize:12,color:'rgba(186,230,253,.4)',marginTop:2}}>📞 {e.telefone}</div>}
           </button>
         ))}
-
-        {errBusca&&<div style={{padding:"12px 14px",borderRadius:12,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",fontSize:13,marginBottom:10}}>{errBusca}</div>}
-        {!loading&&!errBusca&&q.length>=2&&resultados.length===0&&(
-          <div style={{textAlign:"center",padding:"24px 0",color:"rgba(186,230,253,.3)",fontSize:14}}>
-            Nenhum lava-jato encontrado com este nome
-          </div>
-        )}
-
-        {q.length<2&&q.length>0&&(
-          <div style={{textAlign:"center",fontSize:12,color:"rgba(186,230,253,.3)",marginTop:8}}>
-            Digite pelo menos 2 letras para buscar
+        {!load&&!erro&&q.length>=2&&res.length===0&&(
+          <div style={{textAlign:'center',padding:'20px 0',color:'rgba(186,230,253,.3)',fontSize:13}}>
+            Nenhum lava-jato encontrado
           </div>
         )}
       </div>
@@ -142,145 +123,106 @@ function BuscaEmpresaScreen({onSelect}){
   );
 }
 
-// ── Modal de cadastro na fila ───────────────────────────────────────────────
+/* ── Modal cadastro ── */
 function CadastroModal({empresa,onClose,onSuccess}){
   const [svcs,setSvcs]=useState([]);
-  const [form,setForm]=useState({client:"",phone:"",model:"",plate:"",color:"#3b82f6",svc_id:"",svc_nome:"",svc_valor:0});
+  const [form,setForm]=useState({client:'',phone:'',model:'',plate:'',color:'#3b82f6',svc_id:'',svc_nome:'',svc_valor:0});
   const [saving,setSaving]=useState(false);
-  const [err,setErr]=useState("");
-  const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const [erro,setErro]=useState('');
 
   useEffect(()=>{
-    sb.from("servicos_catalogo").select("id,nome,valor")
-      .eq("empresa_id",empresa.id).eq("ativo",true)
+    sb.from('servicos_catalogo').select('id,nome,valor')
+      .eq('empresa_id',empresa.id).eq('ativo',true)
       .then(({data})=>setSvcs(data||[]));
   },[empresa.id]);
 
-  const phoneMask=(v)=>{
-    const d=v.replace(/\D/g,"").slice(0,11);
+  const F=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const mask=v=>{
+    const d=v.replace(/\D/g,'').slice(0,11);
     if(d.length<=2)return d;
-    if(d.length<=7)return`(${d.slice(0,2)}) ${d.slice(2)}`;
-    return`(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+    if(d.length<=7)return'('+d.slice(0,2)+') '+d.slice(2);
+    return'('+d.slice(0,2)+') '+d.slice(2,7)+'-'+d.slice(7);
   };
 
   const confirmar=async()=>{
-    if(!form.client.trim()||!form.phone.trim()||!form.model.trim()||!form.plate.trim()){
-      setErr("Preencha todos os campos obrigatórios.");return;
+    if(!form.client.trim()||!form.phone.trim()||!form.model.trim()||!form.plate.trim()||!form.svc_id){
+      setErro('Preencha todos os campos obrigatórios.');return;
     }
-    if(!form.svc_id){setErr("Selecione o serviço desejado.");return;}
-    setSaving(true);setErr("");
-    const phoneClean=form.phone.replace(/\D/g,"");
-    const{error}=await sb.from("ordens_servico").insert({
+    setSaving(true);setErro('');
+    const{error}=await sb.from('ordens_servico').insert({
       empresa_id:empresa.id,
       plate:form.plate.trim().toUpperCase(),
       model:form.model.trim(),
       client:form.client.trim(),
-      phone:phoneClean,
+      phone:form.phone.replace(/\D/g,''),
       type:form.svc_nome,
       value:form.svc_valor,
       color:form.color,
-      status:"Aguardando",
+      status:'Aguardando',
     });
     setSaving(false);
-    if(error){setErr("Erro ao cadastrar. Tente novamente.");return;}
+    if(error){setErro('Erro ao cadastrar. Tente novamente.');return;}
     onSuccess();
   };
 
-  const CORES=["#3b82f6","#22c55e","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#64748b"];
+  const CORES=['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#64748b'];
 
   return(
-    <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}
-      onClick={onClose}>
-      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)"}}/>
-      <div onClick={e=>e.stopPropagation()}
-        style={{position:"relative",background:"linear-gradient(180deg,#0f1f38,#0c1a2e)",
-          borderRadius:"24px 24px 0 0",padding:"20px 20px 40px",maxHeight:"92vh",overflowY:"auto",
-          border:"1px solid rgba(125,211,252,.15)",borderBottom:"none"}}>
-        <div style={{width:40,height:4,borderRadius:99,background:"rgba(125,211,252,.2)",margin:"0 auto 20px"}}/>
-        <div style={{fontSize:17,fontWeight:900,color:"#e0f2fe",marginBottom:4}}>Entrar na Fila</div>
-        <div style={{fontSize:12,color:"rgba(186,230,253,.4)",marginBottom:20}}>{empresa.nome_fantasia}</div>
-
-        {/* Nome */}
+    <div style={{position:'fixed',inset:0,zIndex:200,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+      <div onClick={onClose} style={{position:'absolute',inset:0,background:'rgba(0,0,0,.6)',backdropFilter:'blur(4px)'}}/>
+      <div style={{position:'relative',background:'linear-gradient(180deg,#0f1f38,#0c1a2e)',
+        borderRadius:'24px 24px 0 0',padding:'20px 20px 44px',maxHeight:'92vh',overflowY:'auto',
+        border:'1px solid rgba(125,211,252,.15)',borderBottom:'none'}}>
+        <div style={{width:40,height:4,borderRadius:99,background:'rgba(125,211,252,.2)',margin:'0 auto 20px'}}/>
+        <div style={{fontSize:17,fontWeight:900,color:'#e0f2fe',marginBottom:2}}>Entrar na Fila</div>
+        <div style={{fontSize:12,color:'rgba(186,230,253,.4)',marginBottom:20}}>{empresa.nome_fantasia}</div>
+        {[['client','Seu nome','João da Silva','text'],['phone','WhatsApp','(49) 99999-9999','tel'],
+          ['model','Modelo do veículo','Honda Civic...','text'],['plate','Placa','ABC1D23','text']].map(([k,l,p,t])=>(
+          <div key={k} style={{marginBottom:14}}>
+            <div style={{fontSize:11,fontWeight:700,color:'rgba(186,230,253,.5)',textTransform:'uppercase',
+              letterSpacing:'.08em',marginBottom:6}}>{l} *</div>
+            <input value={form[k]} onChange={e=>F(k,k==='phone'?mask(e.target.value):k==='plate'?e.target.value.toUpperCase():e.target.value)}
+              placeholder={p} type={t} className='inp'
+              style={k==='plate'?{fontFamily:'monospace',letterSpacing:'.1em'}:{}}/>
+          </div>
+        ))}
         <div style={{marginBottom:14}}>
-          <label className="lbl">Seu nome *</label>
-          <input value={form.client} onChange={e=>setF("client",e.target.value)}
-            placeholder="João da Silva" className="inp"/>
-        </div>
-
-        {/* Telefone */}
-        <div style={{marginBottom:14}}>
-          <label className="lbl">WhatsApp *</label>
-          <input value={form.phone} onChange={e=>setF("phone",phoneMask(e.target.value))}
-            placeholder="(49) 99999-9999" className="inp" type="tel"/>
-        </div>
-
-        {/* Veículo */}
-        <div style={{marginBottom:14}}>
-          <label className="lbl">Modelo do veículo *</label>
-          <input value={form.model} onChange={e=>setF("model",e.target.value)}
-            placeholder="Honda Civic, Fiat Uno..." className="inp"/>
-        </div>
-
-        {/* Placa */}
-        <div style={{marginBottom:14}}>
-          <label className="lbl">Placa *</label>
-          <input value={form.plate} onChange={e=>setF("plate",e.target.value.toUpperCase())}
-            placeholder="ABC1D23" className="inp" maxLength={7}
-            style={{fontFamily:"monospace",letterSpacing:".1em"}}/>
-        </div>
-
-        {/* Cor */}
-        <div style={{marginBottom:14}}>
-          <label className="lbl">Cor do ícone</label>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <div style={{fontSize:11,fontWeight:700,color:'rgba(186,230,253,.5)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>Cor do ícone</div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
             {CORES.map(c=>(
-              <button key={c} onClick={()=>setF("color",c)}
-                style={{width:32,height:32,borderRadius:99,background:c,cursor:"pointer",
-                  border:`3px solid ${form.color===c?"#fff":"transparent"}`,
-                  boxShadow:form.color===c?`0 0 10px ${c}88`:"none"}}/>
+              <button key={c} onClick={()=>F('color',c)}
+                style={{width:32,height:32,borderRadius:99,background:c,cursor:'pointer',border:'3px solid '+(form.color===c?'#fff':'transparent')}}/>
             ))}
           </div>
         </div>
-
-        {/* Serviço */}
         <div style={{marginBottom:20}}>
-          <label className="lbl">Serviço desejado *</label>
-          {svcs.length===0?(
-            <div style={{fontSize:12,color:"rgba(186,230,253,.3)",padding:"10px 0"}}>Carregando serviços...</div>
-          ):(
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {svcs.map(s=>{
-                const sel=form.svc_id===s.id;
-                return(
-                  <button key={s.id} onClick={()=>setF("svc_id",s.id)||setF("svc_nome",s.nome)||setF("svc_valor",s.valor)}
-                    style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                      padding:"12px 14px",borderRadius:12,cursor:"pointer",
-                      border:`1.5px solid ${sel?"rgba(14,165,233,.6)":"rgba(125,211,252,.12)"}`,
-                      background:sel?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
-                      color:sel?"#38bdf8":"rgba(186,230,253,.6)",fontWeight:sel?700:500}}>
-                    <span style={{fontSize:13}}>{s.nome}</span>
-                    <span style={{fontSize:13,fontWeight:800,color:"#4ade80"}}>
-                      R$ {parseFloat(s.valor).toFixed(2).replace(".",",")}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div style={{fontSize:11,fontWeight:700,color:'rgba(186,230,253,.5)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>Serviço *</div>
+          {svcs.length===0
+            ?<div style={{fontSize:12,color:'rgba(186,230,253,.3)'}}>Carregando...</div>
+            :svcs.map(s=>(
+              <button key={s.id} onClick={()=>setForm(f=>({...f,svc_id:s.id,svc_nome:s.nome,svc_valor:s.valor}))}
+                style={{width:'100%',marginBottom:8,display:'flex',justifyContent:'space-between',
+                  alignItems:'center',padding:'12px 14px',borderRadius:12,cursor:'pointer',
+                  border:'1.5px solid '+(form.svc_id===s.id?'rgba(14,165,233,.6)':'rgba(125,211,252,.12)'),
+                  background:form.svc_id===s.id?'rgba(14,165,233,.15)':'rgba(255,255,255,.04)',
+                  color:form.svc_id===s.id?'#38bdf8':'rgba(186,230,253,.6)'}}>
+                <span style={{fontSize:13,fontWeight:700}}>{s.nome}</span>
+                <span style={{fontSize:13,fontWeight:800,color:'#4ade80'}}>R$ {parseFloat(s.valor).toFixed(2).replace('.',',')}</span>
+              </button>
+            ))
+          }
         </div>
-
-        {err&&<div style={{padding:"10px 14px",borderRadius:12,background:"rgba(239,68,68,.12)",
-          border:"1px solid rgba(239,68,68,.3)",color:"#f87171",fontSize:13,marginBottom:14}}>{err}</div>}
-
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={onClose} className="btn btn-ghost">Cancelar</button>
-          <button onClick={()=>{
-            // Fix: setF returns undefined, chain separately
-            const s=svcs.find(x=>x.id===form.svc_id);
-            if(s){form.svc_nome=s.nome;form.svc_valor=s.valor;}
-            confirmar();
-          }} disabled={saving} className="btn btn-primary">
-            {saving?<div className="spin" style={{width:16,height:16}}/>:"✅ Confirmar Cadastro"}
+        {erro&&<div style={{padding:'10px 14px',borderRadius:12,background:'rgba(239,68,68,.12)',
+          border:'1px solid rgba(239,68,68,.3)',color:'#f87171',fontSize:13,marginBottom:14}}>{erro}</div>}
+        <div style={{display:'flex',gap:10}}>
+          <button onClick={onClose} className='btn'
+            style={{background:'rgba(255,255,255,.05)',border:'1px solid rgba(125,211,252,.15)',color:'rgba(186,230,253,.5)'}}>
+            Cancelar
+          </button>
+          <button onClick={confirmar} disabled={saving} className='btn'
+            style={{background:'linear-gradient(135deg,#0ea5e9,#0284c7)',color:'#fff',boxShadow:'0 6px 20px rgba(14,165,233,.35)',opacity:saving?.6:1}}>
+            {saving?<div className='spin' style={{width:16,height:16}}/>:'✅ Confirmar'}
           </button>
         </div>
       </div>
@@ -288,216 +230,178 @@ function CadastroModal({empresa,onClose,onSuccess}){
   );
 }
 
-// ── Tela da fila da empresa ─────────────────────────────────────────────────
+/* ── Fila da empresa ── */
 function FilaScreen({empresa,onVoltar}){
   const [fila,setFila]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [busca,setBusca]=useState("");
+  const [load,setLoad]=useState(true);
+  const [busca,setBusca]=useState('');
   const [updated,setUpdated]=useState(null);
-  const [showCadastro,setShowCadastro]=useState(false);
-  const [toast,setToast]=useState("");
-  const chRef=useRef(null);
+  const [showForm,setShowForm]=useState(false);
+  const [toast,setToast]=useState('');
+  const ch=useRef(null);
 
-  const fetchFila=useCallback(()=>{
-    sb.from("ordens_servico")
-      .select("id,plate,model,status,color,created_at,hora_entrega")
-      .eq("empresa_id",empresa.id)
-      .in("status",["Aguardando","Lavando","Concluído"])
-      .order("created_at",{ascending:true})
-      .then(({data})=>{setFila(data||[]);setUpdated(new Date());setLoading(false);});
+  const fetch=useCallback(()=>{
+    sb.from('ordens_servico')
+      .select('id,plate,model,status,color,created_at,hora_entrega')
+      .eq('empresa_id',empresa.id)
+      .in('status',['Aguardando','Lavando','Concluído'])
+      .order('created_at',{ascending:true})
+      .then(({data,error})=>{
+        if(!error){setFila(data||[]);setUpdated(new Date());}
+        setLoad(false);
+      });
   },[empresa.id]);
 
   useEffect(()=>{
-    fetchFila();
-    if(chRef.current)sb.removeChannel(chRef.current);
-    const ch=sb.channel("fp-"+empresa.id)
-      .on("postgres_changes",{event:"*",schema:"public",table:"ordens_servico",
-        filter:"empresa_id=eq."+empresa.id},()=>fetchFila())
+    fetch();
+    if(ch.current)sb.removeChannel(ch.current);
+    ch.current=sb.channel('fp'+empresa.id)
+      .on('postgres_changes',{event:'*',schema:'public',table:'ordens_servico',
+        filter:'empresa_id=eq.'+empresa.id},fetch)
       .subscribe();
-    chRef.current=ch;
-    return()=>{if(chRef.current)sb.removeChannel(chRef.current);};
-  },[fetchFila]);
+    return()=>{if(ch.current)sb.removeChannel(ch.current);};
+  },[fetch]);
 
-  const showToast=(msg)=>{setToast(msg);setTimeout(()=>setToast(""),4000);};
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(''),4000);};
 
   const bNorm=busca.trim().toLowerCase();
   const filtrada=bNorm?fila.filter(c=>c.model?.toLowerCase().includes(bNorm)):fila;
-  const porSt=ORDER.reduce((a,s)=>{a[s]=filtrada.filter(c=>c.status===s);return a;},{});
-  const totalAg=fila.filter(c=>c.status==="Aguardando").length;
-  const totalLv=fila.filter(c=>c.status==="Lavando").length;
-  const totalPr=fila.filter(c=>c.status==="Concluído").length;
+  const porSt=ORDEM.reduce((a,s)=>{a[s]=filtrada.filter(c=>c.status===s);return a;},{});
 
   return(
-    <div style={{maxWidth:480,margin:"0 auto",paddingBottom:100}}>
-      {/* Header */}
-      <div style={{padding:"16px 16px 0"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+    <div style={{maxWidth:480,margin:'0 auto',paddingBottom:100}}>
+      <div style={{padding:'16px 16px 0'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
           <button onClick={onVoltar}
-            style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.06)",
-              border:"1px solid rgba(125,211,252,.15)",display:"flex",alignItems:"center",
-              justifyContent:"center",cursor:"pointer",flexShrink:0,fontSize:16}}>←</button>
+            style={{width:36,height:36,borderRadius:10,background:'rgba(255,255,255,.06)',
+              border:'1px solid rgba(125,211,252,.15)',color:'#e0f2fe',fontSize:18,
+              cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>←</button>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:11,color:"rgba(186,230,253,.4)",fontWeight:700,
-              textTransform:"uppercase",letterSpacing:".1em"}}>Fila em Tempo Real</div>
-            <div style={{fontSize:17,fontWeight:900,color:"#e0f2fe",
-              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{empresa.nome_fantasia}</div>
+            <div style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em'}}>Fila em Tempo Real</div>
+            <div style={{fontSize:16,fontWeight:900,color:'#e0f2fe',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{empresa.nome_fantasia}</div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:99,
-            background:"rgba(74,222,128,.1)",border:"1px solid rgba(74,222,128,.25)",flexShrink:0}}>
-            <div className="pulse" style={{width:6,height:6,borderRadius:99,background:"#4ade80"}}/>
-            <span style={{fontSize:10,fontWeight:800,color:"#4ade80"}}>AO VIVO</span>
+          <div style={{display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:99,
+            background:'rgba(74,222,128,.1)',border:'1px solid rgba(74,222,128,.25)',flexShrink:0}}>
+            <div className='pulse' style={{width:6,height:6,borderRadius:99,background:'#4ade80'}}/>
+            <span style={{fontSize:10,fontWeight:800,color:'#4ade80'}}>AO VIVO</span>
           </div>
         </div>
-
-        {/* KPIs */}
-        <div style={{display:"flex",gap:8,marginBottom:14}}>
-          {[{l:"Na fila",v:totalAg,c:"#fbbf24"},{l:"Lavando",v:totalLv,c:"#38bdf8"},{l:"Prontos",v:totalPr,c:"#4ade80"}].map(k=>(
-            <div key={k.l} style={{flex:1,padding:"10px 6px",borderRadius:14,textAlign:"center",
-              background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)"}}>
-              <div style={{fontSize:22,fontWeight:900,color:k.c}}>{k.v}</div>
-              <div style={{fontSize:10,color:"rgba(186,230,253,.4)",fontWeight:600,marginTop:1}}>{k.l}</div>
+        <div style={{display:'flex',gap:8,marginBottom:14}}>
+          {[{l:'Na fila',v:fila.filter(c=>c.status==='Aguardando').length,c:'#fbbf24'},
+            {l:'Lavando',v:fila.filter(c=>c.status==='Lavando').length,c:'#38bdf8'},
+            {l:'Prontos',v:fila.filter(c=>c.status==='Concluído').length,c:'#4ade80'}].map(k=>(
+            <div key={k.l} style={{flex:1,padding:'10px 6px',borderRadius:14,textAlign:'center',
+              background:'rgba(255,255,255,.04)',border:'1px solid rgba(125,211,252,.1)'}}>
+              <div style={{fontSize:20,fontWeight:900,color:k.c}}>{k.v}</div>
+              <div style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:600,marginTop:1}}>{k.l}</div>
             </div>
           ))}
         </div>
-
-        {/* Busca por modelo */}
-        <div style={{position:"relative",marginBottom:16}}>
-          <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",fontSize:14,pointerEvents:"none"}}>🔍</span>
+        <div style={{position:'relative',marginBottom:16}}>
+          <span style={{position:'absolute',left:13,top:'50%',transform:'translateY(-50%)',fontSize:14,pointerEvents:'none'}}>🔍</span>
           <input value={busca} onChange={e=>setBusca(e.target.value)}
-            placeholder="Buscar pelo modelo do seu carro..."
-            className="inp" style={{paddingLeft:38,fontSize:13}}/>
-          {busca&&<button onClick={()=>setBusca("")}
-            style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
-              background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:18,cursor:"pointer"}}>×</button>}
+            placeholder='Buscar pelo modelo do seu carro...' className='inp' style={{paddingLeft:38,fontSize:13}}/>
+          {busca&&<button onClick={()=>setBusca('')}
+            style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',
+              background:'transparent',border:'none',color:'rgba(186,230,253,.4)',fontSize:18,cursor:'pointer'}}>×</button>}
         </div>
       </div>
 
-      {/* Fila por status */}
-      {loading?<div style={{textAlign:"center",padding:40}}><div className="spin"/></div>:(
+      {load?<div style={{textAlign:'center',padding:40}}><div className='spin' style={{margin:'0 auto'}}/></div>:(
         <>
-          {bNorm&&filtrada.length===0&&(
-            <div style={{textAlign:"center",padding:"28px 20px"}}>
-              <div style={{fontSize:32,marginBottom:10}}>🔍</div>
-              <div style={{color:"rgba(186,230,253,.5)",fontSize:13,fontWeight:600}}>
-                "{busca}" não está na fila no momento
-              </div>
-            </div>
-          )}
-          {ORDER.map(status=>{
+          {ORDEM.map(status=>{
             const carros=porSt[status];
-            const cfg=ST[status];
-            if(!cfg||(!carros?.length&&!bNorm))return null;
+            const cfg=ST_CFG[status];
+            if(!cfg||(!carros.length&&!bNorm))return null;
             return(
-              <div key={status} style={{padding:"0 16px",marginBottom:20}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div key={status} style={{padding:'0 16px',marginBottom:20}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
                   <span style={{fontSize:16}}>{cfg.e}</span>
                   <span style={{fontSize:12,fontWeight:800,color:cfg.c}}>{cfg.l}</span>
-                  <div style={{flex:1,height:1,background:cfg.c+"30"}}/>
-                  <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
-                    background:cfg.bg,border:"1px solid "+cfg.b,color:cfg.c}}>{carros.length}</span>
+                  <div style={{flex:1,height:1,background:cfg.c+'30'}}/>
+                  <span style={{fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99,
+                    background:cfg.bg,border:'1px solid '+cfg.b,color:cfg.c}}>{carros.length}</span>
                 </div>
-                {!carros.length?(
-                  <div style={{textAlign:"center",padding:"12px 0",color:"rgba(186,230,253,.2)",fontSize:12}}>
-                    Nenhum veículo aqui agora
-                  </div>
-                ):carros.map((c,i)=>{
-                  const hl=bNorm&&c.model?.toLowerCase().includes(bNorm);
-                  const pos=porSt["Aguardando"].findIndex(x=>x.id===c.id);
-                  const hora=c.hora_entrega
-                    ?new Date(c.hora_entrega).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})
-                    :null;
-                  return(
-                    <div key={c.id} className={"card"+(hl?" hl":"")}>
-                      <div style={{display:"flex",alignItems:"center",gap:12}}>
-                        <div style={{width:38,height:38,borderRadius:12,flexShrink:0,
-                          background:(c.color||"#38bdf8")+"22",border:"1px solid "+(c.color||"#38bdf8")+"44",
-                          display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🚗</div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:13,fontWeight:800,color:"#e0f2fe"}}>{mascaraPlaca(c.plate)}</div>
-                          <div style={{fontSize:11,color:"rgba(186,230,253,.5)",marginTop:1}}>
-                            {c.model}{hora&&<span style={{color:"#38bdf8",marginLeft:5}}>· ⏰ {hora}</span>}
+                {!carros.length
+                  ?<div style={{textAlign:'center',padding:'12px 0',color:'rgba(186,230,253,.2)',fontSize:12}}>Nenhum veículo aqui agora</div>
+                  :carros.map((c,i)=>{
+                    const hl=bNorm&&c.model?.toLowerCase().includes(bNorm);
+                    const pos=porSt['Aguardando'].findIndex(x=>x.id===c.id);
+                    const hora=c.hora_entrega?new Date(c.hora_entrega).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):null;
+                    return(
+                      <div key={c.id} className={'card'+(hl?' hl':'')}>
+                        <div style={{display:'flex',alignItems:'center',gap:12}}>
+                          <div style={{width:38,height:38,borderRadius:12,flexShrink:0,
+                            background:(c.color||'#38bdf8')+'22',border:'1px solid '+(c.color||'#38bdf8')+'44',
+                            display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>🚗</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:800,color:'#e0f2fe'}}>{mascaraPlaca(c.plate)}</div>
+                            <div style={{fontSize:11,color:'rgba(186,230,253,.5)',marginTop:1}}>
+                              {c.model}{hora&&<span style={{color:'#38bdf8',marginLeft:5}}>· ⏰ {hora}</span>}
+                            </div>
+                          </div>
+                          <div style={{fontSize:11,flexShrink:0,textAlign:'right'}}>
+                            {status==='Aguardando'&&<div style={{color:'rgba(186,230,253,.35)'}}>{pos===0?'Próximo':'#'+(pos+1)}</div>}
+                            {status==='Lavando'&&<div className='pulse' style={{color:'#38bdf8',fontWeight:700}}>Lavando</div>}
+                            {status==='Concluído'&&<div style={{color:'#4ade80',fontWeight:700}}>Pronto!</div>}
                           </div>
                         </div>
-                        <div style={{fontSize:11,flexShrink:0,textAlign:"right"}}>
-                          {status==="Aguardando"&&<div style={{color:"rgba(186,230,253,.35)"}}>
-                            {pos===0?"Próximo":"#"+(pos+1)}
-                          </div>}
-                          {status==="Lavando"&&<div className="pulse" style={{color:"#38bdf8",fontWeight:700}}>Lavando</div>}
-                          {status==="Concluído"&&<div style={{color:"#4ade80",fontWeight:700}}>Pronto!</div>}
-                        </div>
+                        {hl&&(
+                          <div style={{marginTop:10,padding:'10px 12px',borderRadius:12,
+                            background:'rgba(14,165,233,.15)',border:'1px solid rgba(14,165,233,.35)'}}>
+                            <div style={{fontSize:13,fontWeight:700,color:'#38bdf8',marginBottom:2}}>
+                              {status==='Aguardando'&&('⏳ Na fila'+(pos===0?' — próximo!':' — posição '+(pos+1)))}
+                              {status==='Lavando'&&'🧼 Sendo lavado agora!'}
+                              {status==='Concluído'&&'✅ Pronto para retirada!'}
+                            </div>
+                            <div style={{fontSize:11,color:'rgba(56,189,248,.7)'}}>
+                              {status==='Aguardando'&&pos===0&&'Previsão: em breve!'}
+                              {status==='Aguardando'&&pos>0&&'Previsão: ~'+(pos*20)+' min'}
+                              {status==='Lavando'&&'Previsão: ~25 min'}
+                              {status==='Concluído'&&'Pode vir buscar agora 🎉'}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      {hl&&(
-                        <div style={{marginTop:10,padding:"10px 12px",borderRadius:12,
-                          background:"rgba(14,165,233,.15)",border:"1px solid rgba(14,165,233,.35)"}}>
-                          <div style={{fontSize:13,fontWeight:700,color:"#38bdf8",marginBottom:2}}>
-                            {status==="Aguardando"&&("⏳ Na fila"+(pos===0?" — próximo!":" — posição "+(pos+1)))}
-                            {status==="Lavando"&&"🧼 Sendo lavado agora!"}
-                            {status==="Concluído"&&"✅ Pronto para retirada!"}
-                          </div>
-                          <div style={{fontSize:11,color:"rgba(56,189,248,.7)"}}>
-                            {status==="Aguardando"&&pos===0&&"Previsão: em breve!"}
-                            {status==="Aguardando"&&pos>0&&"Previsão: ~"+(pos*20)+" min"}
-                            {status==="Lavando"&&"Previsão: ~25 min"}
-                            {status==="Concluído"&&"Pode vir buscar agora 🎉"}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                }
               </div>
             );
           })}
           {!bNorm&&!fila.length&&(
-            <div style={{textAlign:"center",padding:"50px 20px"}}>
+            <div style={{textAlign:'center',padding:'50px 20px'}}>
               <div style={{fontSize:44,marginBottom:12}}>🚗</div>
-              <div style={{fontSize:15,fontWeight:700,color:"rgba(186,230,253,.5)",marginBottom:6}}>Fila vazia!</div>
-              <div style={{fontSize:12,color:"rgba(186,230,253,.25)"}}>Ótimo momento para trazer seu carro 😊</div>
+              <div style={{fontSize:14,fontWeight:700,color:'rgba(186,230,253,.5)',marginBottom:4}}>Fila vazia!</div>
+              <div style={{fontSize:12,color:'rgba(186,230,253,.25)'}}>Ótimo momento para trazer seu carro 😊</div>
             </div>
           )}
         </>
       )}
 
-      {/* Rodapé */}
-      {updated&&!loading&&(
-        <div style={{textAlign:"center",padding:"8px 20px",fontSize:10,color:"rgba(186,230,253,.2)"}}>
-          Atualizado às {updated.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})} · Lava Rápido Pro
+      {updated&&!load&&(
+        <div style={{textAlign:'center',padding:'8px 20px',fontSize:10,color:'rgba(186,230,253,.2)'}}>
+          Atualizado às {updated.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · Lava Rápido Pro
         </div>
       )}
 
-      {/* Botão flutuante de cadastro */}
-      <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",zIndex:50,width:"calc(100% - 32px)",maxWidth:448}}>
-        <button onClick={()=>setShowCadastro(true)}
-          style={{width:"100%",padding:"15px 20px",borderRadius:18,cursor:"pointer",
-            background:"linear-gradient(135deg,#0ea5e9,#0284c7)",border:"none",
-            color:"#fff",fontSize:15,fontWeight:800,
-            boxShadow:"0 8px 28px rgba(14,165,233,.45)",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-          ➕ Agendar Lavagem / Entrar na Fila
+      <div style={{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',zIndex:50,width:'calc(100% - 32px)',maxWidth:448}}>
+        <button onClick={()=>setShowForm(true)} className='btn'
+          style={{background:'linear-gradient(135deg,#0ea5e9,#0284c7)',color:'#fff',
+            boxShadow:'0 8px 28px rgba(14,165,233,.4)',fontSize:14}}>
+          ➕ Agendar / Entrar na Fila
         </button>
       </div>
 
-      {/* Modal de cadastro */}
-      {showCadastro&&(
-        <CadastroModal
-          empresa={empresa}
-          onClose={()=>setShowCadastro(false)}
-          onSuccess={()=>{
-            setShowCadastro(false);
-            showToast("🎉 Prontinho! Seu veículo foi adicionado à fila.");
-            fetchFila();
-          }}
-        />
-      )}
+      {showForm&&<CadastroModal empresa={empresa} onClose={()=>setShowForm(false)}
+        onSuccess={()=>{setShowForm(false);showToast('🎉 Prontinho! Seu veículo foi adicionado à fila.');fetch();}}/>}
 
-      {/* Toast */}
       {toast&&(
-        <div style={{position:"fixed",bottom:90,left:"50%",transform:"translateX(-50%)",
-          background:"rgba(15,23,42,.95)",backdropFilter:"blur(16px)",
-          border:"1px solid rgba(56,189,248,.2)",color:"#e0f2fe",
-          fontSize:13,fontWeight:600,padding:"12px 20px",borderRadius:16,
-          boxShadow:"0 8px 24px rgba(0,0,0,.4)",zIndex:300,
-          maxWidth:"calc(100vw - 32px)",textAlign:"center",lineHeight:1.4}}>
+        <div style={{position:'fixed',bottom:90,left:'50%',transform:'translateX(-50%)',
+          background:'rgba(15,23,42,.95)',backdropFilter:'blur(16px)',
+          border:'1px solid rgba(56,189,248,.2)',color:'#e0f2fe',fontSize:13,fontWeight:600,
+          padding:'12px 20px',borderRadius:16,boxShadow:'0 8px 24px rgba(0,0,0,.4)',
+          zIndex:300,maxWidth:'calc(100vw - 32px)',textAlign:'center',lineHeight:1.4}}>
           {toast}
         </div>
       )}
@@ -505,50 +409,33 @@ function FilaScreen({empresa,onVoltar}){
   );
 }
 
-// ── App principal ───────────────────────────────────────────────────────────
+/* ── App ── */
 function App(){
   const [empresa,setEmpresa]=useState(null);
-  const [initLoading,setInitLoading]=useState(!!getUrlEmpresaId());
+  const [initLoad,setInitLoad]=useState(false);
 
   useEffect(()=>{
-    const id=getUrlEmpresaId();
-    if(!id){setInitLoading(false);return;}
-    sb.from("empresas").select("id,nome_fantasia,telefone").eq("id",id).single()
-      .then(({data})=>{
-        if(data)setEmpresa(data);
-        setInitLoading(false);
-      })
-      .catch(()=>setInitLoading(false));
+    const id=getEmpresaId();
+    if(!id)return;
+    setInitLoad(true);
+    sb.from('empresas').select('id,nome_fantasia,telefone').eq('id',id).single()
+      .then(({data})=>{if(data)setEmpresa(data);setInitLoad(false);})
+      .catch(()=>setInitLoad(false));
   },[]);
 
-  if(initLoading)return(
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",
-      justifyContent:"center",height:"100vh",gap:16}}>
-      <div className="spin"/>
-      <div style={{color:"rgba(186,230,253,.4)",fontSize:14}}>Carregando...</div>
+  if(initLoad)return(
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',flexDirection:'column',gap:16}}>
+      <div className='spin'/>
+      <div style={{color:'rgba(186,230,253,.4)',fontSize:14}}>Carregando...</div>
     </div>
   );
 
-  if(empresa){
-    return <FilaScreen empresa={empresa} onVoltar={()=>setEmpresa(null)}/>;
-  }
-  return <BuscaEmpresaScreen onSelect={e=>setEmpresa(e)}/>;
+  return empresa
+    ?<FilaScreen empresa={empresa} onVoltar={()=>setEmpresa(null)}/>
+    :<BuscaScreen onSelect={setEmpresa}/>;
 }
 
-class ErrorBoundary extends React.Component{
-  constructor(p){super(p);this.state={err:null};}
-  static getDerivedStateFromError(e){return{err:e.message};}
-  render(){
-    if(this.state.err)return(
-      <div style={{padding:24,color:"#f87171",fontFamily:"monospace",fontSize:12,wordBreak:"break-all"}}>
-        <div style={{fontSize:16,marginBottom:8}}>❌ Erro no app:</div>
-        {this.state.err}
-      </div>
-    );
-    return this.props.children;
-  }
-}
-ReactDOM.createRoot(document.getElementById("root")).render(<ErrorBoundary><App/></ErrorBoundary>);
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>
