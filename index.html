@@ -2208,6 +2208,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState("");
   const [paymentFilter,setPaymentFilter]=useState("todos");
+  const [filtrarHoje,setFiltrarHoje]=useState(false);
   const [editando,setEditando]=useState(null);     // id do registro em edição
   const [editForm,setEditForm]=useState({});        // {forma_pagamento, status_pagamento, lavado_por}
   const [salvandoEdit,setSalvandoEdit]=useState(false);
@@ -2268,7 +2269,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
     setEditando(h.id);
   };
 
-  // Filtros cumulativos — estornado é excluído dos totais mas ainda aparece na lista
+  // Filtros cumulativos: busca + pagamento + hoje
   const filtered=useMemo(()=>
     hist.filter(h=>{
       const matchSearch=
@@ -2276,9 +2277,10 @@ function HistoryScreen({empresaId,embedded,isOwner}){
         h.plate?.toLowerCase().includes(search.toLowerCase())||
         h.model?.toLowerCase().includes(search.toLowerCase());
       const matchPayment=paymentFilter==="todos"||h.forma_pagamento===paymentFilter;
-      return matchSearch&&matchPayment;
+      const matchHoje=!filtrarHoje||daysSince(h.completed_at)===0;
+      return matchSearch&&matchPayment&&matchHoje;
     })
-  ,[hist,search,paymentFilter]);
+  ,[hist,search,paymentFilter,filtrarHoje]);
 
   // Totalizador exclui estornados — não contam para receita
   const totalFiltrado=useMemo(()=>
@@ -2306,7 +2308,6 @@ function HistoryScreen({empresaId,embedded,isOwner}){
     {id:"cartao",  label:"Cartão",   color:"#a78bfa"},
   ];
 
-  // Config visual por status_pagamento
   const STATUS_PGTO={
     pago:     {label:"Pago",      color:"#4ade80", bg:"rgba(74,222,128,.15)",  border:"rgba(74,222,128,.3)"},
     pendente: {label:"Fiado",     color:"#fbbf24", bg:"rgba(251,191,36,.15)",  border:"rgba(251,191,36,.3)"},
@@ -2314,20 +2315,24 @@ function HistoryScreen({empresaId,embedded,isOwner}){
     estornado:{label:"Estornado", color:"#94a3b8", bg:"rgba(148,163,184,.1)",  border:"rgba(148,163,184,.25)"},
   };
 
+  // Totais por método calculados a partir da base já filtrada por data e busca
+  // Isso garante que ao ativar "Limpo hoje" os valores das pílulas mudem
   const totaisPorMetodo=useMemo(()=>{
-    const base=hist.filter(h=>
-      (h.client?.toLowerCase().includes(search.toLowerCase())||
-       h.plate?.toLowerCase().includes(search.toLowerCase())||
-       h.model?.toLowerCase().includes(search.toLowerCase()))&&
-      h.status_pagamento!=="estornado"
-    );
+    const base=hist.filter(h=>{
+      const matchSearch=
+        h.client?.toLowerCase().includes(search.toLowerCase())||
+        h.plate?.toLowerCase().includes(search.toLowerCase())||
+        h.model?.toLowerCase().includes(search.toLowerCase());
+      const matchHoje=!filtrarHoje||daysSince(h.completed_at)===0;
+      return matchSearch&&matchHoje&&h.status_pagamento!=="estornado";
+    });
     return{
       todos:   base.reduce((s,h)=>s+(parseFloat(h.value)||0),0),
       pix:     base.filter(h=>h.forma_pagamento==="pix").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
       dinheiro:base.filter(h=>h.forma_pagamento==="dinheiro").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
       cartao:  base.filter(h=>h.forma_pagamento==="cartao").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
     };
-  },[hist,search]);
+  },[hist,search,filtrarHoje]);
 
   const saveMov=async()=>{
     if(!form.valor||!form.descricao)return;
@@ -2375,7 +2380,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
           </div>
 
           {/* Chips de filtro por forma de pagamento com totais */}
-          <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
             {PAYMENT_FILTERS.map(f=>{
               const ativo=paymentFilter===f.id;
               const total=totaisPorMetodo[f.id]||0;
@@ -2397,6 +2402,28 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                 </button>
               );
             })}
+          </div>
+
+          {/* Filtro de data — Limpo hoje */}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+            <button onClick={()=>setFiltrarHoje(v=>!v)}
+              style={{padding:"5px 14px",borderRadius:99,fontSize:12,fontWeight:700,cursor:"pointer",
+                border:`1px solid ${filtrarHoje?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+                background:filtrarHoje?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
+                color:filtrarHoje?"#38bdf8":"rgba(186,230,253,.4)",
+                transition:"all .15s",display:"flex",alignItems:"center",gap:5}}>
+              🧼 Limpo hoje
+              {filtrarHoje&&(
+                <span style={{fontSize:10,fontWeight:800,color:"#38bdf8"}}>
+                  ({filtered.length})
+                </span>
+              )}
+            </button>
+            {filtrarHoje&&(
+              <span style={{fontSize:11,color:"rgba(186,230,253,.35)"}}>
+                {new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})}
+              </span>
+            )}
           </div>
 
           {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
