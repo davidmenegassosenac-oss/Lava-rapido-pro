@@ -916,7 +916,8 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     setSvcs(s=>s.filter(x=>x.id!==id));
   };
 
-  const planoAtual=plano||"trial";
+  const planoAtual=(plano&&plano!=="undefined"&&plano!=="null")?plano:"trial";
+  const SEMPRE_LIVRE=new Set(["empresa","assinatura","servicos"]);
   const ALL_CONFIG_TABS=[
     ["relatorios","📈 Relatórios",isOwner],
     ["folha","💸 Folha",isOwner],
@@ -930,7 +931,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     <div className="scroll screen-enter">
       <div style={{display:"flex",width:"100%",marginBottom:18,borderBottom:"1px solid rgba(125,211,252,.15)",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
         {ALL_CONFIG_TABS.map(([k,l])=>{
-          const bloqueado=!checkFeature(planoAtual,k);
+          const bloqueado=!SEMPRE_LIVRE.has(k)&&!checkFeature(planoAtual,k);
           const minimo=FEATURE_PLANO_MINIMO[k];
           return(
             <button key={k} onClick={()=>{
@@ -4068,7 +4069,7 @@ function App(){
   }
 
   const isOwner=profile.role==="owner";
-  const planoApp=assInfo?.plano||"trial";
+  const planoApp=assInfo?.plano||empresa?.plano||"trial";
   const ALL_TABS=[
     {id:"home",    label:"Fila",      icon:"Home",     roles:["owner","employee"]},
     {id:"new",     label:"Nova",      icon:"Plus",     roles:["owner","employee"]},
@@ -4129,7 +4130,7 @@ function App(){
         {safeTab==="new"     &&<NewWashScreen  key="new"     empresaId={profile.empresa_id} userId={profile.id} onSuccess={()=>{setTab("home");showToast("✅ Veículo adicionado à fila!");}}/>}
         {safeTab==="crm"     &&isOwner&&<CRMScreen     key="crm"     empresaId={profile.empresa_id} onBadgeUpdate={()=>setCrmBadge(0)}/>}
         {safeTab==="history"&&<HistoryScreen key="history" empresaId={profile.empresa_id} isOwner={isOwner}/>}
-        {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} plano={assInfo?.plano||"trial"} onUpgrade={()=>setTab("config")} onUpdate={name=>{setEmpresa(e=>({...e,nome_fantasia:name}));showToast("✅ "+name+" atualizado!");}}/>}
+        {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} plano={assInfo?.plano||empresa?.plano||"trial"} onUpgrade={()=>setTab("config")} onUpdate={name=>{setEmpresa(e=>({...e,nome_fantasia:name}));showToast("✅ "+name+" atualizado!");}}/>}
       </div>
 
       {/* Bottom nav — flexShrink:0 garante que nunca seja comprimida nem empurrada para fora */}
