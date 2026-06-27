@@ -3216,10 +3216,10 @@ function FolhaScreen({empresaId,embedded}){
       sb.from("funcionario_diaria").select("*").eq("empresa_id",empresaId),
       sb.from("folha_pagamentos").select("*").eq("empresa_id",empresaId).eq("semana_ref",semana).order("created_at",{ascending:false}),
       sb.from("folha_dias_trabalhados").select("*").eq("empresa_id",empresaId).eq("semana_ref",semana),
-      // Faturamento direto do historico — mais confiável que RPC
-      sb.from("historico").select("value").eq("empresa_id",empresaId)
-        .gte("completed_at",inicio).lte("completed_at",fim+"T23:59:59")
-        .neq("status_pagamento","estornado"),
+      // Busca sem filtro de status — filtramos no JS para tratar NULL corretamente
+      // (SQL: NULL != 'estornado' = NULL/false; JS: null !== 'estornado' = true)
+      sb.from("historico").select("value,status_pagamento").eq("empresa_id",empresaId)
+        .gte("completed_at",inicio).lte("completed_at",fim+"T23:59:59"),
     ]);
     setFuncionarios(funcs||[]);
     const dMap={};
@@ -3233,8 +3233,10 @@ function FolhaScreen({empresaId,embedded}){
     const dmMap={};(dias||[]).forEach(d=>{dmMap[d.profile_id]=d.dias;});
     setDiasMap(dmMap);
 
-    // Calcular performance localmente — sem depender de RPC
-    const faturamento=(histSemana||[]).reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+    // Filtra estornados no JS — null !== 'estornado' é true (correto)
+    const faturamento=(histSemana||[])
+      .filter(h=>h.status_pagamento!=="estornado")
+      .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
     const folha=(pgtos||[]).reduce((s,p)=>s+(parseFloat(p.valor)||0),0);
     const percentual=faturamento>0?Math.round((folha/faturamento)*1000)/10:null;
     setPerformance({faturamento,folha,percentual});
