@@ -3181,6 +3181,7 @@ function FolhaScreen({empresaId,embedded}){
   const [savingConfig,setSavingConfig]=useState(false);
   const [savingDias,setSavingDias]=useState(null);
   const [searchTerm,setSearchTerm]=useState("");
+  const [debugPerf,setDebugPerf]=useState("");
 
   function getSemanaAtual(){
     const d=new Date();
@@ -3228,11 +3229,9 @@ function FolhaScreen({empresaId,embedded}){
     setPagamentos(pgtos||[]);
     const dmMap={};(dias||[]).forEach(d=>{dmMap[d.profile_id]=d.dias;});
     setDiasMap(dmMap);
-    // Debug — remover após confirmar
-    console.log("perf raw:", perf, "type:", typeof perf);
     const perfData=typeof perf==="string"?JSON.parse(perf):perf;
-    console.log("perf parsed:", perfData);
     setPerformance(perfData);
+    setDebugPerf(JSON.stringify({raw:perf,parsed:perfData}));
     // Buscar comissões para funcionários com tipo comissao/misto
     const funcsComissao=(funcs||[]).filter(f=>dMap[f.id]?.tipo_pagamento!=="diaria");
     if(funcsComissao.length>0){
@@ -3378,6 +3377,7 @@ function FolhaScreen({empresaId,embedded}){
 
   return(
     <div style={{padding:embedded?"0":"0 0 20px"}}>
+      {/* DEBUG — remover depois */}
       <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
         {semanas.map(s=>(
           <button key={s} onClick={()=>setSemana(s)}
@@ -3390,8 +3390,8 @@ function FolhaScreen({empresaId,embedded}){
         ))}
       </div>
 
-      {/* Feature 3: Indicador de performance */}
-      {performance&&(
+      {/* Card de performance ou debug */}
+      {performance?(
         <div className="glass-card" style={{padding:14,marginBottom:14,
           borderColor:pct!=null&&pct>50?"rgba(248,113,113,.3)":pct!=null&&pct>35?"rgba(251,191,36,.3)":"rgba(125,211,252,.2)"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
@@ -3420,6 +3420,12 @@ function FolhaScreen({empresaId,embedded}){
                 transition:"width .8s ease"}}/>
             </div>
           )}
+        </div>
+      ):(
+        <div style={{padding:"10px 14px",borderRadius:14,marginBottom:14,
+          background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.25)",
+          fontSize:11,color:"#fbbf24",wordBreak:"break-all",fontFamily:"monospace"}}>
+          🔍 perf={debugPerf||"null/undefined"}
         </div>
       )}
 
