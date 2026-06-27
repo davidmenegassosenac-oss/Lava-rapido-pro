@@ -3242,7 +3242,33 @@ function FolhaScreen({empresaId,embedded}){
     setLoading(false);
   },[empresaId,semana]);
 
-  useEffect(()=>{fetchTudo();},[fetchTudo]);
+  useEffect(()=>{
+    fetchTudo();
+
+    // Realtime: recalcula quando qualquer lavagem é paga (afeta faturamento semanal)
+    const chFaturamento=sb.channel("folha-fat-"+empresaId)
+      .on("postgres_changes",{event:"*",schema:"public",table:"historico",
+        filter:`empresa_id=eq.${empresaId}`},()=>fetchTudo())
+      .subscribe();
+
+    // Realtime: recalcula quando pagamentos da folha são lançados/alterados
+    const chFolha=sb.channel("folha-pgto-"+empresaId)
+      .on("postgres_changes",{event:"*",schema:"public",table:"folha_pagamentos",
+        filter:`empresa_id=eq.${empresaId}`},()=>fetchTudo())
+      .subscribe();
+
+    // Realtime: recalcula quando dias trabalhados são alterados (afeta comissões e saldo)
+    const chDias=sb.channel("folha-dias-"+empresaId)
+      .on("postgres_changes",{event:"*",schema:"public",table:"folha_dias_trabalhados",
+        filter:`empresa_id=eq.${empresaId}`},()=>fetchTudo())
+      .subscribe();
+
+    return()=>{
+      sb.removeChannel(chFaturamento);
+      sb.removeChannel(chFolha);
+      sb.removeChannel(chDias);
+    };
+  },[fetchTudo]);
 
   // Saldo por funcionário calculado localmente
   const saldoPorFunc=useMemo(()=>{
