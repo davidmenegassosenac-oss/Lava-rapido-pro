@@ -79,9 +79,9 @@ function BuscaScreen({onSelect}){
   useEffect(()=>{
     sb.from('empresas')
       .select('id,nome_fantasia,telefone')
-      .limit(5)
+      .limit(6)
       .then(({data,error})=>{
-        if(error)console.error('afiliadas error:',error.message);
+        if(error)console.error('afiliadas:',error.message);
         setAfiliadas(data||[]);
         setLoadAfil(false);
       });
