@@ -3211,12 +3211,15 @@ function FolhaScreen({empresaId,embedded}){
   const fetchTudo=useCallback(async()=>{
     setLoading(true);
     const{inicio,fim}=semanaParaDatas(semana);
-    const[{data:funcs},{data:dirs},{data:pgtos},{data:dias},{data:perf}]=await Promise.all([
+    const[{data:funcs},{data:dirs},{data:pgtos},{data:dias},{data:histSemana}]=await Promise.all([
       sb.from("profiles").select("id,name,role").eq("empresa_id",empresaId).eq("role","employee"),
       sb.from("funcionario_diaria").select("*").eq("empresa_id",empresaId),
       sb.from("folha_pagamentos").select("*").eq("empresa_id",empresaId).eq("semana_ref",semana).order("created_at",{ascending:false}),
       sb.from("folha_dias_trabalhados").select("*").eq("empresa_id",empresaId).eq("semana_ref",semana),
-      sb.rpc("fn_performance_semana",{p_empresa_id:empresaId,p_data_inicio:inicio,p_data_fim:fim}),
+      // Faturamento direto do historico — mais confiável que RPC
+      sb.from("historico").select("value").eq("empresa_id",empresaId)
+        .gte("completed_at",inicio).lte("completed_at",fim+"T23:59:59")
+        .neq("status_pagamento","estornado"),
     ]);
     setFuncionarios(funcs||[]);
     const dMap={};
@@ -3229,9 +3232,14 @@ function FolhaScreen({empresaId,embedded}){
     setPagamentos(pgtos||[]);
     const dmMap={};(dias||[]).forEach(d=>{dmMap[d.profile_id]=d.dias;});
     setDiasMap(dmMap);
-    const perfData=typeof perf==="string"?JSON.parse(perf):perf;
-    setPerformance(perfData);
-    setDebugPerf(`inicio:${inicio} fim:${fim} | perf:${JSON.stringify(perfData)}`);
+
+    // Calcular performance localmente — sem depender de RPC
+    const faturamento=(histSemana||[]).reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+    const folha=(pgtos||[]).reduce((s,p)=>s+(parseFloat(p.valor)||0),0);
+    const percentual=faturamento>0?Math.round((folha/faturamento)*1000)/10:null;
+    setPerformance({faturamento,folha,percentual});
+    setDebugPerf(`i:${inicio} f:${fim} fat:${faturamento} folha:${folha}`);
+
     // Buscar comissões para funcionários com tipo comissao/misto
     const funcsComissao=(funcs||[]).filter(f=>dMap[f.id]?.tipo_pagamento!=="diaria");
     if(funcsComissao.length>0){
