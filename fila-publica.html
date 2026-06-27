@@ -78,7 +78,10 @@ function BuscaScreen({onSelect}){
   useEffect(()=>{
     sb.from('empresas').select('id,nome_fantasia,telefone')
       .order('created_at',{ascending:false}).limit(5)
-      .then(({data})=>setAfiliadas(data||[]));
+      .then(({data,error})=>{
+        if(error)console.error('afiliadas error:',error);
+        setAfiliadas(data||[]);
+      });
   },[]);
 
   useEffect(()=>{
@@ -109,13 +112,21 @@ function BuscaScreen({onSelect}){
           placeholder='Digite o nome do lava-jato...'
           className='inp' style={{marginBottom:12}} autoFocus/>
         {/* Empresas afiliadas — atalhos rápidos */}
-        {!q&&afiliadas.length>0&&(
+        {!q&&(
           <div style={{marginBottom:20}}>
             <div style={{fontSize:11,fontWeight:700,color:'rgba(186,230,253,.4)',
               textTransform:'uppercase',letterSpacing:'.1em',marginBottom:12}}>
               🤝 Lavações Parceiras
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+            {afiliadas.length===0
+              ?<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                {[0,1,2,3].map(i=>(
+                  <div key={i} style={{height:90,borderRadius:16,
+                    background:'rgba(255,255,255,.04)',
+                    border:'1px solid rgba(125,211,252,.08)'}}/>
+                ))}
+              </div>
+              :<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
               {afiliadas.map((e,i)=>{
                 const ICONS=['🚗','💧','✨','🧼','⭐'];
                 const COLORS=['rgba(14,165,233,.15)','rgba(74,222,128,.12)','rgba(167,139,250,.12)','rgba(251,191,36,.12)','rgba(56,189,248,.1)'];
@@ -132,7 +143,8 @@ function BuscaScreen({onSelect}){
                   </button>
                 );
               })}
-            </div>
+              </div>
+            }
           </div>
         )}
         {load&&<div style={{textAlign:'center',padding:20}}><div className='spin' style={{margin:'0 auto'}}/></div>}
