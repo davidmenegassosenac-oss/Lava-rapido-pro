@@ -3203,6 +3203,7 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
   const [savingDias,setSavingDias]=useState(null);
   const [searchTerm,setSearchTerm]=useState("");
   const [debugPerf,setDebugPerf]=useState("");
+  const [fatSemana,setFatSemana]=useState(0);
 
   function getSemanaAtual(){
     const d=new Date();
@@ -3250,8 +3251,8 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
     const dmMap={};(dias||[]).forEach(d=>{dmMap[d.profile_id]=d.dias;});
     setDiasMap(dmMap);
 
-    // Faturamento vem do ConfigScreen via prop — usa select('*') igual ao HistoryScreen
-    const faturamento=faturamentoExterno||0;
+    // Faturamento calculado pelo useEffect próprio (reage à semana ativa)
+    const faturamento=fatSemana;
     const folha=(pgtos||[]).reduce((s,p)=>s+(parseFloat(p.valor)||0),0);
     const percentual=faturamento>0?Math.round((folha/faturamento)*1000)/10:null;
     setPerformance({faturamento,folha,percentual});
@@ -3298,13 +3299,30 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
     };
   },[fetchTudo]);
 
-  // Atualiza o card de performance quando o faturamento externo muda (Realtime)
+  // Faturamento vem do prop quando é a semana atual,
+  // mas para semanas anteriores buscamos direto com as datas corretas
   useEffect(()=>{
-    if(!performance)return;
-    const folha=performance.folha||0;
-    const percentual=faturamentoExterno>0?Math.round((folha/faturamentoExterno)*1000)/10:null;
-    setPerformance(p=>({...p,faturamento:faturamentoExterno||0,percentual}));
-  },[faturamentoExterno]);
+    const{inicio,fim}=semanaParaDatas(semana);
+    const inicioISO=new Date(inicio+"T00:00:00").toISOString();
+    const fimISO=new Date(fim+"T23:59:59").toISOString();
+    sb.from("historico").select("*")
+      .eq("empresa_id",empresaId)
+      .gte("completed_at",inicioISO)
+      .lte("completed_at",fimISO)
+      .then(({data})=>{
+        const fat=(data||[])
+          .filter(h=>h.status_pagamento!=="estornado")
+          .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+        setFatSemana(fat);
+      });
+  },[empresaId,semana]);
+  // Recalcula performance quando fatSemana muda (busca assíncrona por semana)
+  useEffect(()=>{
+    const folha=pagamentos.reduce((s,p)=>s+(parseFloat(p.valor)||0),0);
+    const percentual=fatSemana>0?Math.round((folha/fatSemana)*1000)/10:null;
+    setPerformance(prev=>prev?{...prev,faturamento:fatSemana,folha,percentual}:{faturamento:fatSemana,folha,percentual});
+  },[fatSemana,pagamentos]);
+
   const saldoPorFunc=useMemo(()=>{
     return funcionarios.reduce((acc,f)=>{
       const dias=diasMap[f.id]||0;
