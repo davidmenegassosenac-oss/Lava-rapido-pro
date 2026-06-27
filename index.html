@@ -834,7 +834,28 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [tab,setTab]=useState("relatorios");
   const [ignorarLimites,setIgnorarLimites]=useState(false);
   const [savingIgnorar,setSavingIgnorar]=useState(false);
+  // Faturamento semanal — calculado aqui e passado para FolhaScreen como prop
+  // Usa select('*') identicamente ao HistoryScreen que funciona corretamente
+  const [faturamentoSemana,setFaturamentoSemana]=useState(0);
   const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const fetchFaturamentoSemana=useCallback(async()=>{
+    const hoje=new Date();
+    const diaDaSemana=hoje.getDay()||7; // 1=Seg ... 7=Dom
+    const inicio=new Date(hoje);inicio.setDate(hoje.getDate()-(diaDaSemana-1));
+    inicio.setHours(0,0,0,0);
+    const fim=new Date(inicio);fim.setDate(inicio.getDate()+6);fim.setHours(23,59,59,999);
+    const{data}=await sb.from("historico").select("*")
+      .eq("empresa_id",empresaId)
+      .gte("completed_at",inicio.toISOString())
+      .lte("completed_at",fim.toISOString());
+    const total=(data||[])
+      .filter(h=>h.status_pagamento!=="estornado")
+      .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+    setFaturamentoSemana(total);
+  },[empresaId]);
+
+  useEffect(()=>{fetchFaturamentoSemana();},[fetchFaturamentoSemana]);
 
   useEffect(()=>{
     sb.from('empresas').select('*').eq('id',empresaId).single()
@@ -1178,7 +1199,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
           screen-enter" próprio, porque já estamos dentro de um. */}
       {tab==="relatorios"&&isOwner&&<RelatoriosScreen empresaId={empresaId} embedded/>}
       {tab==="equipe"&&isOwner&&<AdminScreen empresaId={empresaId} currentUser={currentUser} embedded/>}
-      {tab==="folha"&&isOwner&&<FolhaScreen empresaId={empresaId} embedded/>}
+      {tab==="folha"&&isOwner&&<FolhaScreen empresaId={empresaId} embedded faturamentoExterno={faturamentoSemana} onFaturamentoChange={fetchFaturamentoSemana}/>}
     </div>
   );
 }
@@ -3162,7 +3183,7 @@ function BarChart({data,color="#0ea5e9",height=80}){
    Separado do caixa_movimentos para não misturar receitas de lavagem
    com gastos de pessoal. Visível apenas para o owner.
 ══════════════════════════════════════════════════════════════════════════ */
-function FolhaScreen({empresaId,embedded}){
+function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}){
   const [funcionarios,setFuncionarios]=useState([]);
   const [diarias,setDiarias]=useState({});
   const [pagamentos,setPagamentos]=useState([]);
@@ -3211,15 +3232,11 @@ function FolhaScreen({empresaId,embedded}){
   const fetchTudo=useCallback(async()=>{
     setLoading(true);
     const{inicio,fim}=semanaParaDatas(semana);
-    const[{data:funcs},{data:dirs},{data:pgtos},{data:dias},{data:histSemana}]=await Promise.all([
+    const[{data:funcs},{data:dirs},{data:pgtos},{data:dias}]=await Promise.all([
       sb.from("profiles").select("id,name,role").eq("empresa_id",empresaId).eq("role","employee"),
       sb.from("funcionario_diaria").select("*").eq("empresa_id",empresaId),
       sb.from("folha_pagamentos").select("*").eq("empresa_id",empresaId).eq("semana_ref",semana).order("created_at",{ascending:false}),
       sb.from("folha_dias_trabalhados").select("*").eq("empresa_id",empresaId).eq("semana_ref",semana),
-      // Busca sem filtro de status — filtramos no JS para tratar NULL corretamente
-      // (SQL: NULL != 'estornado' = NULL/false; JS: null !== 'estornado' = true)
-      sb.from("historico").select("value,status_pagamento").eq("empresa_id",empresaId)
-        .gte("completed_at",inicio).lte("completed_at",fim+"T23:59:59"),
     ]);
     setFuncionarios(funcs||[]);
     const dMap={};
@@ -3233,14 +3250,12 @@ function FolhaScreen({empresaId,embedded}){
     const dmMap={};(dias||[]).forEach(d=>{dmMap[d.profile_id]=d.dias;});
     setDiasMap(dmMap);
 
-    // Filtra estornados no JS — null !== 'estornado' é true (correto)
-    const faturamento=(histSemana||[])
-      .filter(h=>h.status_pagamento!=="estornado")
-      .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+    // Faturamento vem do ConfigScreen via prop — usa select('*') igual ao HistoryScreen
+    const faturamento=faturamentoExterno||0;
     const folha=(pgtos||[]).reduce((s,p)=>s+(parseFloat(p.valor)||0),0);
     const percentual=faturamento>0?Math.round((folha/faturamento)*1000)/10:null;
     setPerformance({faturamento,folha,percentual});
-    setDebugPerf(`i:${inicio} f:${fim} fat:${faturamento} folha:${folha}`);
+    setDebugPerf(`fat:${faturamento} folha:${folha} pct:${percentual}`);
 
     // Buscar comissões para funcionários com tipo comissao/misto
     const funcsComissao=(funcs||[]).filter(f=>dMap[f.id]?.tipo_pagamento!=="diaria");
@@ -3283,7 +3298,13 @@ function FolhaScreen({empresaId,embedded}){
     };
   },[fetchTudo]);
 
-  // Saldo por funcionário calculado localmente
+  // Atualiza o card de performance quando o faturamento externo muda (Realtime)
+  useEffect(()=>{
+    if(!performance)return;
+    const folha=performance.folha||0;
+    const percentual=faturamentoExterno>0?Math.round((folha/faturamentoExterno)*1000)/10:null;
+    setPerformance(p=>({...p,faturamento:faturamentoExterno||0,percentual}));
+  },[faturamentoExterno]);
   const saldoPorFunc=useMemo(()=>{
     return funcionarios.reduce((acc,f)=>{
       const dias=diasMap[f.id]||0;
