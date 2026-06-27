@@ -2086,8 +2086,12 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   const totalValue=selectedSvcs.reduce((s,sv)=>s+sv.value,0);
 
   const toggleSvc=(sv)=>{
+    const jaSelected=selectedSvcs.find(s=>s.label===sv.label);
+    const bloqueado=limiteAtingido.includes(sv.label);
+    // Regra: se bloqueado E não selecionado → ignora o clique
+    if(bloqueado&&!jaSelected)return;
+    // Permite desmarcar sempre, mesmo com limite atingido
     setSelectedSvcs(prev=>{
-      const jaSelected=prev.find(s=>s.label===sv.label);
       const novo=jaSelected?prev.filter(s=>s.label!==sv.label):[...prev,sv];
       verificarLimites(novo);
       return novo;
@@ -2190,21 +2194,32 @@ function NewWashScreen({empresaId,userId,onSuccess}){
           {svcs.map(sv=>{
             const sel=selectedSvcs.some(s=>s.label===sv.label);
             const bloqueado=limiteAtingido.includes(sv.label);
+            const jaSelected=selectedSvcs.some(s=>s.label===sv.label);
+            // Bloqueado sem seleção = travado; bloqueado mas selecionado = pode desmarcar
+            const podeClicar=!bloqueado||jaSelected;
             return(
               <button key={sv.label} onClick={()=>toggleSvc(sv)}
                 style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",borderRadius:14,
-                  border:`1.5px solid ${bloqueado?"rgba(239,68,68,.5)":sel?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
-                  background:bloqueado?"rgba(239,68,68,.08)":sel?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
-                  color:bloqueado?"#f87171":sel?"#38bdf8":"rgba(186,230,253,.7)",
-                  fontWeight:sel?700:500,fontSize:13,cursor:"pointer",transition:"all .15s"}}>
+                  border:`1.5px solid ${bloqueado&&!jaSelected?"rgba(239,68,68,.5)":bloqueado&&jaSelected?"rgba(239,68,68,.6)":jaSelected?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+                  background:bloqueado&&!jaSelected?"rgba(239,68,68,.06)":bloqueado&&jaSelected?"rgba(239,68,68,.12)":jaSelected?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
+                  color:bloqueado?"#f87171":jaSelected?"#38bdf8":"rgba(186,230,253,.7)",
+                  fontWeight:jaSelected?700:500,fontSize:13,
+                  cursor:podeClicar?"pointer":"not-allowed",
+                  opacity:bloqueado&&!jaSelected?.5:1,
+                  transition:"all .15s"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${bloqueado?"#f87171":sel?"#38bdf8":"rgba(125,211,252,.3)"}`,background:sel&&!bloqueado?"#38bdf8":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
-                    {sel&&!bloqueado&&<Icon name="Check" size={12} color="#fff"/>}
-                    {bloqueado&&<Icon name="Lock" size={10} color="#f87171"/>}
+                  <div style={{width:20,height:20,borderRadius:6,
+                    border:`2px solid ${bloqueado?"#f87171":jaSelected?"#38bdf8":"rgba(125,211,252,.3)"}`,
+                    background:jaSelected&&!bloqueado?"#38bdf8":"transparent",
+                    display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+                    {jaSelected&&!bloqueado&&<Icon name="Check" size={12} color="#fff"/>}
+                    {bloqueado&&!jaSelected&&<Icon name="Lock" size={10} color="#f87171"/>}
+                    {bloqueado&&jaSelected&&<Icon name="X" size={10} color="#f87171"/>}
                   </div>
                   <div>
                     <span>{sv.label}</span>
-                    {bloqueado&&<div style={{fontSize:10,color:"#f87171",marginTop:2}}>⚠️ Limite diário atingido</div>}
+                    {bloqueado&&!jaSelected&&<div style={{fontSize:10,color:"#f87171",marginTop:2}}>⚠️ Limite diário atingido</div>}
+                    {bloqueado&&jaSelected&&<div style={{fontSize:10,color:"#f87171",marginTop:2}}>Clique para remover</div>}
                   </div>
                 </div>
                 <span style={{fontWeight:800,color:bloqueado?"#f87171":"#4ade80"}}>{fmtBRL(sv.value)}</span>
@@ -2259,13 +2274,21 @@ function NewWashScreen({empresaId,userId,onSuccess}){
           <span style={{color:"#f87171",fontSize:13,fontWeight:600,lineHeight:1.4}}>{limitError}</span>
         </div>
       )}
-      <button className="btn-glow" onClick={submit} disabled={loading||selectedSvcs.length===0||limiteAtingido.length>0}
-        style={{opacity:selectedSvcs.length===0||limiteAtingido.length>0?.5:1}}>
-        {loading?<div className="spinner spin"/>:<>
-          <Icon name="Plus" size={18} color="#fff"/>
-          {limiteAtingido.length>0?"Limite atingido — remova o serviço bloqueado":selectedSvcs.length>0?`Adicionar à Fila — ${fmtBRL(totalValue)}`:"Adicionar à Fila"}
-        </>}
-      </button>
+      {/* Bloqueio real: apenas quando serviço bloqueado AINDA está selecionado */}
+      {(()=>{
+        const bloqueadosSelecionados=selectedSvcs.filter(s=>limiteAtingido.includes(s.label));
+        const temBloqueio=bloqueadosSelecionados.length>0;
+        return(
+          <button className="btn-glow" onClick={submit}
+            disabled={loading||selectedSvcs.length===0||temBloqueio}
+            style={{opacity:selectedSvcs.length===0||temBloqueio?.5:1}}>
+            {loading?<div className="spinner spin"/>:<>
+              <Icon name="Plus" size={18} color="#fff"/>
+              {temBloqueio?"Remova o serviço com limite atingido":selectedSvcs.length>0?`Adicionar à Fila — ${fmtBRL(totalValue)}`:"Adicionar à Fila"}
+            </>}
+          </button>
+        );
+      })()}
     </div>
   );
 }
