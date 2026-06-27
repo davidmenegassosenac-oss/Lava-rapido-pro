@@ -3299,23 +3299,31 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
     };
   },[fetchTudo]);
 
-  // Faturamento vem do prop quando é a semana atual,
-  // mas para semanas anteriores buscamos direto com as datas corretas
+  // Faturamento: usa o prop (ConfigScreen) para a semana atual — funciona.
+  // Para semanas passadas, busca com as datas corretas da semana selecionada.
   useEffect(()=>{
+    const semanaCorrente=getSemanaAtual();
+    if(semana===semanaCorrente){
+      // Semana atual: confiar no valor do ConfigScreen que usa Date objects corretamente
+      setFatSemana(faturamentoExterno||0);
+      return;
+    }
+    // Semanas passadas: buscar com o intervalo calculado
     const{inicio,fim}=semanaParaDatas(semana);
-    const inicioISO=new Date(inicio+"T00:00:00").toISOString();
-    const fimISO=new Date(fim+"T23:59:59").toISOString();
+    // Usar new Date(string) com hora explícita gera LOCAL time — ok para comparação
+    const d1=new Date(inicio);d1.setHours(0,0,0,0);
+    const d2=new Date(fim);d2.setHours(23,59,59,999);
     sb.from("historico").select("*")
       .eq("empresa_id",empresaId)
-      .gte("completed_at",inicioISO)
-      .lte("completed_at",fimISO)
+      .gte("completed_at",d1.toISOString())
+      .lte("completed_at",d2.toISOString())
       .then(({data})=>{
         const fat=(data||[])
           .filter(h=>h.status_pagamento!=="estornado")
           .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
         setFatSemana(fat);
       });
-  },[empresaId,semana]);
+  },[empresaId,semana,faturamentoExterno]);
   // Recalcula performance quando fatSemana muda (busca assíncrona por semana)
   useEffect(()=>{
     const folha=pagamentos.reduce((s,p)=>s+(parseFloat(p.valor)||0),0);
