@@ -3818,27 +3818,42 @@ function RelatoriosScreen({empresaId,embedded}){
   const lucroLiquido=receitaBruta-folhaTotal;
   const margemLiquida=receitaBruta>0?Math.round(lucroLiquido/receitaBruta*100):null;
 
-  // Comparativo de desempenho mensal — agrupa todo o histórico por Mês/Ano
-  const desempenhoMensal=useMemo(()=>{
-    if(histAll.length===0)return null;
-    const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-                 "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-    const grupos=histAll.reduce((acc,h)=>{
-      if(!h.completed_at)return acc;
+  // ── Comparativo interativo de meses ───────────────────────────────────
+  const mesesDisponiveis=useMemo(()=>{
+    const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    const MESES_EXT=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const map={};
+    histAll.forEach(h=>{
+      if(!h.completed_at)return;
       const d=new Date(h.completed_at);
-      const chave=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-      const label=`${MESES[d.getMonth()]} de ${d.getFullYear()}`;
-      if(!acc[chave])acc[chave]={label,total:0};
-      acc[chave].total+=(parseFloat(h.value)||0);
-      return acc;
-    },{});
-    const lista=Object.values(grupos).filter(m=>m.total>0);
-    if(lista.length<2)return null; // precisa de pelo menos 2 meses para comparar
-    const maior=lista.reduce((a,b)=>b.total>a.total?b:a);
-    const menor=lista.reduce((a,b)=>b.total<a.total?b:a);
-    const diffPct=menor.total>0?Math.round((maior.total-menor.total)/menor.total*100):null;
-    return{maior,menor,diffPct,totalMeses:lista.length};
+      const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      if(!map[key])map[key]={key,label:`${MESES[d.getMonth()]}/${d.getFullYear()}`,labelExt:`${MESES_EXT[d.getMonth()]} de ${d.getFullYear()}`,total:0};
+      map[key].total+=(parseFloat(h.value)||0);
+    });
+    return Object.values(map).filter(m=>m.total>0).sort((a,b)=>a.key.localeCompare(b.key));
   },[histAll]);
+
+  const [mesA,setMesA]=useState("");
+  const [mesB,setMesB]=useState("");
+
+  // Inicializa seletores quando os meses chegam
+  useEffect(()=>{
+    if(mesesDisponiveis.length===0)return;
+    const ult=mesesDisponiveis[mesesDisponiveis.length-1];
+    const penult=mesesDisponiveis.length>=2?mesesDisponiveis[mesesDisponiveis.length-2]:ult;
+    if(!mesB)setMesB(ult.key);
+    if(!mesA)setMesA(penult.key);
+  },[mesesDisponiveis]);
+
+  const dadosMesA=mesesDisponiveis.find(m=>m.key===mesA);
+  const dadosMesB=mesesDisponiveis.find(m=>m.key===mesB);
+  const variacaoAbs=dadosMesA&&dadosMesB?(dadosMesB.total-dadosMesA.total):0;
+  const variacaoPct=dadosMesA&&dadosMesA.total>0
+    ?Math.round((dadosMesB.total-dadosMesA.total)/dadosMesA.total*1000)/10:null;
+  const cresceu=variacaoAbs>0;
+  const totalComp=(dadosMesA?.total||0)+(dadosMesB?.total||0);
+  const pctBarA=totalComp>0?Math.round((dadosMesA?.total||0)/totalComp*100):50;
+  const pctBarB=100-pctBarA;
 
   const hoje=new Date();
   let chartData;
@@ -3966,77 +3981,99 @@ function RelatoriosScreen({empresaId,embedded}){
             <BarChart data={chartData} color="#0ea5e9" height={100}/>
           </div>
 
-          {/* Comparativo de Desempenho Mensal */}
-          {desempenhoMensal&&(
+          {/* Card Interativo de Comparação Mensal */}
+          {mesesDisponiveis.length>=2&&dadosMesA&&dadosMesB&&(
             <div className="glass-card" style={{padding:16,marginBottom:14}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-                <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)"}}>
-                  📆 Comparativo Mensal
-                </div>
-                <span style={{fontSize:10,color:"rgba(186,230,253,.3)",fontWeight:600}}>
-                  {desempenhoMensal.totalMeses} meses analisados
-                </span>
+              <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:14}}>
+                📆 Comparativo Mensal
               </div>
 
+              {/* Seletores lado a lado */}
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+                <select value={mesA} onChange={e=>setMesA(e.target.value)}
+                  style={{flex:1,padding:"9px 10px",borderRadius:12,
+                    background:"rgba(56,189,248,.1)",border:"1px solid rgba(56,189,248,.25)",
+                    color:"#38bdf8",fontSize:12,fontWeight:700,outline:"none",cursor:"pointer"}}>
+                  {mesesDisponiveis.map(m=>(
+                    <option key={m.key} value={m.key} style={{background:"#0c1a2e"}}>{m.label}</option>
+                  ))}
+                </select>
+                <div style={{fontSize:11,fontWeight:800,color:"rgba(186,230,253,.3)",flexShrink:0}}>VS</div>
+                <select value={mesB} onChange={e=>setMesB(e.target.value)}
+                  style={{flex:1,padding:"9px 10px",borderRadius:12,
+                    background:"rgba(167,139,250,.1)",border:"1px solid rgba(167,139,250,.25)",
+                    color:"#a78bfa",fontSize:12,fontWeight:700,outline:"none",cursor:"pointer"}}>
+                  {mesesDisponiveis.map(m=>(
+                    <option key={m.key} value={m.key} style={{background:"#0c1a2e"}}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Valores lado a lado */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-                {/* Mês Recorde */}
                 <div style={{padding:14,borderRadius:14,
-                  background:"rgba(74,222,128,.08)",
-                  border:"1px solid rgba(74,222,128,.2)"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-                    <div style={{width:28,height:28,borderRadius:8,
-                      background:"rgba(74,222,128,.15)",
-                      border:"1px solid rgba(74,222,128,.3)",
-                      display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:14,boxShadow:"0 0 12px rgba(74,222,128,.2)"}}>
-                      📈
-                    </div>
-                    <span style={{fontSize:10,fontWeight:700,color:"rgba(74,222,128,.8)",
-                      textTransform:"uppercase",letterSpacing:".06em"}}>Recorde</span>
+                  background:"rgba(56,189,248,.07)",border:"1px solid rgba(56,189,248,.18)"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#38bdf8",
+                    textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>
+                    {dadosMesA.label}
                   </div>
-                  <div style={{fontSize:16,fontWeight:900,color:"#4ade80",marginBottom:4}}>
-                    {fmtBRL(desempenhoMensal.maior.total)}
-                  </div>
-                  <div style={{fontSize:10,color:"rgba(186,230,253,.4)",lineHeight:1.4}}>
-                    {desempenhoMensal.maior.label}
+                  <div style={{fontSize:17,fontWeight:900,color:"#38bdf8"}}>
+                    {fmtBRL(dadosMesA.total)}
                   </div>
                 </div>
-
-                {/* Menor Faturamento */}
                 <div style={{padding:14,borderRadius:14,
-                  background:"rgba(248,113,113,.07)",
-                  border:"1px solid rgba(248,113,113,.2)"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-                    <div style={{width:28,height:28,borderRadius:8,
-                      background:"rgba(248,113,113,.15)",
-                      border:"1px solid rgba(248,113,113,.3)",
-                      display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:14,boxShadow:"0 0 12px rgba(248,113,113,.2)"}}>
-                      📉
-                    </div>
-                    <span style={{fontSize:10,fontWeight:700,color:"rgba(248,113,113,.8)",
-                      textTransform:"uppercase",letterSpacing:".06em"}}>Atenção</span>
+                  background:"rgba(167,139,250,.07)",border:"1px solid rgba(167,139,250,.18)"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#a78bfa",
+                    textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>
+                    {dadosMesB.label}
                   </div>
-                  <div style={{fontSize:16,fontWeight:900,color:"#f87171",marginBottom:4}}>
-                    {fmtBRL(desempenhoMensal.menor.total)}
-                  </div>
-                  <div style={{fontSize:10,color:"rgba(186,230,253,.4)",lineHeight:1.4}}>
-                    {desempenhoMensal.menor.label}
+                  <div style={{fontSize:17,fontWeight:900,color:"#a78bfa"}}>
+                    {fmtBRL(dadosMesB.total)}
                   </div>
                 </div>
               </div>
 
-              {/* Insight de rodapé */}
-              {desempenhoMensal.diffPct!==null&&(
-                <div style={{padding:"10px 12px",borderRadius:12,
-                  background:"rgba(255,255,255,.04)",
-                  border:"1px solid rgba(125,211,252,.08)",
-                  fontSize:11,color:"rgba(186,230,253,.5)",lineHeight:1.5,textAlign:"center"}}>
-                  💡 O mês recorde faturou{" "}
-                  <span style={{color:"#4ade80",fontWeight:800}}>{desempenhoMensal.diffPct}% a mais</span>
-                  {" "}do que o mês mais fraco
+              {/* Badge de desempenho */}
+              {variacaoPct!==null&&variacaoAbs!==0&&(
+                <div style={{padding:"12px 14px",borderRadius:14,marginBottom:14,
+                  background:cresceu?"rgba(74,222,128,.08)":"rgba(248,113,113,.08)",
+                  border:`1px solid ${cresceu?"rgba(74,222,128,.2)":"rgba(248,113,113,.2)"}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{fontSize:22,fontWeight:900,
+                      color:cresceu?"#4ade80":"#f87171"}}>
+                      {cresceu?"↑":"↓"} {cresceu?"+":""}{variacaoPct}%
+                    </div>
+                    <div style={{fontSize:12,color:"rgba(186,230,253,.5)",lineHeight:1.4}}>
+                      {cresceu
+                        ?<>O faturamento <b style={{color:"#4ade80"}}>cresceu {fmtBRL(Math.abs(variacaoAbs))}</b> no período B</>
+                        :<>O faturamento <b style={{color:"#f87171"}}>reduziu {fmtBRL(Math.abs(variacaoAbs))}</b> no período B</>
+                      }
+                    </div>
+                  </div>
                 </div>
               )}
+              {variacaoAbs===0&&(
+                <div style={{padding:"10px 14px",borderRadius:12,marginBottom:14,textAlign:"center",
+                  background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)",
+                  fontSize:12,color:"rgba(186,230,253,.4)"}}>
+                  = Faturamento idêntico nos dois períodos
+                </div>
+              )}
+
+              {/* Barra de proporção visual */}
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",
+                  fontSize:10,color:"rgba(186,230,253,.3)",marginBottom:5,fontWeight:600}}>
+                  <span style={{color:"#38bdf8"}}>{pctBarA}%</span>
+                  <span style={{color:"#a78bfa"}}>{pctBarB}%</span>
+                </div>
+                <div style={{display:"flex",height:8,borderRadius:99,overflow:"hidden",gap:2}}>
+                  <div style={{width:`${pctBarA}%`,background:"linear-gradient(90deg,#0ea5e9,#38bdf8)",
+                    borderRadius:"99px 0 0 99px",transition:"width .5s ease"}}/>
+                  <div style={{width:`${pctBarB}%`,background:"linear-gradient(90deg,#8b5cf6,#a78bfa)",
+                    borderRadius:"0 99px 99px 0",transition:"width .5s ease"}}/>
+                </div>
+              </div>
             </div>
           )}
 
