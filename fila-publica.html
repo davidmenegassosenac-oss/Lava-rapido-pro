@@ -72,7 +72,14 @@ function BuscaScreen({onSelect}){
   const [res,setRes]=useState([]);
   const [load,setLoad]=useState(false);
   const [erro,setErro]=useState('');
+  const [afiliadas,setAfiliadas]=useState([]);
   const t=useRef(null);
+
+  useEffect(()=>{
+    sb.from('empresas').select('id,nome_fantasia,telefone')
+      .order('created_at',{ascending:false}).limit(5)
+      .then(({data})=>setAfiliadas(data||[]));
+  },[]);
 
   useEffect(()=>{
     clearTimeout(t.current);
@@ -101,6 +108,33 @@ function BuscaScreen({onSelect}){
         <input value={q} onChange={e=>setQ(e.target.value)}
           placeholder='Digite o nome do lava-jato...'
           className='inp' style={{marginBottom:12}} autoFocus/>
+        {/* Empresas afiliadas — atalhos rápidos */}
+        {!q&&afiliadas.length>0&&(
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:11,fontWeight:700,color:'rgba(186,230,253,.4)',
+              textTransform:'uppercase',letterSpacing:'.1em',marginBottom:12}}>
+              🤝 Lavações Parceiras
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+              {afiliadas.map((e,i)=>{
+                const ICONS=['🚗','💧','✨','🧼','⭐'];
+                const COLORS=['rgba(14,165,233,.15)','rgba(74,222,128,.12)','rgba(167,139,250,.12)','rgba(251,191,36,.12)','rgba(56,189,248,.1)'];
+                const BORDERS=['rgba(14,165,233,.3)','rgba(74,222,128,.25)','rgba(167,139,250,.25)','rgba(251,191,36,.25)','rgba(56,189,248,.2)'];
+                return(
+                  <button key={e.id} onClick={()=>onSelect(e)}
+                    style={{padding:'16px 14px',borderRadius:16,cursor:'pointer',textAlign:'left',
+                      background:COLORS[i%COLORS.length],
+                      border:'1px solid '+BORDERS[i%BORDERS.length],
+                      display:'flex',flexDirection:'column',gap:6}}>
+                    <span style={{fontSize:22}}>{ICONS[i%ICONS.length]}</span>
+                    <span style={{fontSize:13,fontWeight:800,color:'#e0f2fe',lineHeight:1.2}}>{e.nome_fantasia}</span>
+                    <span style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:600}}>Ver fila →</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {load&&<div style={{textAlign:'center',padding:20}}><div className='spin' style={{margin:'0 auto'}}/></div>}
         {erro&&<div style={{padding:'10px 14px',borderRadius:12,background:'rgba(239,68,68,.12)',
           border:'1px solid rgba(239,68,68,.3)',color:'#f87171',fontSize:13,marginBottom:10}}>{erro}</div>}
@@ -126,7 +160,12 @@ function BuscaScreen({onSelect}){
 /* ── Modal cadastro ── */
 function CadastroModal({empresa,onClose,onSuccess}){
   const [svcs,setSvcs]=useState([]);
-  const [form,setForm]=useState({client:'',phone:'',model:'',plate:'',color:'#3b82f6',svc_id:'',svc_nome:'',svc_valor:0});
+  const [form,setForm]=useState({client:'',phone:'',model:'',plate:'',color:'#3b82f6'});
+  const [svcsSelected,setSvcsSelected]=useState([]); // array de {id,nome,valor}
+  const totalSvcs=svcsSelected.reduce((s,x)=>s+parseFloat(x.valor),0);
+  const toggleSvc=s=>setSvcsSelected(prev=>
+    prev.find(x=>x.id===s.id)?prev.filter(x=>x.id!==s.id):[...prev,s]
+  );
   const [saving,setSaving]=useState(false);
   const [erro,setErro]=useState('');
 
@@ -146,18 +185,19 @@ function CadastroModal({empresa,onClose,onSuccess}){
   };
 
   const confirmar=async()=>{
-    if(!form.client.trim()||!form.phone.trim()||!form.model.trim()||!form.plate.trim()||!form.svc_id){
+    if(!form.client.trim()||!form.phone.trim()||!form.model.trim()||!form.plate.trim()||!svcsSelected.length){
       setErro('Preencha todos os campos obrigatórios.');return;
     }
     setSaving(true);setErro('');
+    const typeLabel=svcsSelected.map(s=>s.nome).join(' + ');
     const{error}=await sb.from('ordens_servico').insert({
       empresa_id:empresa.id,
       plate:form.plate.trim().toUpperCase(),
       model:form.model.trim(),
       client:form.client.trim(),
       phone:form.phone.replace(/\D/g,''),
-      type:form.svc_nome,
-      value:form.svc_valor,
+      type:typeLabel,
+      value:totalSvcs,
       color:form.color,
       status:'Aguardando',
     });
@@ -200,17 +240,40 @@ function CadastroModal({empresa,onClose,onSuccess}){
           <div style={{fontSize:11,fontWeight:700,color:'rgba(186,230,253,.5)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>Serviço *</div>
           {svcs.length===0
             ?<div style={{fontSize:12,color:'rgba(186,230,253,.3)'}}>Carregando...</div>
-            :svcs.map(s=>(
-              <button key={s.id} onClick={()=>setForm(f=>({...f,svc_id:s.id,svc_nome:s.nome,svc_valor:s.valor}))}
-                style={{width:'100%',marginBottom:8,display:'flex',justifyContent:'space-between',
-                  alignItems:'center',padding:'12px 14px',borderRadius:12,cursor:'pointer',
-                  border:'1.5px solid '+(form.svc_id===s.id?'rgba(14,165,233,.6)':'rgba(125,211,252,.12)'),
-                  background:form.svc_id===s.id?'rgba(14,165,233,.15)':'rgba(255,255,255,.04)',
-                  color:form.svc_id===s.id?'#38bdf8':'rgba(186,230,253,.6)'}}>
-                <span style={{fontSize:13,fontWeight:700}}>{s.nome}</span>
-                <span style={{fontSize:13,fontWeight:800,color:'#4ade80'}}>R$ {parseFloat(s.valor).toFixed(2).replace('.',',')}</span>
-              </button>
-            ))
+            :<>
+              {svcs.map(s=>{
+                const sel=!!svcsSelected.find(x=>x.id===s.id);
+                return(
+                  <button key={s.id} onClick={()=>toggleSvc(s)}
+                    style={{width:'100%',marginBottom:8,display:'flex',alignItems:'center',
+                      gap:10,padding:'12px 14px',borderRadius:12,cursor:'pointer',
+                      border:'1.5px solid '+(sel?'rgba(14,165,233,.6)':'rgba(125,211,252,.12)'),
+                      background:sel?'rgba(14,165,233,.12)':'rgba(255,255,255,.04)'}}>
+                    <div style={{width:20,height:20,borderRadius:6,flexShrink:0,
+                      border:'2px solid '+(sel?'#38bdf8':'rgba(125,211,252,.3)'),
+                      background:sel?'#38bdf8':'transparent',
+                      display:'flex',alignItems:'center',justifyContent:'center',
+                      fontSize:11,color:'#fff',fontWeight:900}}>
+                      {sel?'✓':''}
+                    </div>
+                    <span style={{flex:1,fontSize:13,fontWeight:700,color:sel?'#38bdf8':'rgba(186,230,253,.6)',textAlign:'left'}}>{s.nome}</span>
+                    <span style={{fontSize:13,fontWeight:800,color:'#4ade80',flexShrink:0}}>R$ {parseFloat(s.valor).toFixed(2).replace('.',',')}</span>
+                  </button>
+                );
+              })}
+              {svcsSelected.length>0&&(
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+                  padding:'10px 14px',borderRadius:12,
+                  background:'rgba(74,222,128,.1)',border:'1px solid rgba(74,222,128,.25)',marginTop:4}}>
+                  <span style={{fontSize:12,color:'rgba(186,230,253,.5)',fontWeight:600}}>
+                    {svcsSelected.length} serviço{svcsSelected.length>1?'s':''} selecionado{svcsSelected.length>1?'s':''}
+                  </span>
+                  <span style={{fontSize:16,fontWeight:900,color:'#4ade80'}}>
+                    R$ {totalSvcs.toFixed(2).replace('.',',')}
+                  </span>
+                </div>
+              )}
+            </>
           }
         </div>
         {erro&&<div style={{padding:'10px 14px',borderRadius:12,background:'rgba(239,68,68,.12)',

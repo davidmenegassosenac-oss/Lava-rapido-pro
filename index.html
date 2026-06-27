@@ -2209,6 +2209,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
   const [search,setSearch]=useState("");
   const [paymentFilter,setPaymentFilter]=useState("todos");
   const [filtrarHoje,setFiltrarHoje]=useState(false);
+  const [dataFiltro,setDataFiltro]=useState(new Date().toISOString().split("T")[0]);
   const [editando,setEditando]=useState(null);     // id do registro em edição
   const [editForm,setEditForm]=useState({});        // {forma_pagamento, status_pagamento, lavado_por}
   const [salvandoEdit,setSalvandoEdit]=useState(false);
@@ -2277,10 +2278,10 @@ function HistoryScreen({empresaId,embedded,isOwner}){
         h.plate?.toLowerCase().includes(search.toLowerCase())||
         h.model?.toLowerCase().includes(search.toLowerCase());
       const matchPayment=paymentFilter==="todos"||h.forma_pagamento===paymentFilter;
-      const matchHoje=!filtrarHoje||daysSince(h.completed_at)===0;
+      const matchHoje=!filtrarHoje||(h.completed_at&&h.completed_at.slice(0,10)===dataFiltro);
       return matchSearch&&matchPayment&&matchHoje;
     })
-  ,[hist,search,paymentFilter,filtrarHoje]);
+  ,[hist,search,paymentFilter,filtrarHoje,dataFiltro]);
 
   // Totalizador exclui estornados — não contam para receita
   const totalFiltrado=useMemo(()=>
@@ -2323,7 +2324,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
         h.client?.toLowerCase().includes(search.toLowerCase())||
         h.plate?.toLowerCase().includes(search.toLowerCase())||
         h.model?.toLowerCase().includes(search.toLowerCase());
-      const matchHoje=!filtrarHoje||daysSince(h.completed_at)===0;
+      const matchHoje=!filtrarHoje||(h.completed_at&&h.completed_at.slice(0,10)===dataFiltro);
       return matchSearch&&matchHoje&&h.status_pagamento!=="estornado";
     });
     return{
@@ -2332,7 +2333,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
       dinheiro:base.filter(h=>h.forma_pagamento==="dinheiro").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
       cartao:  base.filter(h=>h.forma_pagamento==="cartao").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
     };
-  },[hist,search,filtrarHoje]);
+  },[hist,search,filtrarHoje,dataFiltro]);
 
   const saveMov=async()=>{
     if(!form.valor||!form.descricao)return;
@@ -2404,25 +2405,39 @@ function HistoryScreen({empresaId,embedded,isOwner}){
             })}
           </div>
 
-          {/* Filtro de data — Limpo hoje */}
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-            <button onClick={()=>setFiltrarHoje(v=>!v)}
-              style={{padding:"5px 14px",borderRadius:99,fontSize:12,fontWeight:700,cursor:"pointer",
-                border:`1px solid ${filtrarHoje?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
-                background:filtrarHoje?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
-                color:filtrarHoje?"#38bdf8":"rgba(186,230,253,.4)",
-                transition:"all .15s",display:"flex",alignItems:"center",gap:5}}>
-              🧼 Limpo hoje
-              {filtrarHoje&&(
-                <span style={{fontSize:10,fontWeight:800,color:"#38bdf8"}}>
-                  ({filtered.length})
-                </span>
-              )}
+          {/* Filtro de data avançado */}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+            {/* Input de data estilizado */}
+            <div style={{position:"relative",flex:1,minWidth:140}}>
+              <input type="date" value={dataFiltro}
+                onChange={e=>{setDataFiltro(e.target.value);setFiltrarHoje(true);}}
+                style={{width:"100%",padding:"7px 12px 7px 32px",borderRadius:99,
+                  background:filtrarHoje?"rgba(14,165,233,.18)":"rgba(255,255,255,.04)",
+                  border:`1px solid ${filtrarHoje?"rgba(14,165,233,.5)":"rgba(125,211,252,.15)"}`,
+                  color:filtrarHoje?"#38bdf8":"rgba(186,230,253,.5)",
+                  fontSize:12,fontWeight:700,outline:"none",
+                  colorScheme:"dark",cursor:"pointer"}}/>
+              <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,pointerEvents:"none"}}>📅</span>
+            </div>
+            {/* Botão Hoje */}
+            <button onClick={()=>{
+                setDataFiltro(new Date().toISOString().split("T")[0]);
+                setFiltrarHoje(v=>!v);
+              }}
+              style={{padding:"7px 14px",borderRadius:99,fontSize:12,fontWeight:700,cursor:"pointer",
+                flexShrink:0,whiteSpace:"nowrap",
+                border:`1px solid ${filtrarHoje&&dataFiltro===new Date().toISOString().split("T")[0]?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+                background:filtrarHoje&&dataFiltro===new Date().toISOString().split("T")[0]?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
+                color:filtrarHoje&&dataFiltro===new Date().toISOString().split("T")[0]?"#38bdf8":"rgba(186,230,253,.4)"}}>
+              🧼 Hoje {filtrarHoje&&`(${filtered.length})`}
             </button>
+            {/* Limpar filtro */}
             {filtrarHoje&&(
-              <span style={{fontSize:11,color:"rgba(186,230,253,.35)"}}>
-                {new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})}
-              </span>
+              <button onClick={()=>setFiltrarHoje(false)}
+                style={{padding:"7px 10px",borderRadius:99,fontSize:11,fontWeight:700,cursor:"pointer",
+                  background:"transparent",border:"1px solid rgba(248,113,113,.3)",color:"#f87171"}}>
+                ✕
+              </button>
             )}
           </div>
 
