@@ -73,14 +73,17 @@ function BuscaScreen({onSelect}){
   const [load,setLoad]=useState(false);
   const [erro,setErro]=useState('');
   const [afiliadas,setAfiliadas]=useState([]);
+  const [loadAfil,setLoadAfil]=useState(true);
   const t=useRef(null);
 
   useEffect(()=>{
-    sb.from('empresas').select('id,nome_fantasia,telefone')
-      .order('created_at',{ascending:false}).limit(5)
+    sb.from('empresas')
+      .select('id,nome_fantasia,telefone')
+      .limit(5)
       .then(({data,error})=>{
-        if(error)console.error('afiliadas error:',error);
+        if(error)console.error('afiliadas error:',error.message);
         setAfiliadas(data||[]);
+        setLoadAfil(false);
       });
   },[]);
 
@@ -111,39 +114,34 @@ function BuscaScreen({onSelect}){
         <input value={q} onChange={e=>setQ(e.target.value)}
           placeholder='Digite o nome do lava-jato...'
           className='inp' style={{marginBottom:12}} autoFocus/>
-        {/* Empresas afiliadas — atalhos rápidos */}
         {!q&&(
           <div style={{marginBottom:20}}>
             <div style={{fontSize:11,fontWeight:700,color:'rgba(186,230,253,.4)',
               textTransform:'uppercase',letterSpacing:'.1em',marginBottom:12}}>
               🤝 Lavações Parceiras
             </div>
-            {afiliadas.length===0
-              ?<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                {[0,1,2,3].map(i=>(
-                  <div key={i} style={{height:90,borderRadius:16,
-                    background:'rgba(255,255,255,.04)',
-                    border:'1px solid rgba(125,211,252,.08)'}}/>
-                ))}
-              </div>
-              :<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-              {afiliadas.map((e,i)=>{
-                const ICONS=['🚗','💧','✨','🧼','⭐'];
-                const COLORS=['rgba(14,165,233,.15)','rgba(74,222,128,.12)','rgba(167,139,250,.12)','rgba(251,191,36,.12)','rgba(56,189,248,.1)'];
-                const BORDERS=['rgba(14,165,233,.3)','rgba(74,222,128,.25)','rgba(167,139,250,.25)','rgba(251,191,36,.25)','rgba(56,189,248,.2)'];
-                return(
-                  <button key={e.id} onClick={()=>onSelect(e)}
-                    style={{padding:'16px 14px',borderRadius:16,cursor:'pointer',textAlign:'left',
-                      background:COLORS[i%COLORS.length],
-                      border:'1px solid '+BORDERS[i%BORDERS.length],
-                      display:'flex',flexDirection:'column',gap:6}}>
-                    <span style={{fontSize:22}}>{ICONS[i%ICONS.length]}</span>
-                    <span style={{fontSize:13,fontWeight:800,color:'#e0f2fe',lineHeight:1.2}}>{e.nome_fantasia}</span>
-                    <span style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:600}}>Ver fila →</span>
-                  </button>
-                );
-              })}
-              </div>
+            {loadAfil
+              ?<div style={{textAlign:'center',padding:16}}><div className='spin' style={{margin:'0 auto'}}/></div>
+              :afiliadas.length===0
+                ?<div style={{fontSize:12,color:'rgba(186,230,253,.3)',textAlign:'center',padding:12}}>Nenhuma lavação disponível</div>
+                :<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                  {afiliadas.map((e,i)=>{
+                    const ICONS=['🚗','💧','✨','🧼','⭐'];
+                    const COLORS=['rgba(14,165,233,.15)','rgba(74,222,128,.12)','rgba(167,139,250,.12)','rgba(251,191,36,.12)','rgba(56,189,248,.1)'];
+                    const BORDERS=['rgba(14,165,233,.3)','rgba(74,222,128,.25)','rgba(167,139,250,.25)','rgba(251,191,36,.25)','rgba(56,189,248,.2)'];
+                    return(
+                      <button key={e.id} onClick={()=>onSelect(e)}
+                        style={{padding:'16px 14px',borderRadius:16,cursor:'pointer',textAlign:'left',
+                          background:COLORS[i%COLORS.length],
+                          border:'1px solid '+BORDERS[i%BORDERS.length],
+                          display:'flex',flexDirection:'column',gap:6}}>
+                        <span style={{fontSize:22}}>{ICONS[i%ICONS.length]}</span>
+                        <span style={{fontSize:13,fontWeight:800,color:'#e0f2fe',lineHeight:1.2}}>{e.nome_fantasia}</span>
+                        <span style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:600}}>Ver fila →</span>
+                      </button>
+                    );
+                  })}
+                </div>
             }
           </div>
         )}
