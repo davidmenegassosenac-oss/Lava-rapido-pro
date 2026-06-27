@@ -3228,8 +3228,10 @@ function FolhaScreen({empresaId,embedded}){
     setPagamentos(pgtos||[]);
     const dmMap={};(dias||[]).forEach(d=>{dmMap[d.profile_id]=d.dias;});
     setDiasMap(dmMap);
-    // RPC retorna JSON — pode chegar como string ou objeto dependendo do driver
+    // Debug — remover após confirmar
+    console.log("perf raw:", perf, "type:", typeof perf);
     const perfData=typeof perf==="string"?JSON.parse(perf):perf;
+    console.log("perf parsed:", perfData);
     setPerformance(perfData);
     // Buscar comissões para funcionários com tipo comissao/misto
     const funcsComissao=(funcs||[]).filter(f=>dMap[f.id]?.tipo_pagamento!=="diaria");
