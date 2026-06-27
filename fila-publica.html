@@ -174,15 +174,19 @@ function CadastroModal({empresa,onClose,onSuccess}){
   const [svcsSelected,setSvcsSelected]=useState([]); // array de {id,nome,valor}
   const totalSvcs=svcsSelected.reduce((s,x)=>s+parseFloat(x.valor),0);
   const toggleSvc=s=>{
-    setSvcsSelected(prev=>{
-      const jasel=prev.find(x=>x.id===s.id);
-      if(jasel){
-        setLimiteAtingido(l=>l.filter(n=>n!==s.nome));
-        return prev.filter(x=>x.id!==s.id);
-      }
-      verificarLimite(s);
-      return [...prev,s];
-    });
+    const jasel=svcsSelected.find(x=>x.id===s.id);
+    const bloq=limiteAtingido.includes(s.nome);
+    // Bloqueado e NÃO selecionado → ignora
+    if(bloq&&!jasel)return;
+    // Já selecionado → remove sempre (mesmo bloqueado)
+    if(jasel){
+      setLimiteAtingido(l=>l.filter(n=>n!==s.nome));
+      setSvcsSelected(prev=>prev.filter(x=>x.id!==s.id));
+      return;
+    }
+    // Livre → seleciona e verifica limite
+    setSvcsSelected(prev=>[...prev,s]);
+    verificarLimite(s);
   };
   const [saving,setSaving]=useState(false);
   const [erro,setErro]=useState('');
@@ -277,10 +281,26 @@ function CadastroModal({empresa,onClose,onSuccess}){
               {svcs.map(s=>{
                 const sel=!!svcsSelected.find(x=>x.id===s.id);
                 const bloq=limiteAtingido.includes(s.nome);
+                // Bloqueado mas selecionado → botão clicável para desmarcar
+                if(bloq&&sel)return(
+                  <button key={s.id} onClick={()=>toggleSvc(s)}
+                    style={{width:'100%',marginBottom:8,display:'flex',alignItems:'center',
+                      gap:10,padding:'12px 14px',borderRadius:12,cursor:'pointer',
+                      border:'1.5px solid rgba(239,68,68,.6)',background:'rgba(239,68,68,.12)'}}>
+                    <div style={{width:20,height:20,borderRadius:6,flexShrink:0,border:'2px solid #f87171',
+                      display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#f87171',fontWeight:900}}>✕</div>
+                    <div style={{flex:1,textAlign:'left'}}>
+                      <span style={{fontSize:13,fontWeight:700,color:'#f87171'}}>{s.nome}</span>
+                      <div style={{fontSize:10,color:'#f87171',marginTop:2}}>Toque para remover</div>
+                    </div>
+                    <span style={{fontSize:13,fontWeight:800,color:'#f87171',flexShrink:0}}>R$ {parseFloat(s.valor).toFixed(2).replace('.',',')}</span>
+                  </button>
+                );
+                // Bloqueado e NÃO selecionado → div estática sem clique
                 if(bloq)return(
                   <div key={s.id} style={{width:'100%',marginBottom:8,display:'flex',alignItems:'center',
                     gap:10,padding:'12px 14px',borderRadius:12,
-                    border:'1.5px solid rgba(239,68,68,.4)',background:'rgba(239,68,68,.07)',opacity:.7}}>
+                    border:'1.5px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.06)',opacity:.6}}>
                     <div style={{width:20,height:20,borderRadius:6,flexShrink:0,border:'2px solid #f87171',
                       display:'flex',alignItems:'center',justifyContent:'center',fontSize:11}}>🔒</div>
                     <div style={{flex:1,textAlign:'left'}}>
@@ -330,10 +350,20 @@ function CadastroModal({empresa,onClose,onSuccess}){
             style={{background:'rgba(255,255,255,.05)',border:'1px solid rgba(125,211,252,.15)',color:'rgba(186,230,253,.5)'}}>
             Cancelar
           </button>
-          <button onClick={confirmar} disabled={saving} className='btn'
-            style={{background:'linear-gradient(135deg,#0ea5e9,#0284c7)',color:'#fff',boxShadow:'0 6px 20px rgba(14,165,233,.35)',opacity:(saving||limiteAtingido.length>0)?.5:1}} disabled={saving||limiteAtingido.length>0}>
-            {saving?<div className='spin' style={{width:16,height:16}}/>:'✅ Confirmar'}
-          </button>
+          {(()=>{
+            const bloqSel=svcsSelected.filter(x=>limiteAtingido.includes(x.nome));
+            const temBloq=bloqSel.length>0;
+            return(
+              <button onClick={confirmar} disabled={saving||temBloq} className='btn'
+                style={{background:'linear-gradient(135deg,#0ea5e9,#0284c7)',color:'#fff',
+                  boxShadow:'0 6px 20px rgba(14,165,233,.35)',
+                  opacity:(saving||temBloq)?.5:1}}>
+                {saving?<div className='spin' style={{width:16,height:16}}/>
+                  :temBloq?'Remova o serviço esgotado'
+                  :'✅ Confirmar'}
+              </button>
+            );
+          })()}
         </div>
       </div>
     </div>
