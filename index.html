@@ -3231,7 +3231,7 @@ function FolhaScreen({empresaId,embedded}){
     setDiasMap(dmMap);
     const perfData=typeof perf==="string"?JSON.parse(perf):perf;
     setPerformance(perfData);
-    setDebugPerf(JSON.stringify({raw:perf,parsed:perfData}));
+    setDebugPerf(`inicio:${inicio} fim:${fim} | perf:${JSON.stringify(perfData)}`);
     // Buscar comissões para funcionários com tipo comissao/misto
     const funcsComissao=(funcs||[]).filter(f=>dMap[f.id]?.tipo_pagamento!=="diaria");
     if(funcsComissao.length>0){
