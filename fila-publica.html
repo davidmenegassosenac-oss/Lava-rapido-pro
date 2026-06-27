@@ -163,11 +163,34 @@ function CadastroModal({empresa,onClose,onSuccess}){
   const [form,setForm]=useState({client:'',phone:'',model:'',plate:'',color:'#3b82f6'});
   const [svcsSelected,setSvcsSelected]=useState([]); // array de {id,nome,valor}
   const totalSvcs=svcsSelected.reduce((s,x)=>s+parseFloat(x.valor),0);
-  const toggleSvc=s=>setSvcsSelected(prev=>
-    prev.find(x=>x.id===s.id)?prev.filter(x=>x.id!==s.id):[...prev,s]
-  );
+  const toggleSvc=s=>{
+    setSvcsSelected(prev=>{
+      const jasel=prev.find(x=>x.id===s.id);
+      if(jasel){
+        setLimiteAtingido(l=>l.filter(n=>n!==s.nome));
+        return prev.filter(x=>x.id!==s.id);
+      }
+      verificarLimite(s);
+      return [...prev,s];
+    });
+  };
   const [saving,setSaving]=useState(false);
   const [erro,setErro]=useState('');
+  const [limiteAtingido,setLimiteAtingido]=useState([]);
+
+  const verificarLimite=async(svc)=>{
+    const hoje=new Date().toISOString().split('T')[0];
+    const{data}=await sb.rpc('fn_verificar_limite_servico',{
+      p_empresa_id:empresa.id,
+      p_servico_nome:svc.nome,
+      p_data:hoje,
+    });
+    if(data&&data.permitido===false){
+      setLimiteAtingido(prev=>prev.includes(svc.nome)?prev:[...prev,svc.nome]);
+    }else{
+      setLimiteAtingido(prev=>prev.filter(n=>n!==svc.nome));
+    }
+  };
 
   useEffect(()=>{
     sb.from('servicos_catalogo').select('id,nome,valor')
@@ -243,6 +266,20 @@ function CadastroModal({empresa,onClose,onSuccess}){
             :<>
               {svcs.map(s=>{
                 const sel=!!svcsSelected.find(x=>x.id===s.id);
+                const bloq=limiteAtingido.includes(s.nome);
+                if(bloq)return(
+                  <div key={s.id} style={{width:'100%',marginBottom:8,display:'flex',alignItems:'center',
+                    gap:10,padding:'12px 14px',borderRadius:12,
+                    border:'1.5px solid rgba(239,68,68,.4)',background:'rgba(239,68,68,.07)',opacity:.7}}>
+                    <div style={{width:20,height:20,borderRadius:6,flexShrink:0,border:'2px solid #f87171',
+                      display:'flex',alignItems:'center',justifyContent:'center',fontSize:11}}>🔒</div>
+                    <div style={{flex:1,textAlign:'left'}}>
+                      <span style={{fontSize:13,fontWeight:700,color:'#f87171'}}>{s.nome}</span>
+                      <div style={{fontSize:10,color:'#f87171',marginTop:2}}>⚠️ Limite diário atingido</div>
+                    </div>
+                    <span style={{fontSize:13,fontWeight:800,color:'#f87171',flexShrink:0}}>R$ {parseFloat(s.valor).toFixed(2).replace('.',',')}</span>
+                  </div>
+                );
                 return(
                   <button key={s.id} onClick={()=>toggleSvc(s)}
                     style={{width:'100%',marginBottom:8,display:'flex',alignItems:'center',
@@ -284,7 +321,7 @@ function CadastroModal({empresa,onClose,onSuccess}){
             Cancelar
           </button>
           <button onClick={confirmar} disabled={saving} className='btn'
-            style={{background:'linear-gradient(135deg,#0ea5e9,#0284c7)',color:'#fff',boxShadow:'0 6px 20px rgba(14,165,233,.35)',opacity:saving?.6:1}}>
+            style={{background:'linear-gradient(135deg,#0ea5e9,#0284c7)',color:'#fff',boxShadow:'0 6px 20px rgba(14,165,233,.35)',opacity:(saving||limiteAtingido.length>0)?.5:1}} disabled={saving||limiteAtingido.length>0}>
             {saving?<div className='spin' style={{width:16,height:16}}/>:'✅ Confirmar'}
           </button>
         </div>

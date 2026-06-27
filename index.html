@@ -827,11 +827,13 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [cobrancas,setCobrancas]=useState([]);
   const [form,setForm]=useState({nome_fantasia:"",telefone:"",razao_social:"",cnpj:""});
   const [svcs,setSvcs]=useState([]);
-  const [newSvc,setNewSvc]=useState({nome:"",valor:""});
+  const [newSvc,setNewSvc]=useState({nome:"",valor:"",limite_diario:""});
   const [saving,setSaving]=useState(false);
   const [success,setSuccess]=useState("");
   const [errMsg,setErrMsg]=useState("");
   const [tab,setTab]=useState("empresa");
+  const [ignorarLimites,setIgnorarLimites]=useState(false);
+  const [savingIgnorar,setSavingIgnorar]=useState(false);
   const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
 
   useEffect(()=>{
@@ -839,6 +841,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
       .then(({data})=>{
         setEmpresa(data);
         setForm({nome_fantasia:data?.nome_fantasia||"",telefone:data?.telefone||"",razao_social:data?.razao_social||"",cnpj:data?.cnpj||""});
+        setIgnorarLimites(data?.ignorar_limites_hoje||false);
       });
     sb.rpc('fn_assinatura_valida',{p_empresa_id:empresaId}).then(({data})=>setAss(data));
     sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId}).then(({data,error})=>{
@@ -899,11 +902,24 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     setSaving(false);
   };
 
+  const toggleIgnorarLimites=async()=>{
+    setSavingIgnorar(true);
+    const novo=!ignorarLimites;
+    const{error}=await sb.from('empresas').update({ignorar_limites_hoje:novo}).eq('id',empresaId);
+    if(!error)setIgnorarLimites(novo);
+    setSavingIgnorar(false);
+  };
+
   const addSvc=async()=>{
     if(!newSvc.nome.trim()||!newSvc.valor)return;
-    const{data}=await sb.from('servicos_catalogo').insert({empresa_id:empresaId,nome:newSvc.nome.trim(),valor:parseFloat(newSvc.valor)}).select().single();
+    const{data}=await sb.from('servicos_catalogo').insert({
+      empresa_id:empresaId,
+      nome:newSvc.nome.trim(),
+      valor:parseFloat(newSvc.valor),
+      limite_diario:newSvc.limite_diario?parseInt(newSvc.limite_diario):null,
+    }).select().single();
     if(data)setSvcs(s=>[...s,data]);
-    setNewSvc({nome:"",valor:""});
+    setNewSvc({nome:"",valor:"",limite_diario:""});
   };
 
   const toggleSvc=async(id,ativo)=>{
@@ -966,6 +982,38 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
           ))}
           {errMsg&&<div style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",borderRadius:12,padding:"10px 14px",marginBottom:14,color:"#f87171",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:8}}><Icon name="AlertTriangle" size={14} color="#f87171"/>{errMsg}</div>}
           {success&&<div style={{background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.3)",borderRadius:12,padding:"10px 14px",marginBottom:14,color:"#4ade80",fontSize:13,fontWeight:600}}>{success}</div>}
+
+          {/* Toggle — Ignorar Limites Diários */}
+          <div style={{marginBottom:16,padding:16,borderRadius:16,
+            background:ignorarLimites?"rgba(251,191,36,.08)":"rgba(255,255,255,.04)",
+            border:`1px solid ${ignorarLimites?"rgba(251,191,36,.3)":"rgba(125,211,252,.12)"}`}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:700,color:ignorarLimites?"#fbbf24":"#e0f2fe",marginBottom:4}}>
+                  🔓 Ignorar Limites Diários
+                </div>
+                <div style={{fontSize:11,color:"rgba(186,230,253,.4)",lineHeight:1.5}}>
+                  {ignorarLimites
+                    ?"Ativo — aceitando veículos acima do limite de hoje"
+                    :"Ative para aceitar além do limite máximo de cada serviço hoje"}
+                </div>
+              </div>
+              {/* Switch estilizado */}
+              <button onClick={toggleIgnorarLimites} disabled={savingIgnorar}
+                style={{width:48,height:28,borderRadius:99,cursor:"pointer",border:"none",flexShrink:0,
+                  background:ignorarLimites?"#fbbf24":"rgba(125,211,252,.2)",
+                  position:"relative",transition:"background .2s",
+                  opacity:savingIgnorar?.6:1}}>
+                <div style={{position:"absolute",top:3,
+                  left:ignorarLimites?22:3,
+                  width:22,height:22,borderRadius:99,
+                  background:"#fff",
+                  boxShadow:"0 2px 6px rgba(0,0,0,.3)",
+                  transition:"left .2s"}}/>
+              </button>
+            </div>
+          </div>
+
           <button className="btn-glow" onClick={saveEmpresa} disabled={saving}>
             {saving?<div className="spinner spin"/>:<><Icon name="Check" size={16} color="#fff"/> Salvar Alterações</>}
           </button>
@@ -980,6 +1028,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
             <input className="glass-input" value={newSvc.nome} onChange={e=>setNewSvc(s=>({...s,nome:e.target.value}))} placeholder="Nome do serviço" style={{marginBottom:8}}/>
             <div style={{display:"flex",gap:8}}>
               <input className="glass-input" type="number" value={newSvc.valor} onChange={e=>setNewSvc(s=>({...s,valor:e.target.value}))} placeholder="Valor R$" style={{flex:1}}/>
+              <input className="glass-input" type="number" value={newSvc.limite_diario} onChange={e=>setNewSvc(s=>({...s,limite_diario:e.target.value}))} placeholder="Limite/dia" style={{width:90}} title="Máximo de veículos por dia (vazio = ilimitado)"/>
               <button onClick={addSvc} className="btn-glow" style={{width:"auto",padding:"0 20px",borderRadius:12}}>
                 <Icon name="Plus" size={16} color="#fff"/>
               </button>
@@ -2011,11 +2060,31 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   const [svcs,setSvcs]=useState(SVC_DEFAULT);
   const [tipoContrato,setTipoContrato]=useState("avulso");
   const [limitError,setLimitError]=useState("");
+  const [limiteAtingido,setLimiteAtingido]=useState([]); // nomes de serviços bloqueados
 
   useEffect(()=>{
     sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).eq('ativo',true)
       .then(({data})=>{if(data&&data.length>0)setSvcs(data.map(s=>({label:s.nome,value:s.valor})));});
   },[empresaId]);
+
+  // Verificar limites ao mudar seleção de serviços
+  const verificarLimites=async(svcsParaVerificar)=>{
+    if(!svcsParaVerificar.length){setLimiteAtingido([]);return;}
+    const hoje=new Date().toISOString().split("T")[0];
+    const resultados=await Promise.all(
+      svcsParaVerificar.map(sv=>
+        sb.rpc("fn_verificar_limite_servico",{
+          p_empresa_id:empresaId,
+          p_servico_nome:sv.label,
+          p_data:hoje,
+        })
+      )
+    );
+    const bloqueados=svcsParaVerificar
+      .filter((_,i)=>resultados[i]?.data?.permitido===false)
+      .map(sv=>sv.label);
+    setLimiteAtingido(bloqueados);
+  };
 
   // Valor total calculado automaticamente
   const totalValue=selectedSvcs.reduce((s,sv)=>s+sv.value,0);
@@ -2023,8 +2092,9 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   const toggleSvc=(sv)=>{
     setSelectedSvcs(prev=>{
       const jaSelected=prev.find(s=>s.label===sv.label);
-      if(jaSelected)return prev.filter(s=>s.label!==sv.label);
-      return [...prev,sv];
+      const novo=jaSelected?prev.filter(s=>s.label!==sv.label):[...prev,sv];
+      verificarLimites(novo);
+      return novo;
     });
     setErrors(e=>({...e,svc:undefined}));
   };
@@ -2123,20 +2193,25 @@ function NewWashScreen({empresaId,userId,onSuccess}){
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {svcs.map(sv=>{
             const sel=selectedSvcs.some(s=>s.label===sv.label);
+            const bloqueado=limiteAtingido.includes(sv.label);
             return(
               <button key={sv.label} onClick={()=>toggleSvc(sv)}
                 style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",borderRadius:14,
-                  border:`1.5px solid ${sel?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
-                  background:sel?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
-                  color:sel?"#38bdf8":"rgba(186,230,253,.7)",
+                  border:`1.5px solid ${bloqueado?"rgba(239,68,68,.5)":sel?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+                  background:bloqueado?"rgba(239,68,68,.08)":sel?"rgba(14,165,233,.15)":"rgba(255,255,255,.04)",
+                  color:bloqueado?"#f87171":sel?"#38bdf8":"rgba(186,230,253,.7)",
                   fontWeight:sel?700:500,fontSize:13,cursor:"pointer",transition:"all .15s"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${sel?"#38bdf8":"rgba(125,211,252,.3)"}`,background:sel?"#38bdf8":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
-                    {sel&&<Icon name="Check" size={12} color="#fff"/>}
+                  <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${bloqueado?"#f87171":sel?"#38bdf8":"rgba(125,211,252,.3)"}`,background:sel&&!bloqueado?"#38bdf8":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+                    {sel&&!bloqueado&&<Icon name="Check" size={12} color="#fff"/>}
+                    {bloqueado&&<Icon name="Lock" size={10} color="#f87171"/>}
                   </div>
-                  <span>{sv.label}</span>
+                  <div>
+                    <span>{sv.label}</span>
+                    {bloqueado&&<div style={{fontSize:10,color:"#f87171",marginTop:2}}>⚠️ Limite diário atingido</div>}
+                  </div>
                 </div>
-                <span style={{fontWeight:800,color:"#4ade80"}}>{fmtBRL(sv.value)}</span>
+                <span style={{fontWeight:800,color:bloqueado?"#f87171":"#4ade80"}}>{fmtBRL(sv.value)}</span>
               </button>
             );
           })}
@@ -2188,11 +2263,11 @@ function NewWashScreen({empresaId,userId,onSuccess}){
           <span style={{color:"#f87171",fontSize:13,fontWeight:600,lineHeight:1.4}}>{limitError}</span>
         </div>
       )}
-      <button className="btn-glow" onClick={submit} disabled={loading||selectedSvcs.length===0}
-        style={{opacity:selectedSvcs.length===0?.5:1}}>
+      <button className="btn-glow" onClick={submit} disabled={loading||selectedSvcs.length===0||limiteAtingido.length>0}
+        style={{opacity:selectedSvcs.length===0||limiteAtingido.length>0?.5:1}}>
         {loading?<div className="spinner spin"/>:<>
           <Icon name="Plus" size={18} color="#fff"/>
-          {selectedSvcs.length>0?`Adicionar à Fila — ${fmtBRL(totalValue)}`:"Adicionar à Fila"}
+          {limiteAtingido.length>0?"Limite atingido — remova o serviço bloqueado":selectedSvcs.length>0?`Adicionar à Fila — ${fmtBRL(totalValue)}`:"Adicionar à Fila"}
         </>}
       </button>
     </div>
