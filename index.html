@@ -3755,6 +3755,7 @@ function RelatoriosScreen({empresaId,embedded}){
   const [periodo,setPeriodo]=useState("semana");
   const [movs,setMovs]=useState([]);
   const [hist,setHist]=useState([]);
+  const [histAll,setHistAll]=useState([]); // histórico completo para comparativo mensal
   const [folhaTotal,setFolhaTotal]=useState(0);
   const [loading,setLoading]=useState(true);
 
@@ -3774,6 +3775,14 @@ function RelatoriosScreen({empresaId,embedded}){
       setLoading(false);
     });
   },[empresaId,periodo]);
+
+  // Busca histórico completo (todos os meses) para comparativo — roda uma só vez
+  useEffect(()=>{
+    sb.from('historico').select('value,completed_at')
+      .eq('empresa_id',empresaId)
+      .order('completed_at',{ascending:true})
+      .then(({data})=>setHistAll(data||[]));
+  },[empresaId]);
 
   const entradas=movs.filter(m=>m.tipo==="entrada").reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
   const saidas=movs.filter(m=>m.tipo==="saida").reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
@@ -3808,6 +3817,28 @@ function RelatoriosScreen({empresaId,embedded}){
   const receitaBruta=hist.reduce((s,h)=>s+(parseFloat(h.value)||0),0);
   const lucroLiquido=receitaBruta-folhaTotal;
   const margemLiquida=receitaBruta>0?Math.round(lucroLiquido/receitaBruta*100):null;
+
+  // Comparativo de desempenho mensal — agrupa todo o histórico por Mês/Ano
+  const desempenhoMensal=useMemo(()=>{
+    if(histAll.length===0)return null;
+    const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                 "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const grupos=histAll.reduce((acc,h)=>{
+      if(!h.completed_at)return acc;
+      const d=new Date(h.completed_at);
+      const chave=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      const label=`${MESES[d.getMonth()]} de ${d.getFullYear()}`;
+      if(!acc[chave])acc[chave]={label,total:0};
+      acc[chave].total+=(parseFloat(h.value)||0);
+      return acc;
+    },{});
+    const lista=Object.values(grupos).filter(m=>m.total>0);
+    if(lista.length<2)return null; // precisa de pelo menos 2 meses para comparar
+    const maior=lista.reduce((a,b)=>b.total>a.total?b:a);
+    const menor=lista.reduce((a,b)=>b.total<a.total?b:a);
+    const diffPct=menor.total>0?Math.round((maior.total-menor.total)/menor.total*100):null;
+    return{maior,menor,diffPct,totalMeses:lista.length};
+  },[histAll]);
 
   const hoje=new Date();
   let chartData;
@@ -3934,6 +3965,80 @@ function RelatoriosScreen({empresaId,embedded}){
             </div>
             <BarChart data={chartData} color="#0ea5e9" height={100}/>
           </div>
+
+          {/* Comparativo de Desempenho Mensal */}
+          {desempenhoMensal&&(
+            <div className="glass-card" style={{padding:16,marginBottom:14}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+                <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)"}}>
+                  📆 Comparativo Mensal
+                </div>
+                <span style={{fontSize:10,color:"rgba(186,230,253,.3)",fontWeight:600}}>
+                  {desempenhoMensal.totalMeses} meses analisados
+                </span>
+              </div>
+
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                {/* Mês Recorde */}
+                <div style={{padding:14,borderRadius:14,
+                  background:"rgba(74,222,128,.08)",
+                  border:"1px solid rgba(74,222,128,.2)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                    <div style={{width:28,height:28,borderRadius:8,
+                      background:"rgba(74,222,128,.15)",
+                      border:"1px solid rgba(74,222,128,.3)",
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:14,boxShadow:"0 0 12px rgba(74,222,128,.2)"}}>
+                      📈
+                    </div>
+                    <span style={{fontSize:10,fontWeight:700,color:"rgba(74,222,128,.8)",
+                      textTransform:"uppercase",letterSpacing:".06em"}}>Recorde</span>
+                  </div>
+                  <div style={{fontSize:16,fontWeight:900,color:"#4ade80",marginBottom:4}}>
+                    {fmtBRL(desempenhoMensal.maior.total)}
+                  </div>
+                  <div style={{fontSize:10,color:"rgba(186,230,253,.4)",lineHeight:1.4}}>
+                    {desempenhoMensal.maior.label}
+                  </div>
+                </div>
+
+                {/* Menor Faturamento */}
+                <div style={{padding:14,borderRadius:14,
+                  background:"rgba(248,113,113,.07)",
+                  border:"1px solid rgba(248,113,113,.2)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                    <div style={{width:28,height:28,borderRadius:8,
+                      background:"rgba(248,113,113,.15)",
+                      border:"1px solid rgba(248,113,113,.3)",
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:14,boxShadow:"0 0 12px rgba(248,113,113,.2)"}}>
+                      📉
+                    </div>
+                    <span style={{fontSize:10,fontWeight:700,color:"rgba(248,113,113,.8)",
+                      textTransform:"uppercase",letterSpacing:".06em"}}>Atenção</span>
+                  </div>
+                  <div style={{fontSize:16,fontWeight:900,color:"#f87171",marginBottom:4}}>
+                    {fmtBRL(desempenhoMensal.menor.total)}
+                  </div>
+                  <div style={{fontSize:10,color:"rgba(186,230,253,.4)",lineHeight:1.4}}>
+                    {desempenhoMensal.menor.label}
+                  </div>
+                </div>
+              </div>
+
+              {/* Insight de rodapé */}
+              {desempenhoMensal.diffPct!==null&&(
+                <div style={{padding:"10px 12px",borderRadius:12,
+                  background:"rgba(255,255,255,.04)",
+                  border:"1px solid rgba(125,211,252,.08)",
+                  fontSize:11,color:"rgba(186,230,253,.5)",lineHeight:1.5,textAlign:"center"}}>
+                  💡 O mês recorde faturou{" "}
+                  <span style={{color:"#4ade80",fontWeight:800}}>{desempenhoMensal.diffPct}% a mais</span>
+                  {" "}do que o mês mais fraco
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Serviços mais realizados */}
           {svcs.length>0&&(
