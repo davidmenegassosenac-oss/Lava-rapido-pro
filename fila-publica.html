@@ -75,16 +75,28 @@ function BuscaScreen({onSelect}){
   const [load,setLoad]=useState(false);
   const [erro,setErro]=useState('');
   const [afiliadas,setAfiliadas]=useState([]);
+  const [filaCount,setFilaCount]=useState({}); // {empresa_id: count}
   const [loadAfil,setLoadAfil]=useState(true);
   const t=useRef(null);
 
   useEffect(()=>{
-    sb.from('empresas')
-      .select('id,nome_fantasia,telefone')
-      .limit(6)
-      .then(({data,error})=>{
-        if(error)console.error('afiliadas:',error.message);
-        setAfiliadas(data||[]);
+    sb.from('empresas').select('id,nome_fantasia,telefone').limit(8)
+      .then(async({data,error})=>{
+        if(error){setLoadAfil(false);return;}
+        const lista=data||[];
+        setAfiliadas(lista);
+        // Buscar contagem de fila por empresa para o badge ao vivo
+        if(lista.length>0){
+          const counts={};
+          await Promise.all(lista.map(async e=>{
+            const{count}=await sb.from('ordens_servico')
+              .select('*',{count:'exact',head:true})
+              .eq('empresa_id',e.id)
+              .in('status',['Aguardando','Lavando']);
+            counts[e.id]=count||0;
+          }));
+          setFilaCount(counts);
+        }
         setLoadAfil(false);
       });
   },[]);
@@ -105,66 +117,193 @@ function BuscaScreen({onSelect}){
     return()=>clearTimeout(t.current);
   },[q]);
 
+  const GRADIENTS=[
+    'linear-gradient(135deg,rgba(14,165,233,.25),rgba(6,182,212,.12))',
+    'linear-gradient(135deg,rgba(139,92,246,.25),rgba(167,139,250,.12))',
+    'linear-gradient(135deg,rgba(16,185,129,.22),rgba(74,222,128,.1))',
+    'linear-gradient(135deg,rgba(245,158,11,.22),rgba(251,191,36,.1))',
+    'linear-gradient(135deg,rgba(239,68,68,.2),rgba(248,113,113,.1))',
+    'linear-gradient(135deg,rgba(56,189,248,.22),rgba(14,165,233,.1))',
+  ];
+  const EMOJIS=['🚗','💧','✨','🧼','⭐','🏎️'];
+
   return(
-    <div style={{minHeight:'100vh',padding:'50px 20px 40px',display:'flex',flexDirection:'column',alignItems:'center'}}>
-      <div style={{textAlign:'center',marginBottom:36}}>
-        <div style={{fontSize:48,marginBottom:10}}>🚗💧</div>
-        <div style={{fontSize:22,fontWeight:900,color:'#e0f2fe',marginBottom:4}}>Fila em Tempo Real</div>
-        <div style={{fontSize:13,color:'rgba(186,230,253,.4)'}}>Acompanhe seu carro sem sair de casa</div>
+    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',background:'#0c1a2e'}}>
+
+      {/* Hero */}
+      <div style={{padding:'52px 20px 28px',textAlign:'center'}}>
+        <div style={{fontSize:44,marginBottom:10}}>🚗💧</div>
+        <div style={{fontSize:24,fontWeight:900,color:'#e0f2fe',marginBottom:6,lineHeight:1.2}}>
+          Fila em Tempo Real
+        </div>
+        <div style={{fontSize:13,color:'rgba(186,230,253,.4)',marginBottom:24}}>
+          Acompanhe seu carro sem sair de casa
+        </div>
+        {/* Barra de busca */}
+        <div style={{position:'relative',maxWidth:420,margin:'0 auto'}}>
+          <span style={{position:'absolute',left:16,top:'50%',transform:'translateY(-50%)',fontSize:16,pointerEvents:'none'}}>🔍</span>
+          <input value={q} onChange={e=>setQ(e.target.value)}
+            placeholder='Buscar lava-jato pelo nome...'
+            style={{width:'100%',padding:'14px 16px 14px 44px',borderRadius:20,
+              background:'rgba(255,255,255,.08)',border:'1px solid rgba(125,211,252,.2)',
+              color:'#e0f2fe',fontFamily:'Outfit,sans-serif',fontSize:15,outline:'none',
+              boxShadow:q?'0 0 0 2px rgba(14,165,233,.3)':'none',transition:'box-shadow .2s'}}/>
+          {q&&<button onClick={()=>setQ('')}
+            style={{position:'absolute',right:14,top:'50%',transform:'translateY(-50%)',
+              background:'transparent',border:'none',color:'rgba(186,230,253,.4)',fontSize:20,cursor:'pointer'}}>×</button>}
+        </div>
       </div>
-      <div style={{width:'100%',maxWidth:440}}>
-        <input value={q} onChange={e=>setQ(e.target.value)}
-          placeholder='Digite o nome do lava-jato...'
-          className='inp' style={{marginBottom:12}} autoFocus/>
-        {!q&&(
-          <div style={{marginBottom:20}}>
-            <div style={{fontSize:11,fontWeight:700,color:'rgba(186,230,253,.4)',
-              textTransform:'uppercase',letterSpacing:'.1em',marginBottom:12}}>
-              🤝 Lavações Parceiras
+
+      {/* Resultados da busca */}
+      {q.length>=2&&(
+        <div style={{padding:'0 16px 20px',maxWidth:452,margin:'0 auto',width:'100%'}}>
+          {load&&<div style={{textAlign:'center',padding:16}}><div className='spin' style={{margin:'0 auto'}}/></div>}
+          {erro&&<div style={{padding:'10px 14px',borderRadius:12,background:'rgba(239,68,68,.12)',
+            border:'1px solid rgba(239,68,68,.3)',color:'#f87171',fontSize:13,marginBottom:10}}>{erro}</div>}
+          {!load&&!erro&&res.length===0&&(
+            <div style={{textAlign:'center',padding:'20px 0',color:'rgba(186,230,253,.3)',fontSize:13}}>
+              Nenhum lava-jato encontrado para "{q}"
             </div>
-            {loadAfil
-              ?<div style={{textAlign:'center',padding:16}}><div className='spin' style={{margin:'0 auto'}}/></div>
-              :afiliadas.length===0
-                ?<div style={{fontSize:12,color:'rgba(186,230,253,.3)',textAlign:'center',padding:12}}>Nenhuma lavação disponível</div>
-                :<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                  {afiliadas.map((e,i)=>{
-                    const ICONS=['🚗','💧','✨','🧼','⭐'];
-                    const COLORS=['rgba(14,165,233,.15)','rgba(74,222,128,.12)','rgba(167,139,250,.12)','rgba(251,191,36,.12)','rgba(56,189,248,.1)'];
-                    const BORDERS=['rgba(14,165,233,.3)','rgba(74,222,128,.25)','rgba(167,139,250,.25)','rgba(251,191,36,.25)','rgba(56,189,248,.2)'];
-                    return(
-                      <button key={e.id} onClick={()=>onSelect(e)}
-                        style={{padding:'16px 14px',borderRadius:16,cursor:'pointer',textAlign:'left',
-                          background:COLORS[i%COLORS.length],
-                          border:'1px solid '+BORDERS[i%BORDERS.length],
-                          display:'flex',flexDirection:'column',gap:6}}>
-                        <span style={{fontSize:22}}>{ICONS[i%ICONS.length]}</span>
-                        <span style={{fontSize:13,fontWeight:800,color:'#e0f2fe',lineHeight:1.2}}>{e.nome_fantasia}</span>
-                        <span style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:600}}>Ver fila →</span>
-                      </button>
-                    );
-                  })}
+          )}
+          {res.map(e=>(
+            <button key={e.id} onClick={()=>onSelect(e)}
+              style={{width:'100%',marginBottom:8,padding:'14px 16px',borderRadius:16,cursor:'pointer',
+                background:'rgba(255,255,255,.06)',border:'1px solid rgba(125,211,252,.15)',
+                textAlign:'left',color:'#e0f2fe',display:'flex',alignItems:'center',gap:12}}>
+              <div style={{width:40,height:40,borderRadius:12,background:'rgba(14,165,233,.15)',
+                border:'1px solid rgba(14,165,233,.25)',display:'flex',alignItems:'center',
+                justifyContent:'center',fontSize:20,flexShrink:0}}>🚗</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:15,fontWeight:800,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.nome_fantasia}</div>
+                {e.telefone&&<div style={{fontSize:12,color:'rgba(186,230,253,.4)',marginTop:1}}>📞 {e.telefone}</div>}
+              </div>
+              <div style={{color:'rgba(56,189,248,.5)',fontSize:18,flexShrink:0}}>›</div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Lavações parceiras — só aparece quando não há busca */}
+      {!q&&(
+        <div style={{flex:1,paddingBottom:40}}>
+          {loadAfil?(
+            <div style={{textAlign:'center',padding:32}}><div className='spin' style={{margin:'0 auto'}}/></div>
+          ):afiliadas.length===0?(
+            <div style={{textAlign:'center',padding:32,color:'rgba(186,230,253,.3)',fontSize:13}}>
+              Nenhuma lavação disponível
+            </div>
+          ):(
+            <>
+              {/* Seção destaque — primeiro card grande */}
+              {afiliadas[0]&&(()=>{
+                const e=afiliadas[0];
+                const count=filaCount[e.id]||0;
+                const aberto=count<8;
+                return(
+                  <div style={{padding:'0 16px',marginBottom:24}}>
+                    <div style={{fontSize:11,fontWeight:700,color:'rgba(186,230,253,.45)',
+                      textTransform:'uppercase',letterSpacing:'.12em',marginBottom:12,
+                      display:'flex',alignItems:'center',gap:6}}>
+                      <span>🔥 Em Destaque</span>
+                    </div>
+                    <button onClick={()=>onSelect(e)}
+                      style={{width:'100%',padding:'22px 20px',borderRadius:24,cursor:'pointer',
+                        background:GRADIENTS[0],
+                        border:'1px solid rgba(14,165,233,.35)',
+                        textAlign:'left',position:'relative',overflow:'hidden'}}>
+                      {/* Glow de fundo */}
+                      <div style={{position:'absolute',top:-40,right:-40,width:120,height:120,
+                        borderRadius:99,background:'rgba(14,165,233,.15)',filter:'blur(30px)',pointerEvents:'none'}}/>
+                      <div style={{position:'relative'}}>
+                        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:12}}>
+                          <div style={{fontSize:32}}>🚗</div>
+                          {/* Badge ao vivo */}
+                          <div style={{display:'flex',alignItems:'center',gap:6,
+                            padding:'4px 10px',borderRadius:99,
+                            background:aberto?'rgba(74,222,128,.15)':'rgba(248,113,113,.15)',
+                            border:`1px solid ${aberto?'rgba(74,222,128,.3)':'rgba(248,113,113,.3)'}`}}>
+                            <div style={{position:'relative',width:8,height:8}}>
+                              <div style={{position:'absolute',inset:0,borderRadius:99,
+                                background:aberto?'#4ade80':'#f87171',
+                                animation:'pl 1.5s ease-in-out infinite'}}/>
+                              <div style={{position:'relative',width:'100%',height:'100%',
+                                borderRadius:99,background:aberto?'#4ade80':'#f87171'}}/>
+                            </div>
+                            <span style={{fontSize:10,fontWeight:800,
+                              color:aberto?'#4ade80':'#f87171'}}>
+                              {aberto?'Aberto':'Cheio'}
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{fontSize:18,fontWeight:900,color:'#e0f2fe',marginBottom:4,lineHeight:1.2}}>
+                          {e.nome_fantasia}
+                        </div>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                          <div style={{fontSize:12,color:'rgba(186,230,253,.5)'}}>
+                            {count===0?'Sem fila agora':'${count} na fila'.replace('${count}',count)}
+                          </div>
+                          <div style={{fontSize:12,fontWeight:700,color:'#38bdf8'}}>Ver fila →</div>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Carrossel horizontal — demais empresas */}
+              {afiliadas.length>1&&(
+                <div>
+                  <div style={{padding:'0 16px',fontSize:11,fontWeight:700,
+                    color:'rgba(186,230,253,.45)',textTransform:'uppercase',
+                    letterSpacing:'.12em',marginBottom:12}}>
+                    🤝 Todas as Lavações
+                  </div>
+                  <div style={{display:'flex',gap:10,overflowX:'auto',
+                    padding:'4px 16px 12px',
+                    WebkitOverflowScrolling:'touch',
+                    scrollbarWidth:'none',msOverflowStyle:'none'}}>
+                    {afiliadas.slice(1).map((e,i)=>{
+                      const count=filaCount[e.id]||0;
+                      const aberto=count<8;
+                      return(
+                        <button key={e.id} onClick={()=>onSelect(e)}
+                          style={{flexShrink:0,width:150,padding:'16px 14px',
+                            borderRadius:20,cursor:'pointer',textAlign:'left',
+                            background:GRADIENTS[(i+1)%GRADIENTS.length],
+                            border:'1px solid rgba(125,211,252,.15)',
+                            display:'flex',flexDirection:'column',gap:8}}>
+                          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                            <span style={{fontSize:24}}>{EMOJIS[(i+1)%EMOJIS.length]}</span>
+                            {/* Mini badge */}
+                            <div style={{display:'flex',alignItems:'center',gap:4}}>
+                              <div style={{width:6,height:6,borderRadius:99,
+                                background:aberto?'#4ade80':'#f87171',
+                                animation:aberto?'pl 1.5s ease-in-out infinite':'none'}}/>
+                              <span style={{fontSize:9,fontWeight:700,
+                                color:aberto?'#4ade80':'rgba(186,230,253,.4)'}}>
+                                {aberto?'Aberto':'Cheio'}
+                              </span>
+                            </div>
+                          </div>
+                          <div style={{fontSize:12,fontWeight:800,color:'#e0f2fe',
+                            lineHeight:1.3,overflow:'hidden',
+                            display:'-webkit-box',WebkitLineClamp:2,
+                            WebkitBoxOrient:'vertical'}}>
+                            {e.nome_fantasia}
+                          </div>
+                          <div style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:600}}>
+                            {count===0?'Sem fila':'${c} na fila'.replace('${c}',count)} · Ver →
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-            }
-          </div>
-        )}
-        {load&&<div style={{textAlign:'center',padding:20}}><div className='spin' style={{margin:'0 auto'}}/></div>}
-        {erro&&<div style={{padding:'10px 14px',borderRadius:12,background:'rgba(239,68,68,.12)',
-          border:'1px solid rgba(239,68,68,.3)',color:'#f87171',fontSize:13,marginBottom:10}}>{erro}</div>}
-        {res.map(e=>(
-          <button key={e.id} onClick={()=>onSelect(e)}
-            style={{width:'100%',marginBottom:8,padding:'14px 16px',borderRadius:16,cursor:'pointer',
-              background:'rgba(255,255,255,.05)',border:'1px solid rgba(125,211,252,.15)',
-              textAlign:'left',color:'#e0f2fe'}}>
-            <div style={{fontSize:15,fontWeight:800}}>{e.nome_fantasia}</div>
-            {e.telefone&&<div style={{fontSize:12,color:'rgba(186,230,253,.4)',marginTop:2}}>📞 {e.telefone}</div>}
-          </button>
-        ))}
-        {!load&&!erro&&q.length>=2&&res.length===0&&(
-          <div style={{textAlign:'center',padding:'20px 0',color:'rgba(186,230,253,.3)',fontSize:13}}>
-            Nenhum lava-jato encontrado
-          </div>
-        )}
-      </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
