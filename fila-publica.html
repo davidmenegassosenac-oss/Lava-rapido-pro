@@ -430,20 +430,32 @@ function CadastroModal({empresa,onClose,onSuccess}){
     }
     setSaving(true);setErro('');
     const typeLabel=svcsSelected.map(s=>s.nome).join(' + ');
+    const phone=form.phone.replace(/\D/g,'');
+
+    // Verifica se é cliente recuperado (sumiu há +30 dias)
+    let recuperado=false;
+    try{
+      const{data:rData}=await sb.rpc('fn_verificar_cliente_recuperado',{
+        p_empresa_id:empresa.id,p_phone:phone
+      });
+      recuperado=rData===true;
+    }catch(_){}
+
     const{error}=await sb.from('ordens_servico').insert({
       empresa_id:empresa.id,
       plate:form.plate.trim().toUpperCase(),
       model:form.model.trim(),
       client:form.client.trim(),
-      phone:form.phone.replace(/\D/g,''),
+      phone,
       type:typeLabel,
       value:totalSvcs,
       color:form.color,
       status:'Aguardando',
+      cliente_recuperado:recuperado,
     });
     setSaving(false);
     if(error){setErro('Erro ao cadastrar. Tente novamente.');return;}
-    onSuccess();
+    onSuccess(recuperado);
   };
 
   const CORES=['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#64748b'];
@@ -814,45 +826,66 @@ function FilaScreen({empresa,onVoltar}){
                       const hora=c.hora_entrega
                         ?new Date(c.hora_entrega).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})
                         :null;
+                      const rec=c.cliente_recuperado===true;
+                      const lavandoRec=rec&&status==='Lavando';
                       return(
                         <div key={c.id} style={{marginBottom:10,padding:'14px 16px',borderRadius:20,
-                          background:hl
-                            ?'rgba(14,165,233,.1)'
-                            :'rgba(255,255,255,.05)',
+                          background:rec
+                            ?'linear-gradient(135deg,rgba(251,191,36,.1),rgba(202,138,4,.05),rgba(255,255,255,.04))'
+                            :hl?'rgba(14,165,233,.1)':'rgba(255,255,255,.05)',
                           backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',
-                          border:`1px solid ${hl?'rgba(14,165,233,.35)':'rgba(125,211,252,.1)'}`,
-                          boxShadow:hl?'0 4px 20px rgba(14,165,233,.15)':'0 2px 12px rgba(0,0,0,.2)'}}>
+                          border:rec
+                            ?`1.5px solid rgba(251,191,36,${lavandoRec?.5:.3})`
+                            :`1px solid ${hl?'rgba(14,165,233,.35)':'rgba(125,211,252,.1)'}`,
+                          boxShadow:rec
+                            ?lavandoRec
+                              ?'0 4px 24px rgba(251,191,36,.18),0 0 0 1px rgba(251,191,36,.1)'
+                              :'0 4px 16px rgba(251,191,36,.1)'
+                            :hl?'0 4px 20px rgba(14,165,233,.15)':'0 2px 12px rgba(0,0,0,.2)',
+                          animation:lavandoRec?'pl 2.5s ease-in-out infinite':undefined}}>
+                          {/* Badge cliente recuperado */}
+                          {rec&&(
+                            <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:10,
+                              padding:'4px 10px',borderRadius:8,width:'fit-content',
+                              background:'rgba(251,191,36,.15)',border:'1px solid rgba(251,191,36,.35)'}}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                              <span style={{fontSize:10,fontWeight:800,color:'#fbbf24',textTransform:'uppercase',letterSpacing:'.08em'}}>Cliente Recuperado</span>
+                            </div>
+                          )}
                           <div style={{display:'flex',alignItems:'center',gap:12}}>
                             {/* Avatar cor do veículo */}
                             <div style={{width:42,height:42,borderRadius:14,flexShrink:0,
-                              background:(c.color||'#38bdf8')+'28',
-                              border:'1.5px solid '+(c.color||'#38bdf8')+'55',
+                              background:rec?'rgba(251,191,36,.15)':(c.color||'#38bdf8')+'28',
+                              border:rec?'1.5px solid rgba(251,191,36,.4)':'1.5px solid '+(c.color||'#38bdf8')+'55',
                               display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>
-                              🚗
+                              {rec?'⭐':'🚗'}
                             </div>
                             <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:14,fontWeight:900,color:'#e0f2fe',
+                              <div style={{fontSize:14,fontWeight:900,
+                                color:rec?'#fbbf24':'#e0f2fe',
                                 letterSpacing:'.05em'}}>
                                 {mascaraPlaca(c.plate)}
                               </div>
-                              <div style={{fontSize:11,color:'rgba(186,230,253,.5)',marginTop:2}}>
+                              <div style={{fontSize:11,color:rec?'rgba(251,191,36,.6)':'rgba(186,230,253,.5)',marginTop:2}}>
                                 {c.model}
-                                {hora&&<span style={{color:'#38bdf8',marginLeft:6}}>· ⏰ {hora}</span>}
+                                {hora&&<span style={{color:rec?'#fbbf24':'#38bdf8',marginLeft:6}}>· ⏰ {hora}</span>}
                               </div>
                             </div>
                             <div style={{fontSize:11,flexShrink:0,textAlign:'right'}}>
                               {status==='Aguardando'&&(
                                 <div style={{padding:'3px 9px',borderRadius:99,
-                                  background:'rgba(251,191,36,.12)',border:'1px solid rgba(251,191,36,.25)',
+                                  background:rec?'rgba(251,191,36,.15)':'rgba(251,191,36,.12)',
+                                  border:rec?'1px solid rgba(251,191,36,.4)':'1px solid rgba(251,191,36,.25)',
                                   color:'#fbbf24',fontWeight:700}}>
                                   {pos===0?'Próximo':'#'+(pos+1)}
                                 </div>
                               )}
                               {status==='Lavando'&&(
                                 <div className='pulse' style={{padding:'3px 9px',borderRadius:99,
-                                  background:'rgba(56,189,248,.12)',border:'1px solid rgba(56,189,248,.25)',
-                                  color:'#38bdf8',fontWeight:700}}>
-                                  Lavando
+                                  background:rec?'rgba(251,191,36,.15)':'rgba(56,189,248,.12)',
+                                  border:rec?'1px solid rgba(251,191,36,.4)':'1px solid rgba(56,189,248,.25)',
+                                  color:rec?'#fbbf24':'#38bdf8',fontWeight:700}}>
+                                  {rec?'✨ Lavando':'Lavando'}
                                 </div>
                               )}
                               {status==='Concluído'&&(
@@ -866,13 +899,14 @@ function FilaScreen({empresa,onVoltar}){
                           </div>
                           {hl&&(
                             <div style={{marginTop:12,padding:'12px 14px',borderRadius:14,
-                              background:'rgba(14,165,233,.12)',border:'1px solid rgba(14,165,233,.3)'}}>
-                              <div style={{fontSize:13,fontWeight:800,color:'#38bdf8',marginBottom:3}}>
+                              background:rec?'rgba(251,191,36,.1)':'rgba(14,165,233,.12)',
+                              border:rec?'1px solid rgba(251,191,36,.3)':'1px solid rgba(14,165,233,.3)'}}>
+                              <div style={{fontSize:13,fontWeight:800,color:rec?'#fbbf24':'#38bdf8',marginBottom:3}}>
                                 {status==='Aguardando'&&('⏳ Na fila'+(pos===0?' — próximo!':' — posição '+(pos+1)))}
-                                {status==='Lavando'&&'🧼 Sendo lavado agora!'}
+                                {status==='Lavando'&&(rec?'⭐ VIP sendo lavado agora!':'🧼 Sendo lavado agora!')}
                                 {status==='Concluído'&&'✅ Pronto para retirada!'}
                               </div>
-                              <div style={{fontSize:11,color:'rgba(56,189,248,.7)'}}>
+                              <div style={{fontSize:11,color:rec?'rgba(251,191,36,.7)':'rgba(56,189,248,.7)'}}>
                                 {status==='Aguardando'&&pos===0&&'Previsão: em breve!'}
                                 {status==='Aguardando'&&pos>0&&'~'+pos*20+' min de espera'}
                                 {status==='Lavando'&&'Previsão: ~25 min'}
@@ -925,9 +959,7 @@ function FilaScreen({empresa,onVoltar}){
 
       {showForm&&<CadastroModal empresa={empresa}
         onClose={()=>setShowForm(false)}
-        onSuccess={()=>{setShowForm(false);showToast('🎉 Prontinho! Seu veículo foi adicionado à fila.');fetch();}}/>}
-
-      {toast&&(
+        onSuccess={rec=>{setShowForm(false);showToast(rec?'🌟 Que saudade! Bem-vindo de volta! Seu veículo está na fila.':'🎉 Prontinho! Seu veículo foi adicionado à fila.');fetch();}}/>}      {toast&&(
         <div style={{position:'fixed',bottom:96,left:'50%',transform:'translateX(-50%)',
           background:'rgba(8,15,30,.96)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
           border:'1px solid rgba(56,189,248,.2)',color:'#e0f2fe',

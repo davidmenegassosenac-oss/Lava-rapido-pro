@@ -1944,9 +1944,15 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
       borderRadius:20,overflow:"hidden",
       background:"rgba(255,255,255,.05)",
       backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
-      border:"1px solid rgba(125,211,252,.1)",
-      borderLeft:`3px solid ${progColor[item.status]||"rgba(125,211,252,.2)"}`,
-      boxShadow:"0 4px 24px rgba(0,0,0,.25)"}}>
+      border:item.cliente_recuperado
+        ?"1.5px solid rgba(251,191,36,.5)"
+        :"1px solid rgba(125,211,252,.1)",
+      borderLeft:item.cliente_recuperado
+        ?"3px solid #fbbf24"
+        :`3px solid ${progColor[item.status]||"rgba(125,211,252,.2)"}`,
+      boxShadow:item.cliente_recuperado
+        ?"0 4px 24px rgba(0,0,0,.25),0 0 20px rgba(251,191,36,.12)"
+        :"0 4px 24px rgba(0,0,0,.25)"}}>
       <div style={{padding:16,cursor:"pointer"}} onClick={()=>{if(!showPgto&&!showLavador&&!editHora)setOpen(!open);}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -1964,6 +1970,13 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <StatusBadge status={item.status}/>
+            {item.cliente_recuperado&&(
+              <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,
+                background:"rgba(251,191,36,.15)",border:"1px solid rgba(251,191,36,.4)",
+                color:"#fbbf24",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:11}}>♻️</span> Recuperado
+              </span>
+            )}
             {isMensalista&&(
               <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:99,
                 background:"rgba(167,139,250,.15)",border:"1px solid rgba(167,139,250,.3)",
