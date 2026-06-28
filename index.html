@@ -412,6 +412,24 @@ function StatusBadge({status}){
 const today=new Date();
 function daysSince(ds){return Math.floor((today-new Date(ds))/86400000);}
 function fmtDate(ds){return new Date(ds).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"});}
+
+// Helper global: verifica se cliente tem ordem ativa hoje (fila ou histórico de hoje)
+function clienteEstaAtivoHoje(phone,plate,listaFila,listaHistorico){
+  const fone=(phone?String(phone).replace(/\D/g,''):'');
+  const placa=(plate?String(plate).trim().toUpperCase():'');
+  if(!fone&&!placa)return false;
+  const match=(o)=>{
+    const op=(o.plate?String(o.plate).trim().toUpperCase():'');
+    const of=(o.phone?String(o.phone).replace(/\D/g,''):'');
+    return(placa&&op===placa)||(fone&&of===fone&&fone.length>=8);
+  };
+  if((listaFila||[]).some(match))return true;
+  const hoje=new Date().toDateString();
+  return(listaHistorico||[]).some(h=>{
+    if(new Date(h.completed_at).toDateString()!==hoje)return false;
+    return match(h);
+  });
+}
 function fmtTime(ds){return ds?new Date(ds).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—";}
 
 // ── Feature Gate — controle de acesso por plano ───────────────────────────
@@ -3031,39 +3049,39 @@ function HistoryScreen({empresaId,embedded,isOwner}){
 function CRMScreen({empresaId,onBadgeUpdate}){
   const [min,setMin]=useState(30);
   const [hist,setHist]=useState([]);
+  const [filaAtiva,setFilaAtiva]=useState([]);
+  const [histHoje,setHistHoje]=useState([]);
   const [loading,setLoading]=useState(true);
   const [disparados,setDisparados]=useState(new Set());
-  const [hojeSet,setHojeSet]=useState({plates:new Set(),phones:new Set()});
 
   useEffect(()=>{
     const hoje=new Date().toISOString().split('T')[0];
     Promise.all([
       sb.from('historico').select('phone,client,model,plate,type,completed_at,cliente_recuperado')
         .eq('empresa_id',empresaId).order('completed_at',{ascending:false}),
-      // Ordens ativas + concluídas hoje — para excluir do CRM quem já pisou no pátio hoje
       sb.from('ordens_servico').select('plate,phone')
-        .eq('empresa_id',empresaId)
-        .gte('created_at',hoje+'T00:00:00')
-    ]).then(([{data:h},{data:o}])=>{
+        .eq('empresa_id',empresaId).neq('status','Concluído'),
+      sb.from('historico').select('plate,phone,completed_at')
+        .eq('empresa_id',empresaId).gte('completed_at',hoje+'T00:00:00'),
+    ]).then(([{data:h},{data:fila},{data:hj}])=>{
       setHist(h||[]);
-      const plates=new Set((o||[]).map(x=>(x.plate||'').toUpperCase()));
-      const phones=new Set((o||[]).map(x=>(x.phone||'').replace(/\D/g,'')));
-      setHojeSet({plates,phones});
+      setFilaAtiva(fila||[]);
+      setHistHoje(hj||[]);
       setLoading(false);
     });
   },[empresaId]);
 
-  // Latest per phone — exclui quem está no pátio hoje ou já foi recuperado
+  // Último registro por telefone
   const map={};
   hist.forEach(r=>{if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))map[r.phone]=r;});
+
+  // Filtro definitivo: 30+ dias ausente, não recuperado, e não ativo hoje
   const sumidos=Object.values(map)
     .map(r=>({...r,dias:daysSince(r.completed_at)}))
     .filter(r=>{
       if(r.dias<min)return false;
       if(r.cliente_recuperado===true)return false;
-      // Excluir quem visitou hoje (por placa ou telefone)
-      if(hojeSet.plates.has((r.plate||'').toUpperCase()))return false;
-      if(hojeSet.phones.has((r.phone||'').replace(/\D/g,'')))return false;
+      if(clienteEstaAtivoHoje(r.phone,r.plate,filaAtiva,histHoje))return false;
       return true;
     })
     .sort((a,b)=>b.dias-a.dias);
@@ -4474,33 +4492,25 @@ function App(){
   const [showSupport,setShowSupport]=useState(false);
   const [crmBadge,setCrmBadge]=useState(0);
 
-  // Conta clientes sumidos (≥30 dias) para o badge do CRM —
-  // usa a mesma regra do CRMScreen: exclui cliente_recuperado=true e quem pisou no pátio hoje
+  // Badge CRM — mesma lógica do CRMScreen usando clienteEstaAtivoHoje
   useEffect(()=>{
     if(!profile?.empresa_id||profile.role==="master")return;
     const hoje=new Date().toISOString().split('T')[0];
     Promise.all([
-      sb.from("historico")
-        .select("phone,plate,completed_at,cliente_recuperado")
-        .eq("empresa_id",profile.empresa_id)
-        .order("completed_at",{ascending:false}),
+      sb.from("historico").select("phone,plate,completed_at,cliente_recuperado")
+        .eq("empresa_id",profile.empresa_id).order("completed_at",{ascending:false}),
       sb.from("ordens_servico").select("plate,phone")
-        .eq("empresa_id",profile.empresa_id)
-        .gte("created_at",hoje+"T00:00:00"),
-    ]).then(([{data:h},{data:o}])=>{
+        .eq("empresa_id",profile.empresa_id).neq("status","Concluído"),
+      sb.from("historico").select("plate,phone,completed_at")
+        .eq("empresa_id",profile.empresa_id).gte("completed_at",hoje+"T00:00:00"),
+    ]).then(([{data:h},{data:fila},{data:hj}])=>{
       if(!h)return;
-      const platesHoje=new Set((o||[]).map(x=>(x.plate||'').toUpperCase()));
-      const phonesHoje=new Set((o||[]).map(x=>(x.phone||'').replace(/\D/g,'')));
       const map={};
-      h.forEach(r=>{
-        if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))
-          map[r.phone]=r;
-      });
+      h.forEach(r=>{if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))map[r.phone]=r;});
       const count=Object.values(map).filter(r=>{
         if(daysSince(r.completed_at)<30)return false;
         if(r.cliente_recuperado===true)return false;
-        if(platesHoje.has((r.plate||'').toUpperCase()))return false;
-        if(phonesHoje.has((r.phone||'').replace(/\D/g,'')))return false;
+        if(clienteEstaAtivoHoje(r.phone,r.plate,fila||[],hj||[]))return false;
         return true;
       }).length;
       setCrmBadge(count);
