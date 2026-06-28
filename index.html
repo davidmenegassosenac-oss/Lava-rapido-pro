@@ -1927,16 +1927,26 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
     :null;
 
   return(
-    <div className="glass-card car-enter" style={{marginBottom:12,animationDelay:`${idx*.07}s`,overflow:"hidden"}}>
-      <div style={{padding:14,cursor:"pointer"}} onClick={()=>{if(!showPgto&&!showLavador&&!editHora)setOpen(!open);}}>
+    <div className="car-enter" style={{marginBottom:12,animationDelay:`${idx*.07}s`,
+      borderRadius:20,overflow:"hidden",
+      background:"rgba(255,255,255,.05)",
+      backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
+      border:"1px solid rgba(125,211,252,.1)",
+      borderLeft:`3px solid ${progColor[item.status]||"rgba(125,211,252,.2)"}`,
+      boxShadow:"0 4px 24px rgba(0,0,0,.25)"}}>
+      <div style={{padding:16,cursor:"pointer"}} onClick={()=>{if(!showPgto&&!showLavador&&!editHora)setOpen(!open);}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:42,height:42,borderRadius:14,background:`${item.color}22`,border:`1px solid ${item.color}44`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <Icon name="Car" size={20} color={item.color}/>
+            <div style={{width:46,height:46,borderRadius:16,
+              background:`${item.color}28`,border:`1.5px solid ${item.color}55`,
+              display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+              boxShadow:`0 4px 14px ${item.color}22`}}>
+              <Icon name="Car" size={22} color={item.color}/>
             </div>
             <div>
-              <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14}}>{item.model}</div>
-              <div style={{color:"rgba(186,230,253,.45)",fontSize:11,fontFamily:"monospace",letterSpacing:".12em"}}>{item.plate}</div>
+              <div style={{color:"#e0f2fe",fontWeight:900,fontSize:15}}>{item.model}</div>
+              <div style={{color:"rgba(186,230,253,.4)",fontSize:11,fontFamily:"monospace",
+                letterSpacing:".12em",marginTop:2}}>{item.plate}</div>
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -1951,10 +1961,13 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
             <Icon name={open?"ChevronUp":"ChevronDown"} size={14} color="rgba(186,230,253,.4)"/>
           </div>
         </div>
-        <div style={{marginTop:10,marginBottom:6}}><ProgressBar pct={prog[item.status]||0} color={progColor[item.status]}/></div>
+        <div style={{marginTop:12,marginBottom:8}}><ProgressBar pct={prog[item.status]||0} color={progColor[item.status]}/></div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <span style={{fontSize:12,color:"rgba(186,230,253,.5)"}}>{item.client} · {item.type}</span>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:12,color:"rgba(186,230,253,.5)",flex:1,minWidth:0,
+            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginRight:8}}>
+            {item.client} · {item.type}
+          </span>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
             {item.forma_pagamento&&(
               <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,
                 background:item.forma_pagamento==="pix"?"rgba(74,222,128,.15)":item.forma_pagamento==="cartao"?"rgba(56,189,248,.15)":"rgba(251,191,36,.15)",
@@ -1963,10 +1976,9 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
                 {item.forma_pagamento==="pix"?"Pix":item.forma_pagamento==="cartao"?"Cartão":"Dinheiro"}
               </span>
             )}
-            <span style={{fontSize:13,fontWeight:800,color:"#4ade80"}}>{fmtBRL(item.value)}</span>
+            <span style={{fontSize:14,fontWeight:900,color:"#4ade80"}}>{fmtBRL(item.value)}</span>
           </div>
         </div>
-        {/* Lavador — visível quando atribuído */}
         {item.lavador?.name&&(
           <div style={{marginTop:6,display:"flex",alignItems:"center",gap:5}}>
             <Icon name="User" size={11} color="#38bdf8"/>
@@ -1974,7 +1986,9 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
           </div>
         )}
         {item.observacoes&&(
-          <div style={{marginTop:8,padding:"6px 10px",borderRadius:10,background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.2)",display:"flex",alignItems:"flex-start",gap:6}}>
+          <div style={{marginTop:8,padding:"6px 10px",borderRadius:10,
+            background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.2)",
+            display:"flex",alignItems:"flex-start",gap:6}}>
             <Icon name="FileText" size={11} color="#fbbf24"/>
             <span style={{fontSize:11,color:"rgba(251,191,36,.8)",lineHeight:1.4}}>{item.observacoes}</span>
           </div>
@@ -2011,32 +2025,34 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
 
       {/* Modal: quem vai lavar? */}
       {showLavador&&(
-        <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.2)"}}>
-          <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:10,textAlign:"center"}}>
+        <div style={{borderTop:"1px solid rgba(125,211,252,.08)",padding:16,
+          background:"rgba(0,0,0,.25)",backdropFilter:"blur(8px)"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:12,textAlign:"center"}}>
             👤 Quem vai lavar este carro?
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:8}}>
             {funcionarios.map(f=>(
               <button key={f.id} onClick={()=>handleAdvance(null,f.id)} disabled={loading}
-                style={{padding:"11px 14px",borderRadius:12,cursor:"pointer",textAlign:"left",
+                style={{padding:"12px 14px",borderRadius:14,cursor:"pointer",textAlign:"left",
                   background:"rgba(56,189,248,.1)",border:"1px solid rgba(56,189,248,.25)",
                   color:"#e0f2fe",fontWeight:700,fontSize:13,opacity:loading?.5:1,
                   display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:28,height:28,borderRadius:8,background:"rgba(56,189,248,.2)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <Icon name="User" size={13} color="#38bdf8"/>
+                <div style={{width:30,height:30,borderRadius:10,background:"rgba(56,189,248,.2)",
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <Icon name="User" size={14} color="#38bdf8"/>
                 </div>
                 {f.name}
               </button>
             ))}
             <button onClick={()=>handleAdvance(null,null)} disabled={loading}
-              style={{padding:"9px 14px",borderRadius:12,cursor:"pointer",
+              style={{padding:"10px 14px",borderRadius:14,cursor:"pointer",
                 background:"transparent",border:"1px solid rgba(125,211,252,.15)",
                 color:"rgba(186,230,253,.4)",fontWeight:600,fontSize:12}}>
               Continuar sem atribuir
             </button>
           </div>
           <button onClick={()=>setShowLavador(false)}
-            style={{width:"100%",padding:"8px 0",borderRadius:12,background:"transparent",
+            style={{width:"100%",padding:"9px 0",borderRadius:14,background:"transparent",
               border:"1px solid rgba(239,68,68,.2)",color:"rgba(248,113,113,.6)",
               fontSize:12,fontWeight:600,cursor:"pointer"}}>
             Cancelar
@@ -2046,23 +2062,24 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
 
       {/* Modal: forma de pagamento */}
       {showPgto&&(
-        <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.2)"}}>
-          <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:10,textAlign:"center"}}>
+        <div style={{borderTop:"1px solid rgba(125,211,252,.08)",padding:16,
+          background:"rgba(0,0,0,.25)",backdropFilter:"blur(8px)"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:12,textAlign:"center"}}>
             💳 Como o cliente vai pagar?
           </div>
           <div style={{display:"flex",gap:8,marginBottom:8}}>
             {FORMAS.map(f=>(
               <button key={f.id} onClick={()=>handleAdvance(f.id,null)} disabled={loading}
-                style={{flex:1,padding:"12px 4px",borderRadius:14,cursor:"pointer",
+                style={{flex:1,padding:"14px 4px",borderRadius:16,cursor:"pointer",
                   background:`${f.color}18`,border:`1.5px solid ${f.color}44`,
-                  display:"flex",flexDirection:"column",alignItems:"center",gap:5,opacity:loading?.5:1}}>
-                <Icon name={f.icon} size={18} color={f.color}/>
+                  display:"flex",flexDirection:"column",alignItems:"center",gap:6,opacity:loading?.5:1}}>
+                <Icon name={f.icon} size={20} color={f.color}/>
                 <span style={{fontSize:12,fontWeight:800,color:f.color}}>{f.label}</span>
               </button>
             ))}
           </div>
           <button onClick={()=>setShowPgto(false)}
-            style={{width:"100%",padding:"8px 0",borderRadius:12,background:"transparent",
+            style={{width:"100%",padding:"9px 0",borderRadius:14,background:"transparent",
               border:"1px solid rgba(125,211,252,.15)",color:"rgba(186,230,253,.4)",
               fontSize:12,fontWeight:600,cursor:"pointer"}}>
             Cancelar
@@ -2071,18 +2088,31 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
       )}
 
       {open&&!showPgto&&!showLavador&&(
-        <div style={{borderTop:"1px solid rgba(125,211,252,.1)",padding:14,background:"rgba(0,0,0,.15)"}}>
+        <div style={{borderTop:"1px solid rgba(125,211,252,.08)",padding:16,
+          background:"rgba(0,0,0,.2)",backdropFilter:"blur(8px)"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14,fontSize:12}}>
-            <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Telefone</span><span style={{color:"#bae6fd",fontWeight:600}}>{item.phone}</span></div>
-            <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Entrada</span><span style={{color:"#bae6fd",fontWeight:600}}>{fmtTime(item.created_at)}</span></div>
-            {item.criador?.name&&<div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Criado por</span><span style={{color:"#bae6fd",fontWeight:600}}>{item.criador.name}</span></div>}
+            <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Telefone</span>
+              <span style={{color:"#bae6fd",fontWeight:600}}>{item.phone}</span></div>
+            <div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Entrada</span>
+              <span style={{color:"#bae6fd",fontWeight:600}}>{fmtTime(item.created_at)}</span></div>
+            {item.criador?.name&&<div><span style={{color:"rgba(186,230,253,.4)",display:"block",marginBottom:2}}>Criado por</span>
+              <span style={{color:"#bae6fd",fontWeight:600}}>{item.criador.name}</span></div>}
           </div>
           <div style={{display:"flex",gap:8}}>
-            {next&&<button onClick={onClickAvancar} disabled={loading} style={{flex:1,padding:"10px 0",borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",color:"#fff",fontWeight:700,fontSize:12,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,boxShadow:"0 4px 12px rgba(14,165,233,.3)",opacity:loading?.6:1}}>
-              {loading?<div className="spinner spin" style={{width:14,height:14}}/>:<><Icon name="Zap" size={13} color="#fff"/> Avançar: {next}</>}
+            {next&&<button onClick={onClickAvancar} disabled={loading}
+              style={{flex:1,padding:"12px 0",borderRadius:14,
+                background:"linear-gradient(135deg,#0ea5e9,#6366f1)",
+                color:"#fff",fontWeight:800,fontSize:13,border:"none",cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+                boxShadow:"0 4px 16px rgba(14,165,233,.35)",opacity:loading?.6:1}}>
+              {loading?<div className="spinner spin" style={{width:14,height:14}}/>
+                :<><Icon name="Zap" size={13} color="#fff"/> Avançar: {next}</>}
             </button>}
-            <button onClick={()=>onDelete(item.id)} style={{padding:"10px 12px",borderRadius:12,background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",cursor:"pointer",display:"flex",alignItems:"center"}}>
-              <Icon name="Trash2" size={14} color="#f87171"/>
+            <button onClick={()=>onDelete(item.id)}
+              style={{padding:"12px 14px",borderRadius:14,
+                background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.25)",
+                color:"#f87171",cursor:"pointer",display:"flex",alignItems:"center"}}>
+              <Icon name="Trash2" size={15} color="#f87171"/>
             </button>
           </div>
         </div>
@@ -2163,7 +2193,15 @@ function HomeScreen({empresaId}){
   ];
 
   return(
-    <div className="scroll screen-enter">
+    <div className="scroll screen-enter" style={{position:"relative"}}>
+      {/* Bolhas decorativas de fundo */}
+      <div style={{position:"fixed",top:-80,right:-60,width:260,height:260,borderRadius:"50%",
+        background:"radial-gradient(circle,rgba(14,165,233,.18),transparent 70%)",
+        filter:"blur(50px)",pointerEvents:"none",zIndex:0}}/>
+      <div style={{position:"fixed",bottom:60,left:-70,width:240,height:240,borderRadius:"50%",
+        background:"radial-gradient(circle,rgba(99,102,241,.12),transparent 70%)",
+        filter:"blur(55px)",pointerEvents:"none",zIndex:0}}/>
+      <div style={{position:"relative",zIndex:1}}>
       {errorMsg&&(
         <div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"flex-start",gap:8}}>
           <Icon name="AlertTriangle" size={14} color="#f87171" style={{marginTop:1,flexShrink:0}}/>
@@ -2192,6 +2230,7 @@ function HomeScreen({empresaId}){
           <div style={{color:"rgba(186,230,253,.4)",fontSize:13,marginTop:6}}>Adicione um veículo na aba Nova Lavagem</div>
         </div>
       ):(queue.map((v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} onUpdate={(id,patch)=>setQueue(q=>q.map(x=>x.id===id?{...x,...patch}:x))} funcionarios={funcionarios} selecionarLavador={false} idx={i}/>))}
+      </div>
     </div>
   );
 }
