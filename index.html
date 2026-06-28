@@ -2759,7 +2759,8 @@ function HistoryScreen({empresaId,embedded,isOwner}){
             const stPgto=STATUS_PGTO[h.status_pagamento||"pago"]||STATUS_PGTO.pago;
             const isEstornado=h.status_pagamento==="estornado";
             const estaEditando=editando===h.id;
-            const rec=h.cliente_recuperado===true&&!isEstornado;
+            // rec: flag do banco OU placa que estava inativa há 30+ dias no histórico anterior
+            const rec=(h.cliente_recuperado===true)&&!isEstornado;
             return(
             <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`,
               opacity:isEstornado?.6:1,
@@ -3032,18 +3033,39 @@ function CRMScreen({empresaId,onBadgeUpdate}){
   const [hist,setHist]=useState([]);
   const [loading,setLoading]=useState(true);
   const [disparados,setDisparados]=useState(new Set());
+  const [hojeSet,setHojeSet]=useState({plates:new Set(),phones:new Set()});
 
   useEffect(()=>{
-    sb.from('historico').select('phone,client,model,plate,type,completed_at,cliente_recuperado').eq('empresa_id',empresaId).order('completed_at',{ascending:false})
-      .then(({data})=>{setHist(data||[]);setLoading(false);});
+    const hoje=new Date().toISOString().split('T')[0];
+    Promise.all([
+      sb.from('historico').select('phone,client,model,plate,type,completed_at,cliente_recuperado')
+        .eq('empresa_id',empresaId).order('completed_at',{ascending:false}),
+      // Ordens ativas + concluídas hoje — para excluir do CRM quem já pisou no pátio hoje
+      sb.from('ordens_servico').select('plate,phone')
+        .eq('empresa_id',empresaId)
+        .gte('created_at',hoje+'T00:00:00')
+    ]).then(([{data:h},{data:o}])=>{
+      setHist(h||[]);
+      const plates=new Set((o||[]).map(x=>(x.plate||'').toUpperCase()));
+      const phones=new Set((o||[]).map(x=>(x.phone||'').replace(/\D/g,'')));
+      setHojeSet({plates,phones});
+      setLoading(false);
+    });
   },[empresaId]);
 
-  // Latest per phone — exclui clientes já recuperados (voltaram ao pátio)
+  // Latest per phone — exclui quem está no pátio hoje ou já foi recuperado
   const map={};
   hist.forEach(r=>{if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))map[r.phone]=r;});
   const sumidos=Object.values(map)
     .map(r=>({...r,dias:daysSince(r.completed_at)}))
-    .filter(r=>r.dias>=min&&r.cliente_recuperado!==true)
+    .filter(r=>{
+      if(r.dias<min)return false;
+      if(r.cliente_recuperado===true)return false;
+      // Excluir quem visitou hoje (por placa ou telefone)
+      if(hojeSet.plates.has((r.plate||'').toUpperCase()))return false;
+      if(hojeSet.phones.has((r.phone||'').replace(/\D/g,'')))return false;
+      return true;
+    })
     .sort((a,b)=>b.dias-a.dias);
 
   // Clientes que completaram exatamente 45 dias hoje (±1 dia) — gatilho de ação rápida
@@ -4453,25 +4475,36 @@ function App(){
   const [crmBadge,setCrmBadge]=useState(0);
 
   // Conta clientes sumidos (≥30 dias) para o badge do CRM —
-  // usa a mesma regra do CRMScreen: exclui cliente_recuperado=true
+  // usa a mesma regra do CRMScreen: exclui cliente_recuperado=true e quem pisou no pátio hoje
   useEffect(()=>{
     if(!profile?.empresa_id||profile.role==="master")return;
-    sb.from("historico")
-      .select("phone,completed_at,cliente_recuperado")
-      .eq("empresa_id",profile.empresa_id)
-      .order("completed_at",{ascending:false})
-      .then(({data})=>{
-        if(!data)return;
-        const map={};
-        data.forEach(r=>{
-          if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))
-            map[r.phone]=r;
-        });
-        const count=Object.values(map)
-          .filter(r=>daysSince(r.completed_at)>=30&&r.cliente_recuperado!==true)
-          .length;
-        setCrmBadge(count);
+    const hoje=new Date().toISOString().split('T')[0];
+    Promise.all([
+      sb.from("historico")
+        .select("phone,plate,completed_at,cliente_recuperado")
+        .eq("empresa_id",profile.empresa_id)
+        .order("completed_at",{ascending:false}),
+      sb.from("ordens_servico").select("plate,phone")
+        .eq("empresa_id",profile.empresa_id)
+        .gte("created_at",hoje+"T00:00:00"),
+    ]).then(([{data:h},{data:o}])=>{
+      if(!h)return;
+      const platesHoje=new Set((o||[]).map(x=>(x.plate||'').toUpperCase()));
+      const phonesHoje=new Set((o||[]).map(x=>(x.phone||'').replace(/\D/g,'')));
+      const map={};
+      h.forEach(r=>{
+        if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))
+          map[r.phone]=r;
       });
+      const count=Object.values(map).filter(r=>{
+        if(daysSince(r.completed_at)<30)return false;
+        if(r.cliente_recuperado===true)return false;
+        if(platesHoje.has((r.plate||'').toUpperCase()))return false;
+        if(phonesHoje.has((r.phone||'').replace(/\D/g,'')))return false;
+        return true;
+      }).length;
+      setCrmBadge(count);
+    });
   },[profile]);
 
   // Mostra o popup de resumo semanal uma vez por dia, por empresa — a
