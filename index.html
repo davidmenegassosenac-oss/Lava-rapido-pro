@@ -3084,7 +3084,7 @@ function AdminScreen({empresaId,currentUser,embedded}){
             <div style={{color:"rgba(186,230,253,.5)",fontSize:12}}>Crie um novo acesso ao sistema</div>
           </div>
         </div>
-        {[["name","Nome completo","Maria Silva","text"],["email","E-mail","maria@email.com","email"],["password","Senha (min. 6 chars)","••••••••","password"]].map(([field,label,ph,type])=>(
+        {[["name","Nome completo","Maria Silva","text"],["email","E-mail","maria@email.com","email"],["password","Senha","••••••••","password"]].map(([field,label,ph,type])=>(
           <div key={field} style={{marginBottom:12}}>
             <label className="lbl">{label}</label>
             <input className="glass-input" type={type} value={form[field]} onChange={e=>set(field,e.target.value)} placeholder={ph} autoCapitalize="none" style={{borderColor:errors[field]?"rgba(239,68,68,.5)":undefined}}/>
