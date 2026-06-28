@@ -2522,7 +2522,6 @@ function HistoryScreen({empresaId,embedded,isOwner}){
 
           {/* Filtro de data avançado */}
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-            {/* Input de data estilizado */}
             <div style={{position:"relative",flex:1,minWidth:140}}>
               <input type="date" value={dataFiltro}
                 onChange={e=>{setDataFiltro(e.target.value);setFiltrarHoje(true);}}
@@ -2534,19 +2533,6 @@ function HistoryScreen({empresaId,embedded,isOwner}){
                   colorScheme:"dark",cursor:"pointer"}}/>
               <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,pointerEvents:"none"}}>📅</span>
             </div>
-            {/* Botão Hoje */}
-            <button onClick={()=>{
-                setDataFiltro(new Date().toISOString().split("T")[0]);
-                setFiltrarHoje(v=>!v);
-              }}
-              style={{padding:"7px 14px",borderRadius:99,fontSize:12,fontWeight:700,cursor:"pointer",
-                flexShrink:0,whiteSpace:"nowrap",
-                border:`1px solid ${filtrarHoje&&dataFiltro===new Date().toISOString().split("T")[0]?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
-                background:filtrarHoje&&dataFiltro===new Date().toISOString().split("T")[0]?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
-                color:filtrarHoje&&dataFiltro===new Date().toISOString().split("T")[0]?"#38bdf8":"rgba(186,230,253,.4)"}}>
-              🧼 Hoje {filtrarHoje&&`(${filtered.length})`}
-            </button>
-            {/* Limpar filtro */}
             {filtrarHoje&&(
               <button onClick={()=>setFiltrarHoje(false)}
                 style={{padding:"7px 10px",borderRadius:99,fontSize:11,fontWeight:700,cursor:"pointer",
