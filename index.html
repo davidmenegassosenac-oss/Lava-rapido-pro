@@ -882,21 +882,20 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
 
   useEffect(()=>{
     sb.from('empresas').select('*').eq('id',empresaId).single()
-      .then(({data})=>{
+      .then(({data,error})=>{
+        if(error||!data)return;
         setEmpresa(data);
-        setForm({nome_fantasia:data?.nome_fantasia||"",telefone:data?.telefone||"",razao_social:data?.razao_social||"",cnpj:data?.cnpj||""});
-        setIgnorarLimites(data?.ignorar_limites_hoje||false);
-        if(data?.horario_funcionamento)setHorario({...HORARIO_DEFAULT,...data.horario_funcionamento});
-      });
-    sb.rpc('fn_assinatura_valida',{p_empresa_id:empresaId}).then(({data})=>setAss(data));
-    sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId}).then(({data,error})=>{
-      if(!error)setLimites(data);
-    });
-    sb.rpc('fn_listar_cobrancas',{p_empresa_id:empresaId}).then(({data,error})=>{
-      if(!error)setCobrancas(data||[]);
-    });
+        setForm({nome_fantasia:data.nome_fantasia||"",telefone:data.telefone||"",razao_social:data.razao_social||"",cnpj:data.cnpj||""});
+        setIgnorarLimites(data.ignorar_limites_hoje||false);
+        // Mescla com o default garantindo que todas as 7 chaves existam
+        const hDb=data.horario_funcionamento;
+        setHorario(hDb&&typeof hDb==="object"?{...HORARIO_DEFAULT,...hDb}:{...HORARIO_DEFAULT});
+      }).catch(()=>{});
+    sb.rpc('fn_assinatura_valida',{p_empresa_id:empresaId}).then(({data})=>{if(data)setAss(data);}).catch(()=>{});
+    sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId}).then(({data,error})=>{if(!error&&data)setLimites(data);}).catch(()=>{});
+    sb.rpc('fn_listar_cobrancas',{p_empresa_id:empresaId}).then(({data,error})=>{if(!error)setCobrancas(data||[]);}).catch(()=>{});
     sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).order('created_at')
-      .then(({data})=>setSvcs(data||[]));
+      .then(({data})=>setSvcs(data||[])).catch(()=>{});
   },[empresaId]);
 
   const saveEmpresa=async()=>{
