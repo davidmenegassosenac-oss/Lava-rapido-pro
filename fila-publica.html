@@ -649,139 +649,238 @@ function FilaScreen({empresa,onVoltar}){
   const porSt=ORDEM.reduce((a,s)=>{a[s]=filtrada.filter(c=>c.status===s);return a;},{});
 
   return(
-    <div style={{maxWidth:480,margin:'0 auto',paddingBottom:100}}>
-      <div style={{padding:'16px 16px 0'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
-          <button onClick={onVoltar}
-            style={{width:36,height:36,borderRadius:10,background:'rgba(255,255,255,.06)',
-              border:'1px solid rgba(125,211,252,.15)',color:'#e0f2fe',fontSize:18,
-              cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>←</button>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em'}}>Fila em Tempo Real</div>
-            <div style={{fontSize:16,fontWeight:900,color:'#e0f2fe',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{empresa.nome_fantasia}</div>
-          </div>
-          <div style={{display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:99,
-            background:'rgba(74,222,128,.1)',border:'1px solid rgba(74,222,128,.25)',flexShrink:0}}>
-            <div className='pulse' style={{width:6,height:6,borderRadius:99,background:'#4ade80'}}/>
-            <span style={{fontSize:10,fontWeight:800,color:'#4ade80'}}>AO VIVO</span>
-          </div>
-        </div>
-        <div style={{display:'flex',gap:8,marginBottom:14}}>
-          {[{l:'Na fila',v:fila.filter(c=>c.status==='Aguardando').length,c:'#fbbf24'},
-            {l:'Lavando',v:fila.filter(c=>c.status==='Lavando').length,c:'#38bdf8'},
-            {l:'Prontos',v:fila.filter(c=>c.status==='Concluído').length,c:'#4ade80'}].map(k=>(
-            <div key={k.l} style={{flex:1,padding:'10px 6px',borderRadius:14,textAlign:'center',
-              background:'rgba(255,255,255,.04)',border:'1px solid rgba(125,211,252,.1)'}}>
-              <div style={{fontSize:20,fontWeight:900,color:k.c}}>{k.v}</div>
-              <div style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:600,marginTop:1}}>{k.l}</div>
+    <div style={{minHeight:'100vh',background:'#080f1e',position:'relative',overflow:'hidden',paddingBottom:110}}>
+
+      {/* Bolhas de fundo */}
+      <div style={{position:'fixed',top:-60,right:-50,width:220,height:220,borderRadius:'50%',
+        background:'radial-gradient(circle,rgba(14,165,233,.22),transparent 70%)',
+        filter:'blur(50px)',pointerEvents:'none',zIndex:0}}/>
+      <div style={{position:'fixed',top:'35%',left:-80,width:240,height:240,borderRadius:'50%',
+        background:'radial-gradient(circle,rgba(99,102,241,.15),transparent 70%)',
+        filter:'blur(55px)',pointerEvents:'none',zIndex:0}}/>
+      <div style={{position:'fixed',bottom:60,right:-40,width:180,height:180,borderRadius:'50%',
+        background:'radial-gradient(circle,rgba(6,182,212,.12),transparent 70%)',
+        filter:'blur(45px)',pointerEvents:'none',zIndex:0}}/>
+
+      {/* Conteúdo */}
+      <div style={{position:'relative',zIndex:1,maxWidth:480,margin:'0 auto'}}>
+
+        {/* Header */}
+        <div style={{padding:'52px 16px 16px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:18}}>
+            <button onClick={onVoltar}
+              style={{width:40,height:40,borderRadius:14,flexShrink:0,
+                background:'rgba(255,255,255,.07)',
+                backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',
+                border:'1px solid rgba(125,211,252,.15)',color:'#e0f2fe',
+                fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              ←
+            </button>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:700,
+                textTransform:'uppercase',letterSpacing:'.12em',marginBottom:2}}>
+                Fila em Tempo Real
+              </div>
+              <div style={{fontSize:17,fontWeight:900,color:'#e0f2fe',
+                overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                {empresa.nome_fantasia}
+              </div>
             </div>
-          ))}
+            <div style={{display:'flex',alignItems:'center',gap:5,padding:'5px 12px',
+              borderRadius:99,flexShrink:0,
+              background:'rgba(74,222,128,.12)',
+              border:'1px solid rgba(74,222,128,.3)'}}>
+              <div className='pulse' style={{width:6,height:6,borderRadius:99,background:'#4ade80'}}/>
+              <span style={{fontSize:10,fontWeight:800,color:'#4ade80'}}>AO VIVO</span>
+            </div>
+          </div>
+
+          {/* Cards de status */}
+          <div style={{display:'flex',gap:8,marginBottom:16}}>
+            {[{l:'Na fila',v:fila.filter(c=>c.status==='Aguardando').length,c:'#fbbf24',bg:'rgba(251,191,36,.1)',b:'rgba(251,191,36,.2)'},
+              {l:'Lavando', v:fila.filter(c=>c.status==='Lavando').length,  c:'#38bdf8',bg:'rgba(56,189,248,.1)', b:'rgba(56,189,248,.2)'},
+              {l:'Prontos', v:fila.filter(c=>c.status==='Concluído').length, c:'#4ade80',bg:'rgba(74,222,128,.1)', b:'rgba(74,222,128,.2)'}
+            ].map(k=>(
+              <div key={k.l} style={{flex:1,padding:'12px 6px',borderRadius:18,textAlign:'center',
+                background:k.bg,border:'1px solid '+k.b,
+                backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)'}}>
+                <div style={{fontSize:22,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
+                <div style={{fontSize:10,color:'rgba(186,230,253,.45)',fontWeight:700,
+                  marginTop:3,textTransform:'uppercase',letterSpacing:'.06em'}}>{k.l}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Busca */}
+          <div style={{position:'relative',marginBottom:4}}>
+            <span style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',
+              fontSize:15,pointerEvents:'none'}}>🔍</span>
+            <input value={busca} onChange={e=>setBusca(e.target.value)}
+              placeholder='Buscar pelo modelo do carro...'
+              style={{width:'100%',padding:'13px 16px 13px 42px',borderRadius:16,
+                background:'rgba(255,255,255,.07)',
+                backdropFilter:'blur(10px)',WebkitBackdropFilter:'blur(10px)',
+                border:'1px solid rgba(125,211,252,.15)',
+                color:'#e0f2fe',fontFamily:'Outfit,sans-serif',fontSize:13,outline:'none'}}/>
+            {busca&&<button onClick={()=>setBusca('')}
+              style={{position:'absolute',right:13,top:'50%',transform:'translateY(-50%)',
+                background:'transparent',border:'none',color:'rgba(186,230,253,.4)',
+                fontSize:20,cursor:'pointer'}}>×</button>}
+          </div>
         </div>
-        <div style={{position:'relative',marginBottom:16}}>
-          <span style={{position:'absolute',left:13,top:'50%',transform:'translateY(-50%)',fontSize:14,pointerEvents:'none'}}>🔍</span>
-          <input value={busca} onChange={e=>setBusca(e.target.value)}
-            placeholder='Buscar pelo modelo do seu carro...' className='inp' style={{paddingLeft:38,fontSize:13}}/>
-          {busca&&<button onClick={()=>setBusca('')}
-            style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',
-              background:'transparent',border:'none',color:'rgba(186,230,253,.4)',fontSize:18,cursor:'pointer'}}>×</button>}
-        </div>
+
+        {/* Lista de veículos */}
+        {load
+          ?<div style={{textAlign:'center',padding:48}}><div className='spin' style={{margin:'0 auto'}}/></div>
+          :<div style={{padding:'0 16px'}}>
+            {ORDEM.map(status=>{
+              const carros=porSt[status];
+              const cfg=ST_CFG[status];
+              if(!cfg||(!carros.length&&!bNorm))return null;
+              return(
+                <div key={status} style={{marginBottom:22}}>
+                  {/* Seção header */}
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                    <span style={{fontSize:16}}>{cfg.e}</span>
+                    <span style={{fontSize:11,fontWeight:800,color:cfg.c,
+                      textTransform:'uppercase',letterSpacing:'.08em'}}>{cfg.l}</span>
+                    <div style={{flex:1,height:1,background:cfg.c+'25'}}/>
+                    <span style={{fontSize:11,fontWeight:800,padding:'2px 9px',borderRadius:99,
+                      background:cfg.bg,border:'1px solid '+cfg.b,color:cfg.c}}>
+                      {carros.length}
+                    </span>
+                  </div>
+                  {!carros.length
+                    ?<div style={{textAlign:'center',padding:'14px 0',
+                        color:'rgba(186,230,253,.2)',fontSize:12}}>
+                        Nenhum veículo aqui agora
+                      </div>
+                    :carros.map((c,i)=>{
+                      const hl=bNorm&&c.model?.toLowerCase().includes(bNorm);
+                      const pos=porSt['Aguardando'].findIndex(x=>x.id===c.id);
+                      const hora=c.hora_entrega
+                        ?new Date(c.hora_entrega).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})
+                        :null;
+                      return(
+                        <div key={c.id} style={{marginBottom:10,padding:'14px 16px',borderRadius:20,
+                          background:hl
+                            ?'rgba(14,165,233,.1)'
+                            :'rgba(255,255,255,.05)',
+                          backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',
+                          border:`1px solid ${hl?'rgba(14,165,233,.35)':'rgba(125,211,252,.1)'}`,
+                          boxShadow:hl?'0 4px 20px rgba(14,165,233,.15)':'0 2px 12px rgba(0,0,0,.2)'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:12}}>
+                            {/* Avatar cor do veículo */}
+                            <div style={{width:42,height:42,borderRadius:14,flexShrink:0,
+                              background:(c.color||'#38bdf8')+'28',
+                              border:'1.5px solid '+(c.color||'#38bdf8')+'55',
+                              display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>
+                              🚗
+                            </div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:14,fontWeight:900,color:'#e0f2fe',
+                                letterSpacing:'.05em'}}>
+                                {mascaraPlaca(c.plate)}
+                              </div>
+                              <div style={{fontSize:11,color:'rgba(186,230,253,.5)',marginTop:2}}>
+                                {c.model}
+                                {hora&&<span style={{color:'#38bdf8',marginLeft:6}}>· ⏰ {hora}</span>}
+                              </div>
+                            </div>
+                            <div style={{fontSize:11,flexShrink:0,textAlign:'right'}}>
+                              {status==='Aguardando'&&(
+                                <div style={{padding:'3px 9px',borderRadius:99,
+                                  background:'rgba(251,191,36,.12)',border:'1px solid rgba(251,191,36,.25)',
+                                  color:'#fbbf24',fontWeight:700}}>
+                                  {pos===0?'Próximo':'#'+(pos+1)}
+                                </div>
+                              )}
+                              {status==='Lavando'&&(
+                                <div className='pulse' style={{padding:'3px 9px',borderRadius:99,
+                                  background:'rgba(56,189,248,.12)',border:'1px solid rgba(56,189,248,.25)',
+                                  color:'#38bdf8',fontWeight:700}}>
+                                  Lavando
+                                </div>
+                              )}
+                              {status==='Concluído'&&(
+                                <div style={{padding:'3px 9px',borderRadius:99,
+                                  background:'rgba(74,222,128,.12)',border:'1px solid rgba(74,222,128,.25)',
+                                  color:'#4ade80',fontWeight:700}}>
+                                  Pronto!
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {hl&&(
+                            <div style={{marginTop:12,padding:'12px 14px',borderRadius:14,
+                              background:'rgba(14,165,233,.12)',border:'1px solid rgba(14,165,233,.3)'}}>
+                              <div style={{fontSize:13,fontWeight:800,color:'#38bdf8',marginBottom:3}}>
+                                {status==='Aguardando'&&('⏳ Na fila'+(pos===0?' — próximo!':' — posição '+(pos+1)))}
+                                {status==='Lavando'&&'🧼 Sendo lavado agora!'}
+                                {status==='Concluído'&&'✅ Pronto para retirada!'}
+                              </div>
+                              <div style={{fontSize:11,color:'rgba(56,189,248,.7)'}}>
+                                {status==='Aguardando'&&pos===0&&'Previsão: em breve!'}
+                                {status==='Aguardando'&&pos>0&&'~'+pos*20+' min de espera'}
+                                {status==='Lavando'&&'Previsão: ~25 min'}
+                                {status==='Concluído'&&'Pode vir buscar agora 🎉'}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  }
+                </div>
+              );
+            })}
+            {!bNorm&&!fila.length&&(
+              <div style={{textAlign:'center',padding:'60px 20px'}}>
+                <div style={{fontSize:52,marginBottom:14}}>🚗</div>
+                <div style={{fontSize:15,fontWeight:800,color:'rgba(186,230,253,.4)',marginBottom:6}}>
+                  Fila vazia!
+                </div>
+                <div style={{fontSize:12,color:'rgba(186,230,253,.2)'}}>
+                  Ótimo momento para trazer seu carro 😊
+                </div>
+              </div>
+            )}
+          </div>
+        }
+
+        {/* Timestamp */}
+        {updated&&!load&&(
+          <div style={{textAlign:'center',padding:'12px 20px',
+            fontSize:10,color:'rgba(186,230,253,.18)'}}>
+            Atualizado às {updated.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · Lava Rápido Pro
+          </div>
+        )}
       </div>
 
-      {load?<div style={{textAlign:'center',padding:40}}><div className='spin' style={{margin:'0 auto'}}/></div>:(
-        <>
-          {ORDEM.map(status=>{
-            const carros=porSt[status];
-            const cfg=ST_CFG[status];
-            if(!cfg||(!carros.length&&!bNorm))return null;
-            return(
-              <div key={status} style={{padding:'0 16px',marginBottom:20}}>
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-                  <span style={{fontSize:16}}>{cfg.e}</span>
-                  <span style={{fontSize:12,fontWeight:800,color:cfg.c}}>{cfg.l}</span>
-                  <div style={{flex:1,height:1,background:cfg.c+'30'}}/>
-                  <span style={{fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99,
-                    background:cfg.bg,border:'1px solid '+cfg.b,color:cfg.c}}>{carros.length}</span>
-                </div>
-                {!carros.length
-                  ?<div style={{textAlign:'center',padding:'12px 0',color:'rgba(186,230,253,.2)',fontSize:12}}>Nenhum veículo aqui agora</div>
-                  :carros.map((c,i)=>{
-                    const hl=bNorm&&c.model?.toLowerCase().includes(bNorm);
-                    const pos=porSt['Aguardando'].findIndex(x=>x.id===c.id);
-                    const hora=c.hora_entrega?new Date(c.hora_entrega).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):null;
-                    return(
-                      <div key={c.id} className={'card'+(hl?' hl':'')}>
-                        <div style={{display:'flex',alignItems:'center',gap:12}}>
-                          <div style={{width:38,height:38,borderRadius:12,flexShrink:0,
-                            background:(c.color||'#38bdf8')+'22',border:'1px solid '+(c.color||'#38bdf8')+'44',
-                            display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>🚗</div>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:13,fontWeight:800,color:'#e0f2fe'}}>{mascaraPlaca(c.plate)}</div>
-                            <div style={{fontSize:11,color:'rgba(186,230,253,.5)',marginTop:1}}>
-                              {c.model}{hora&&<span style={{color:'#38bdf8',marginLeft:5}}>· ⏰ {hora}</span>}
-                            </div>
-                          </div>
-                          <div style={{fontSize:11,flexShrink:0,textAlign:'right'}}>
-                            {status==='Aguardando'&&<div style={{color:'rgba(186,230,253,.35)'}}>{pos===0?'Próximo':'#'+(pos+1)}</div>}
-                            {status==='Lavando'&&<div className='pulse' style={{color:'#38bdf8',fontWeight:700}}>Lavando</div>}
-                            {status==='Concluído'&&<div style={{color:'#4ade80',fontWeight:700}}>Pronto!</div>}
-                          </div>
-                        </div>
-                        {hl&&(
-                          <div style={{marginTop:10,padding:'10px 12px',borderRadius:12,
-                            background:'rgba(14,165,233,.15)',border:'1px solid rgba(14,165,233,.35)'}}>
-                            <div style={{fontSize:13,fontWeight:700,color:'#38bdf8',marginBottom:2}}>
-                              {status==='Aguardando'&&('⏳ Na fila'+(pos===0?' — próximo!':' — posição '+(pos+1)))}
-                              {status==='Lavando'&&'🧼 Sendo lavado agora!'}
-                              {status==='Concluído'&&'✅ Pronto para retirada!'}
-                            </div>
-                            <div style={{fontSize:11,color:'rgba(56,189,248,.7)'}}>
-                              {status==='Aguardando'&&pos===0&&'Previsão: em breve!'}
-                              {status==='Aguardando'&&pos>0&&'Previsão: ~'+(pos*20)+' min'}
-                              {status==='Lavando'&&'Previsão: ~25 min'}
-                              {status==='Concluído'&&'Pode vir buscar agora 🎉'}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                }
-              </div>
-            );
-          })}
-          {!bNorm&&!fila.length&&(
-            <div style={{textAlign:'center',padding:'50px 20px'}}>
-              <div style={{fontSize:44,marginBottom:12}}>🚗</div>
-              <div style={{fontSize:14,fontWeight:700,color:'rgba(186,230,253,.5)',marginBottom:4}}>Fila vazia!</div>
-              <div style={{fontSize:12,color:'rgba(186,230,253,.25)'}}>Ótimo momento para trazer seu carro 😊</div>
-            </div>
-          )}
-        </>
-      )}
-
-      {updated&&!load&&(
-        <div style={{textAlign:'center',padding:'8px 20px',fontSize:10,color:'rgba(186,230,253,.2)'}}>
-          Atualizado às {updated.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · Lava Rápido Pro
-        </div>
-      )}
-
-      <div style={{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',zIndex:50,width:'calc(100% - 32px)',maxWidth:448}}>
-        <button onClick={()=>setShowForm(true)} className='btn'
-          style={{background:'linear-gradient(135deg,#0ea5e9,#0284c7)',color:'#fff',
-            boxShadow:'0 8px 28px rgba(14,165,233,.4)',fontSize:14}}>
+      {/* FAB — Entrar na fila */}
+      <div style={{position:'fixed',bottom:28,left:'50%',transform:'translateX(-50%)',
+        zIndex:50,width:'calc(100% - 32px)',maxWidth:448}}>
+        <button onClick={()=>setShowForm(true)}
+          style={{width:'100%',padding:'16px 24px',borderRadius:20,cursor:'pointer',border:'none',
+            background:'linear-gradient(135deg,#0ea5e9,#6366f1)',color:'#fff',
+            fontSize:15,fontWeight:800,fontFamily:'Outfit,sans-serif',
+            boxShadow:'0 8px 32px rgba(14,165,233,.45)',
+            display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
           ➕ Agendar / Entrar na Fila
         </button>
       </div>
 
-      {showForm&&<CadastroModal empresa={empresa} onClose={()=>setShowForm(false)}
+      {showForm&&<CadastroModal empresa={empresa}
+        onClose={()=>setShowForm(false)}
         onSuccess={()=>{setShowForm(false);showToast('🎉 Prontinho! Seu veículo foi adicionado à fila.');fetch();}}/>}
 
       {toast&&(
-        <div style={{position:'fixed',bottom:90,left:'50%',transform:'translateX(-50%)',
-          background:'rgba(15,23,42,.95)',backdropFilter:'blur(16px)',
-          border:'1px solid rgba(56,189,248,.2)',color:'#e0f2fe',fontSize:13,fontWeight:600,
-          padding:'12px 20px',borderRadius:16,boxShadow:'0 8px 24px rgba(0,0,0,.4)',
-          zIndex:300,maxWidth:'calc(100vw - 32px)',textAlign:'center',lineHeight:1.4}}>
+        <div style={{position:'fixed',bottom:96,left:'50%',transform:'translateX(-50%)',
+          background:'rgba(8,15,30,.96)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
+          border:'1px solid rgba(56,189,248,.2)',color:'#e0f2fe',
+          fontSize:13,fontWeight:700,padding:'14px 22px',borderRadius:18,
+          boxShadow:'0 8px 32px rgba(0,0,0,.5)',zIndex:300,
+          maxWidth:'calc(100vw - 32px)',textAlign:'center',lineHeight:1.5}}>
           {toast}
         </div>
       )}
