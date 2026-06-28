@@ -80,8 +80,7 @@ function BuscaScreen({onSelect}){
 
   useEffect(()=>{
     sb.from('empresas')
-      .select('id,nome_fantasia,telefone,assinaturas!inner(status)')
-      .in('assinaturas.status',['ativo','trial'])
+      .select('id,nome_fantasia,telefone')
       .limit(6)
       .then(({data,error})=>{
         if(error)console.error('afiliadas:',error.message);
@@ -96,9 +95,8 @@ function BuscaScreen({onSelect}){
     t.current=setTimeout(async()=>{
       setLoad(true);setErro('');
       const{data,error}=await sb.from('empresas')
-        .select('id,nome_fantasia,telefone,assinaturas!inner(status)')
+        .select('id,nome_fantasia,telefone')
         .ilike('nome_fantasia','%'+q.trim()+'%')
-        .in('assinaturas.status',['ativo','trial'])
         .limit(8);
       setLoad(false);
       if(error){setErro('Erro ao buscar. Tente novamente.');return;}
