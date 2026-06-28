@@ -435,8 +435,8 @@ function CadastroModal({empresa,onClose,onSuccess}){
     // Verifica se é cliente recuperado (sumiu há +30 dias)
     let recuperado=false;
     try{
-      const{data:rData}=await sb.rpc('fn_verificar_cliente_recuperado',{
-        p_empresa_id:empresa.id,p_phone:phone
+    const{data:rData}=await sb.rpc('fn_verificar_cliente_recuperado',{
+        p_empresa_id:empresa.id,p_phone:phone,p_plate:form.plate.trim().toUpperCase()
       });
       recuperado=rData===true;
     }catch(_){}
