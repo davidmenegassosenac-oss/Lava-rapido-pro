@@ -1050,8 +1050,30 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
           {/* ── Horário de Funcionamento ── */}
           <div style={{marginTop:24,paddingTop:20,borderTop:"1px solid rgba(125,211,252,.1)"}}>
             <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.5)",
-              textTransform:"uppercase",letterSpacing:".08em",marginBottom:14}}>
+              textTransform:"uppercase",letterSpacing:".08em",marginBottom:12}}>
               🕐 Horário de Funcionamento
+            </div>
+
+            {/* Botões de atalho */}
+            <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+              <button onClick={()=>{
+                  const seg=horarios.seg||HORARIOS_PADRAO.seg;
+                  setHorarios(p=>({...p,ter:{...seg},qua:{...seg},qui:{...seg},sex:{...seg}}));
+                }}
+                style={{padding:"6px 12px",borderRadius:10,cursor:"pointer",fontSize:11,fontWeight:700,
+                  background:"rgba(56,189,248,.1)",border:"1px solid rgba(56,189,248,.25)",
+                  color:"#38bdf8"}}>
+                📋 Replicar Segunda → Dias Úteis
+              </button>
+              <button onClick={()=>{
+                  const seg=horarios.seg||HORARIOS_PADRAO.seg;
+                  setHorarios(p=>({...p,sab:{...seg}}));
+                }}
+                style={{padding:"6px 12px",borderRadius:10,cursor:"pointer",fontSize:11,fontWeight:700,
+                  background:"rgba(167,139,250,.1)",border:"1px solid rgba(167,139,250,.25)",
+                  color:"#a78bfa"}}>
+                ⏰ Replicar Segunda → Sábado
+              </button>
             </div>
             {DIAS_CONFIG.map(({key,label})=>{
               const d=horarios[key]||HORARIOS_PADRAO[key];
