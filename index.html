@@ -820,6 +820,25 @@ function TermosModal({onClose,onAceitar}){
 /* ══════════════════════════════════════════════════════════════════════════
    CONFIGURAÇÕES SCREEN — personalização da empresa
 ══════════════════════════════════════════════════════════════════════════ */
+const DIAS_SEMANA=[
+  {key:"seg",label:"Segunda"},
+  {key:"ter",label:"Terça"},
+  {key:"qua",label:"Quarta"},
+  {key:"qui",label:"Quinta"},
+  {key:"sex",label:"Sexta"},
+  {key:"sab",label:"Sábado"},
+  {key:"dom",label:"Domingo"},
+];
+const HORARIO_DEFAULT={
+  seg:{aberto:true,inicio:"08:00",fim:"18:00"},
+  ter:{aberto:true,inicio:"08:00",fim:"18:00"},
+  qua:{aberto:true,inicio:"08:00",fim:"18:00"},
+  qui:{aberto:true,inicio:"08:00",fim:"18:00"},
+  sex:{aberto:true,inicio:"08:00",fim:"18:00"},
+  sab:{aberto:true,inicio:"08:00",fim:"13:00"},
+  dom:{aberto:false,inicio:"08:00",fim:"12:00"},
+};
+
 function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [empresa,setEmpresa]=useState(null);
   const [ass,setAss]=useState(null);
@@ -833,24 +852,6 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [errMsg,setErrMsg]=useState("");
   const [tab,setTab]=useState("relatorios");
   const [ignorarLimites,setIgnorarLimites]=useState(false);
-  const DIAS_SEMANA=[
-    {key:"seg",label:"Segunda"},
-    {key:"ter",label:"Terça"},
-    {key:"qua",label:"Quarta"},
-    {key:"qui",label:"Quinta"},
-    {key:"sex",label:"Sexta"},
-    {key:"sab",label:"Sábado"},
-    {key:"dom",label:"Domingo"},
-  ];
-  const HORARIO_DEFAULT={
-    seg:{aberto:true,inicio:"08:00",fim:"18:00"},
-    ter:{aberto:true,inicio:"08:00",fim:"18:00"},
-    qua:{aberto:true,inicio:"08:00",fim:"18:00"},
-    qui:{aberto:true,inicio:"08:00",fim:"18:00"},
-    sex:{aberto:true,inicio:"08:00",fim:"18:00"},
-    sab:{aberto:true,inicio:"08:00",fim:"13:00"},
-    dom:{aberto:false,inicio:"08:00",fim:"12:00"},
-  };
   const [horario,setHorario]=useState(HORARIO_DEFAULT);
   const [savingHorario,setSavingHorario]=useState(false);
   const [horarioOk,setHorarioOk]=useState(false);
@@ -1044,7 +1045,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
               {DIAS_SEMANA.map(({key,label})=>{
-                const d=horario[key]||{aberto:true,inicio:"08:00",fim:"18:00"};
+                const d={...(HORARIO_DEFAULT[key]||{aberto:true,inicio:"08:00",fim:"18:00"}),...(horario?.[key]||{})};
                 return(
                   <div key={key} style={{padding:"12px 14px",borderRadius:14,
                     background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)"}}>
