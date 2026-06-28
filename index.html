@@ -3299,18 +3299,15 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
     };
   },[fetchTudo]);
 
-  // Faturamento: usa o prop (ConfigScreen) para a semana atual — funciona.
-  // Para semanas passadas, busca com as datas corretas da semana selecionada.
+  // Faturamento por semana — todas as pílulas usam a mesma lógica agora
   useEffect(()=>{
     const semanaCorrente=getSemanaAtual();
-    if(semana===semanaCorrente){
-      // Semana atual: confiar no valor do ConfigScreen que usa Date objects corretamente
-      setFatSemana(faturamentoExterno||0);
+    if(semana===semanaCorrente&&faturamentoExterno>0){
+      // Semana atual: usar o valor calculado no ConfigScreen (mais confiável)
+      setFatSemana(faturamentoExterno);
       return;
     }
-    // Semanas passadas: buscar com o intervalo calculado
     const{inicio,fim}=semanaParaDatas(semana);
-    // Usar new Date(string) com hora explícita gera LOCAL time — ok para comparação
     const d1=new Date(inicio);d1.setHours(0,0,0,0);
     const d2=new Date(fim);d2.setHours(23,59,59,999);
     sb.from("historico").select("*")
@@ -3417,7 +3414,10 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
     const d=new Date();d.setDate(d.getDate()-i*7);
     const jan1=new Date(d.getFullYear(),0,1);
     const n=Math.ceil(((d-jan1)/86400000+jan1.getDay()+1)/7);
-    return `${d.getFullYear()}-W${String(n).padStart(2,"0")}`;
+    const key=`${d.getFullYear()}-W${String(n).padStart(2,"0")}`;
+    const intervalo=semanaLabel(key);
+    const label=i===0?`Esta semana (${intervalo})`:intervalo;
+    return{key,label};
   });
 
   if(loading)return<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>;
@@ -3434,21 +3434,20 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
 
   return(
     <div style={{padding:embedded?"0":"0 0 20px"}}>
-      {/* DEBUG — remover depois */}
       <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
-        {semanas.map(s=>(
-          <button key={s} onClick={()=>setSemana(s)}
+        {semanas.map(({key,label})=>(
+          <button key={key} onClick={()=>setSemana(key)}
             style={{flexShrink:0,padding:"6px 12px",borderRadius:99,fontSize:11,fontWeight:700,cursor:"pointer",
-              border:`1px solid ${semana===s?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
-              background:semana===s?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
-              color:semana===s?"#38bdf8":"rgba(186,230,253,.4)"}}>
-            {s===getSemanaAtual()?"Esta semana":semanaLabel(s)}
+              border:`1px solid ${semana===key?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,
+              background:semana===key?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",
+              color:semana===key?"#38bdf8":"rgba(186,230,253,.4)"}}>
+            {label}
           </button>
         ))}
       </div>
 
-      {/* Card de performance ou debug */}
-      {performance?(
+      {/* Card de performance */}
+      {performance&&(
         <div className="glass-card" style={{padding:14,marginBottom:14,
           borderColor:pct!=null&&pct>50?"rgba(248,113,113,.3)":pct!=null&&pct>35?"rgba(251,191,36,.3)":"rgba(125,211,252,.2)"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
@@ -3477,12 +3476,6 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
                 transition:"width .8s ease"}}/>
             </div>
           )}
-        </div>
-      ):(
-        <div style={{padding:"10px 14px",borderRadius:14,marginBottom:14,
-          background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.25)",
-          fontSize:11,color:"#fbbf24",wordBreak:"break-all",fontFamily:"monospace"}}>
-          🔍 perf={debugPerf||"null/undefined"}
         </div>
       )}
 
