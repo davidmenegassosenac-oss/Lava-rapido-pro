@@ -20,19 +20,19 @@ html,body,#root{height:100%;width:100%;overflow:hidden}
 :root{--app-height:100vh}
 @supports (height:100dvh){:root{--app-height:100dvh}}
 .app-shell{height:var(--app-height);min-height:0}
-body{font-family:'Outfit',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:#0c1a2e;font-size:16px}
+body{font-family:'Outfit',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:#080f1e;font-size:16px}
 input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif;font-size:16px}
 ::-webkit-scrollbar{width:0;height:0}
-.aqua-bg{position:fixed;inset:0;z-index:0;background:linear-gradient(160deg,#0c1a2e 0%,#0d2847 40%,#0c3460 70%,#0a4a7c 100%);overflow:hidden}
-.bubble{position:absolute;border-radius:50%;background:radial-gradient(circle at 30% 30%,rgba(14,165,233,.35),rgba(56,189,248,.08));border:1px solid rgba(125,211,252,.15);animation:floatUp linear infinite;will-change:transform,opacity}
+.aqua-bg{position:fixed;inset:0;z-index:0;background:#080f1e;overflow:hidden}
+.bubble{position:absolute;border-radius:50%;background:radial-gradient(circle at 30% 30%,rgba(14,165,233,.25),rgba(56,189,248,.05));border:1px solid rgba(125,211,252,.08);animation:floatUp linear infinite;will-change:transform,opacity}
 @keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:0}10%{opacity:1}90%{opacity:.6}100%{transform:translateY(-110vh) scale(1.15);opacity:0}}
 .wave{position:absolute;bottom:0;left:0;width:200%;height:120px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 120'%3E%3Cpath fill='rgba(14,165,233,0.07)' d='M0,60 C360,120 720,0 1080,60 C1260,90 1350,45 1440,60 L1440,120 L0,120 Z'/%3E%3C/svg%3E") repeat-x;animation:waveMove 8s linear infinite}
 .wave2{position:absolute;bottom:8px;left:0;width:200%;height:100px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 100'%3E%3Cpath fill='rgba(56,189,248,0.05)' d='M0,50 C480,100 960,0 1440,50 L1440,100 L0,100 Z'/%3E%3C/svg%3E") repeat-x;animation:waveMove 12s linear infinite reverse}
 @keyframes waveMove{to{transform:translateX(-50%)}}
 .glass{background:rgba(255,255,255,.08);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.15)}
-.glass-card{background:rgba(255,255,255,.06);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(125,211,252,.12);border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,.25);transition:transform .2s ease,box-shadow .2s ease,background .2s ease}
+.glass-card{background:rgba(255,255,255,.05);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(125,211,252,.1);border-radius:20px;box-shadow:0 4px 28px rgba(0,0,0,.3);transition:transform .2s ease,box-shadow .2s ease,background .2s ease}
 .glass-card:active{transform:scale(.98);background:rgba(255,255,255,.11)}
-.glass-input{background:rgba(255,255,255,.06);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1.5px solid rgba(125,211,252,.15);border-radius:16px;color:#e0f2fe;font-size:16px;padding:14px 16px;width:100%;outline:none;transition:border-color .2s,background .2s}
+.glass-input{background:rgba(255,255,255,.05);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1.5px solid rgba(125,211,252,.12);border-radius:16px;color:#e0f2fe;font-size:16px;padding:14px 16px;width:100%;outline:none;transition:border-color .2s,background .2s}
 .glass-input::placeholder{color:rgba(186,230,253,.4)}
 .glass-input:focus{border-color:rgba(56,189,248,.6);background:rgba(255,255,255,.09);box-shadow:0 0 0 3px rgba(14,165,233,.1)}
 .screen-enter{animation:screenIn .3s cubic-bezier(.25,.46,.45,.94) forwards}
@@ -152,24 +152,27 @@ function Icon({name,size=16,color="currentColor",style={}}){
 
 /* ── Aquatic Background ─────────────────────────────────────────────────── */
 function AquaBg(){
-  const bubbles=useMemo(()=>Array.from({length:14},(_,i)=>({
-    id:i,size:18+Math.random()*50,left:Math.random()*100,
-    delay:Math.random()*12,duration:8+Math.random()*14,
+  const bubbles=useMemo(()=>Array.from({length:10},(_,i)=>({
+    id:i,size:16+Math.random()*40,left:Math.random()*100,
+    delay:Math.random()*14,duration:10+Math.random()*16,
   })),[]);
   return(
     <div className="aqua-bg">
-      {/* Ambient glow blobs — profundidade glassmorphism */}
-      <div style={{position:"absolute",top:"-10%",right:"-8%",width:280,height:280,borderRadius:"50%",
-        background:"radial-gradient(circle,rgba(14,165,233,.2),transparent 70%)",
-        filter:"blur(55px)",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",top:"35%",left:"-10%",width:260,height:260,borderRadius:"50%",
-        background:"radial-gradient(circle,rgba(99,102,241,.15),transparent 70%)",
+      {/* Grandes blobs de glow — fundo imersivo igual à fila pública */}
+      <div style={{position:"absolute",top:"-8%",right:"-6%",width:320,height:320,borderRadius:"50%",
+        background:"radial-gradient(circle,rgba(14,165,233,.28),transparent 68%)",
         filter:"blur(60px)",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",bottom:"5%",right:"5%",width:200,height:200,borderRadius:"50%",
-        background:"radial-gradient(circle,rgba(6,182,212,.12),transparent 70%)",
-        filter:"blur(50px)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",top:"30%",left:"-10%",width:300,height:300,borderRadius:"50%",
+        background:"radial-gradient(circle,rgba(99,102,241,.2),transparent 68%)",
+        filter:"blur(65px)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:"8%",right:"4%",width:240,height:240,borderRadius:"50%",
+        background:"radial-gradient(circle,rgba(6,182,212,.18),transparent 68%)",
+        filter:"blur(55px)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:"35%",left:"40%",width:200,height:200,borderRadius:"50%",
+        background:"radial-gradient(circle,rgba(139,92,246,.12),transparent 68%)",
+        filter:"blur(70px)",pointerEvents:"none"}}/>
+      {/* Bolhas flutuantes pequenas */}
       {bubbles.map(b=><div key={b.id} className="bubble" style={{width:b.size,height:b.size,left:`${b.left}%`,bottom:`-${b.size}px`,animationDelay:`${b.delay}s`,animationDuration:`${b.duration}s`}}/>)}
-      <div className="wave"/><div className="wave2"/>
     </div>
   );
 }
