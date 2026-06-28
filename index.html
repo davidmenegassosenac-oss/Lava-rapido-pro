@@ -831,7 +831,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [saving,setSaving]=useState(false);
   const [success,setSuccess]=useState("");
   const [errMsg,setErrMsg]=useState("");
-  const [tab,setTab]=useState("relatorios");
+  const [tab,setTab]=useState("empresa");
   const [ignorarLimites,setIgnorarLimites]=useState(false);
   const [savingIgnorar,setSavingIgnorar]=useState(false);
   // Faturamento semanal — calculado aqui e passado para FolhaScreen como prop
@@ -949,6 +949,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   };
 
   const SEMPRE_LIVRE=new Set(["empresa","assinatura","servicos"]);
+  const planoAtual=(plano&&plano!=="undefined"&&plano!=="null")?plano:"trial";
   const ALL_CONFIG_TABS=[
     ["relatorios","📈 Relatórios",isOwner],
     ["folha","💸 Folha",isOwner],
