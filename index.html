@@ -820,25 +820,6 @@ function TermosModal({onClose,onAceitar}){
 /* ══════════════════════════════════════════════════════════════════════════
    CONFIGURAÇÕES SCREEN — personalização da empresa
 ══════════════════════════════════════════════════════════════════════════ */
-const DIAS_SEMANA=[
-  {key:"seg",label:"Segunda"},
-  {key:"ter",label:"Terça"},
-  {key:"qua",label:"Quarta"},
-  {key:"qui",label:"Quinta"},
-  {key:"sex",label:"Sexta"},
-  {key:"sab",label:"Sábado"},
-  {key:"dom",label:"Domingo"},
-];
-const HORARIO_DEFAULT={
-  seg:{aberto:true,inicio:"08:00",fim:"18:00"},
-  ter:{aberto:true,inicio:"08:00",fim:"18:00"},
-  qua:{aberto:true,inicio:"08:00",fim:"18:00"},
-  qui:{aberto:true,inicio:"08:00",fim:"18:00"},
-  sex:{aberto:true,inicio:"08:00",fim:"18:00"},
-  sab:{aberto:true,inicio:"08:00",fim:"13:00"},
-  dom:{aberto:false,inicio:"08:00",fim:"12:00"},
-};
-
 function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [empresa,setEmpresa]=useState(null);
   const [ass,setAss]=useState(null);
@@ -852,33 +833,27 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [errMsg,setErrMsg]=useState("");
   const [tab,setTab]=useState("relatorios");
   const [ignorarLimites,setIgnorarLimites]=useState(false);
-  const [horario,setHorario]=useState(HORARIO_DEFAULT);
-  const [savingHorario,setSavingHorario]=useState(false);
-  const [horarioOk,setHorarioOk]=useState(false);
-  const setDia=(dia,campo,valor)=>setHorario(h=>({...h,[dia]:{...h[dia],[campo]:valor}}));
   const [savingIgnorar,setSavingIgnorar]=useState(false);
   // Faturamento semanal — calculado aqui e passado para FolhaScreen como prop
   // Usa select('*') identicamente ao HistoryScreen que funciona corretamente
   const [faturamentoSemana,setFaturamentoSemana]=useState(0);
   const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
 
-  const fetchFaturamentoSemana=useCallback(async()=>{
+  useEffect(()=>{
+    // Faturamento semanal para passar ao FolhaScreen
     const hoje=new Date();
-    const diaDaSemana=hoje.getDay()||7; // 1=Seg ... 7=Dom
-    const inicio=new Date(hoje);inicio.setDate(hoje.getDate()-(diaDaSemana-1));
-    inicio.setHours(0,0,0,0);
-    const fim=new Date(inicio);fim.setDate(inicio.getDate()+6);fim.setHours(23,59,59,999);
-    const{data}=await sb.from("historico").select("*")
+    const dia=hoje.getDay()||7;
+    const ini=new Date(hoje);ini.setDate(hoje.getDate()-(dia-1));ini.setHours(0,0,0,0);
+    const fim=new Date(ini);fim.setDate(ini.getDate()+6);fim.setHours(23,59,59,999);
+    sb.from("historico").select("value,status_pagamento")
       .eq("empresa_id",empresaId)
-      .gte("completed_at",inicio.toISOString())
-      .lte("completed_at",fim.toISOString());
-    const total=(data||[])
-      .filter(h=>h.status_pagamento!=="estornado")
-      .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
-    setFaturamentoSemana(total);
+      .gte("completed_at",ini.toISOString())
+      .lte("completed_at",fim.toISOString())
+      .then(({data})=>{
+        const t=(data||[]).filter(h=>h.status_pagamento!=="estornado").reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+        setFaturamentoSemana(t);
+      }).catch(()=>{});
   },[empresaId]);
-
-  useEffect(()=>{fetchFaturamentoSemana();},[fetchFaturamentoSemana]);
 
   useEffect(()=>{
     sb.from('empresas').select('*').eq('id',empresaId).single()
@@ -887,9 +862,6 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
         setEmpresa(data);
         setForm({nome_fantasia:data.nome_fantasia||"",telefone:data.telefone||"",razao_social:data.razao_social||"",cnpj:data.cnpj||""});
         setIgnorarLimites(data.ignorar_limites_hoje||false);
-        // Mescla com o default garantindo que todas as 7 chaves existam
-        const hDb=data.horario_funcionamento;
-        setHorario(hDb&&typeof hDb==="object"?{...HORARIO_DEFAULT,...hDb}:{...HORARIO_DEFAULT});
       }).catch(()=>{});
     sb.rpc('fn_assinatura_valida',{p_empresa_id:empresaId}).then(({data})=>{if(data)setAss(data);}).catch(()=>{});
     sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId}).then(({data,error})=>{if(!error&&data)setLimites(data);}).catch(()=>{});
@@ -976,12 +948,6 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     setSvcs(s=>s.filter(x=>x.id!==id));
   };
 
-  const saveHorario=async()=>{
-    setSavingHorario(true);
-    const{error}=await sb.from('empresas').update({horario_funcionamento:horario}).eq('id',empresaId);
-    setSavingHorario(false);
-    if(!error){setHorarioOk(true);setTimeout(()=>setHorarioOk(false),3000);}
-  };
   const SEMPRE_LIVRE=new Set(["empresa","assinatura","servicos"]);
   const ALL_CONFIG_TABS=[
     ["relatorios","📈 Relatórios",isOwner],
@@ -1035,69 +1001,6 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
           <button className="btn-glow" onClick={saveEmpresa} disabled={saving}>
             {saving?<div className="spinner spin"/>:<><Icon name="Check" size={16} color="#fff"/> Salvar Alterações</>}
           </button>
-
-          {/* Horário de Funcionamento */}
-          <div style={{marginTop:24}}>
-            <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.5)",
-              textTransform:"uppercase",letterSpacing:".08em",marginBottom:14}}>
-              🕐 Horário de Funcionamento
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
-              {DIAS_SEMANA.map(({key,label})=>{
-                const d={...(HORARIO_DEFAULT[key]||{aberto:true,inicio:"08:00",fim:"18:00"}),...(horario?.[key]||{})};
-                return(
-                  <div key={key} style={{padding:"12px 14px",borderRadius:14,
-                    background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)"}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:d.aberto?10:0}}>
-                      <span style={{fontSize:13,fontWeight:700,
-                        color:d.aberto?"#e0f2fe":"rgba(186,230,253,.35)",minWidth:70}}>{label}</span>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
-                          {d.aberto?"Aberto":"Fechado"}
-                        </span>
-                        {/* Toggle switch */}
-                        <button onClick={()=>setDia(key,"aberto",!d.aberto)}
-                          style={{width:40,height:22,borderRadius:99,cursor:"pointer",border:"none",
-                            position:"relative",transition:"background .2s",
-                            background:d.aberto?"#0ea5e9":"rgba(125,211,252,.2)"}}>
-                          <div style={{position:"absolute",top:3,
-                            left:d.aberto?20:3,width:16,height:16,borderRadius:99,
-                            background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.3)",
-                            transition:"left .2s"}}/>
-                        </button>
-                      </div>
-                    </div>
-                    {d.aberto&&(
-                      <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:10,color:"rgba(186,230,253,.4)",marginBottom:4,fontWeight:600}}>ABRE</div>
-                          <input type="time" value={d.inicio}
-                            onChange={e=>setDia(key,"inicio",e.target.value)}
-                            style={{width:"100%",padding:"7px 10px",borderRadius:10,
-                              background:"rgba(255,255,255,.06)",border:"1px solid rgba(125,211,252,.2)",
-                              color:"#e0f2fe",fontSize:13,outline:"none",colorScheme:"dark"}}/>
-                        </div>
-                        <div style={{color:"rgba(186,230,253,.3)",fontSize:12,paddingTop:16}}>–</div>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:10,color:"rgba(186,230,253,.4)",marginBottom:4,fontWeight:600}}>FECHA</div>
-                          <input type="time" value={d.fim}
-                            onChange={e=>setDia(key,"fim",e.target.value)}
-                            style={{width:"100%",padding:"7px 10px",borderRadius:10,
-                              background:"rgba(255,255,255,.06)",border:"1px solid rgba(125,211,252,.2)",
-                              color:"#e0f2fe",fontSize:13,outline:"none",colorScheme:"dark"}}/>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {horarioOk&&<div style={{color:"#4ade80",fontSize:12,fontWeight:600,marginBottom:8}}>✅ Horários salvos!</div>}
-            <button className="btn-glow" onClick={saveHorario} disabled={savingHorario}
-              style={{background:"linear-gradient(135deg,#0369a1,#0284c7)"}}>
-              {savingHorario?<div className="spinner spin"/>:<><Icon name="Clock" size={16} color="#fff"/> Salvar Horários</>}
-            </button>
-          </div>
         </div>
       )}
 
@@ -1290,7 +1193,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
           screen-enter" próprio, porque já estamos dentro de um. */}
       {tab==="relatorios"&&isOwner&&<RelatoriosScreen empresaId={empresaId} embedded/>}
       {tab==="equipe"&&isOwner&&<AdminScreen empresaId={empresaId} currentUser={currentUser} embedded/>}
-      {tab==="folha"&&isOwner&&<FolhaScreen empresaId={empresaId} embedded faturamentoExterno={faturamentoSemana} onFaturamentoChange={fetchFaturamentoSemana}/>}
+      {tab==="folha"&&isOwner&&<FolhaScreen empresaId={empresaId} embedded faturamentoExterno={faturamentoSemana} onFaturamentoChange={()=>{}}/>}
     </div>
   );
 }
