@@ -4453,11 +4453,11 @@ function App(){
   const [crmBadge,setCrmBadge]=useState(0);
 
   // Conta clientes sumidos (≥30 dias) para o badge do CRM —
-  // roda sempre que o perfil carrega, sem impactar outras queries.
+  // usa a mesma regra do CRMScreen: exclui cliente_recuperado=true
   useEffect(()=>{
     if(!profile?.empresa_id||profile.role==="master")return;
     sb.from("historico")
-      .select("phone,client,model,plate,completed_at")
+      .select("phone,completed_at,cliente_recuperado")
       .eq("empresa_id",profile.empresa_id)
       .order("completed_at",{ascending:false})
       .then(({data})=>{
@@ -4467,7 +4467,9 @@ function App(){
           if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))
             map[r.phone]=r;
         });
-        const count=Object.values(map).filter(r=>daysSince(r.completed_at)>=30).length;
+        const count=Object.values(map)
+          .filter(r=>daysSince(r.completed_at)>=30&&r.cliente_recuperado!==true)
+          .length;
         setCrmBadge(count);
       });
   },[profile]);
