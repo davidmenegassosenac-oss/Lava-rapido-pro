@@ -820,6 +820,26 @@ function TermosModal({onClose,onAceitar}){
 /* ══════════════════════════════════════════════════════════════════════════
    CONFIGURAÇÕES SCREEN — personalização da empresa
 ══════════════════════════════════════════════════════════════════════════ */
+// Horários padrão — definido fora do componente para nunca ser undefined
+const HORARIOS_PADRAO={
+  seg:{aberto:true, inicio:"08:00",fim:"18:00"},
+  ter:{aberto:true, inicio:"08:00",fim:"18:00"},
+  qua:{aberto:true, inicio:"08:00",fim:"18:00"},
+  qui:{aberto:true, inicio:"08:00",fim:"18:00"},
+  sex:{aberto:true, inicio:"08:00",fim:"18:00"},
+  sab:{aberto:true, inicio:"08:00",fim:"13:00"},
+  dom:{aberto:false,inicio:"08:00",fim:"12:00"},
+};
+const DIAS_CONFIG=[
+  {key:"seg",label:"Segunda-feira"},
+  {key:"ter",label:"Terça-feira"},
+  {key:"qua",label:"Quarta-feira"},
+  {key:"qui",label:"Quinta-feira"},
+  {key:"sex",label:"Sexta-feira"},
+  {key:"sab",label:"Sábado"},
+  {key:"dom",label:"Domingo"},
+];
+
 function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [empresa,setEmpresa]=useState(null);
   const [ass,setAss]=useState(null);
@@ -834,6 +854,10 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [tab,setTab]=useState("relatorios");
   const [ignorarLimites,setIgnorarLimites]=useState(false);
   const [savingIgnorar,setSavingIgnorar]=useState(false);
+  // Horários — inicia com padrão seguro, nunca null/undefined
+  const [horarios,setHorarios]=useState(HORARIOS_PADRAO);
+  const [savingHorarios,setSavingHorarios]=useState(false);
+  const [horariosSalvos,setHorariosSalvos]=useState(false);
   // Faturamento semanal — calculado aqui e passado para FolhaScreen como prop
   // Usa select('*') identicamente ao HistoryScreen que funciona corretamente
   const [faturamentoSemana,setFaturamentoSemana]=useState(0);
@@ -862,6 +886,10 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
         setEmpresa(data);
         setForm({nome_fantasia:data.nome_fantasia||"",telefone:data.telefone||"",razao_social:data.razao_social||"",cnpj:data.cnpj||""});
         setIgnorarLimites(data.ignorar_limites_hoje||false);
+        // Merge defensivo: HORARIOS_PADRAO garante todas as chaves mesmo se banco vier parcial
+        if(data.horario_funcionamento&&typeof data.horario_funcionamento==="object"){
+          setHorarios({...HORARIOS_PADRAO,...data.horario_funcionamento});
+        }
       }).catch(()=>{});
     sb.rpc('fn_assinatura_valida',{p_empresa_id:empresaId}).then(({data})=>{if(data)setAss(data);}).catch(()=>{});
     sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId}).then(({data,error})=>{if(!error&&data)setLimites(data);}).catch(()=>{});
@@ -924,6 +952,22 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     const{error}=await sb.from('empresas').update({ignorar_limites_hoje:novo}).eq('id',empresaId);
     if(!error)setIgnorarLimites(novo);
     setSavingIgnorar(false);
+  };
+
+  const saveHorarios=async()=>{
+    setSavingHorarios(true);
+    const{error}=await sb.from("empresas")
+      .update({horario_funcionamento:horarios})
+      .eq("id",empresaId);
+    setSavingHorarios(false);
+    if(!error){setHorariosSalvos(true);setTimeout(()=>setHorariosSalvos(false),3000);}
+  };
+
+  const setDiaHorario=(dia,campo,valor)=>{
+    setHorarios(prev=>({
+      ...prev,
+      [dia]:{...(prev[dia]||HORARIOS_PADRAO[dia]),[campo]:valor}
+    }));
   };
 
   const addSvc=async()=>{
@@ -1002,6 +1046,81 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
           <button className="btn-glow" onClick={saveEmpresa} disabled={saving}>
             {saving?<div className="spinner spin"/>:<><Icon name="Check" size={16} color="#fff"/> Salvar Alterações</>}
           </button>
+
+          {/* ── Horário de Funcionamento ── */}
+          <div style={{marginTop:24,paddingTop:20,borderTop:"1px solid rgba(125,211,252,.1)"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.5)",
+              textTransform:"uppercase",letterSpacing:".08em",marginBottom:14}}>
+              🕐 Horário de Funcionamento
+            </div>
+            {DIAS_CONFIG.map(({key,label})=>{
+              const d=horarios[key]||HORARIOS_PADRAO[key];
+              return(
+                <div key={key} style={{marginBottom:10,padding:"12px 14px",borderRadius:14,
+                  background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                    marginBottom:d.aberto?10:0}}>
+                    <span style={{fontSize:13,fontWeight:700,
+                      color:d.aberto?"#e0f2fe":"rgba(186,230,253,.3)",minWidth:100}}>
+                      {label}
+                    </span>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
+                        {d.aberto?"Aberto":"Fechado"}
+                      </span>
+                      <button onClick={()=>setDiaHorario(key,"aberto",!d.aberto)}
+                        style={{width:40,height:22,borderRadius:99,border:"none",
+                          cursor:"pointer",position:"relative",transition:"background .2s",
+                          background:d.aberto?"#0ea5e9":"rgba(125,211,252,.2)"}}>
+                        <div style={{position:"absolute",top:3,
+                          left:d.aberto?20:3,width:16,height:16,borderRadius:99,
+                          background:"#fff",transition:"left .2s",
+                          boxShadow:"0 1px 4px rgba(0,0,0,.3)"}}/>
+                      </button>
+                    </div>
+                  </div>
+                  {d.aberto&&(
+                    <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:10,color:"rgba(186,230,253,.4)",
+                          fontWeight:600,marginBottom:4}}>ABRE</div>
+                        <input type="time"
+                          value={d.inicio||"08:00"}
+                          onChange={e=>setDiaHorario(key,"inicio",e.target.value)}
+                          style={{width:"100%",padding:"7px 10px",borderRadius:10,
+                            background:"rgba(255,255,255,.06)",
+                            border:"1px solid rgba(125,211,252,.2)",
+                            color:"#e0f2fe",fontSize:13,outline:"none",colorScheme:"dark"}}/>
+                      </div>
+                      <div style={{color:"rgba(186,230,253,.3)",fontSize:12,paddingTop:16}}>–</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:10,color:"rgba(186,230,253,.4)",
+                          fontWeight:600,marginBottom:4}}>FECHA</div>
+                        <input type="time"
+                          value={d.fim||"18:00"}
+                          onChange={e=>setDiaHorario(key,"fim",e.target.value)}
+                          style={{width:"100%",padding:"7px 10px",borderRadius:10,
+                            background:"rgba(255,255,255,.06)",
+                            border:"1px solid rgba(125,211,252,.2)",
+                            color:"#e0f2fe",fontSize:13,outline:"none",colorScheme:"dark"}}/>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {horariosSalvos&&(
+              <div style={{color:"#4ade80",fontSize:12,fontWeight:600,marginBottom:8}}>
+                ✅ Horários salvos!
+              </div>
+            )}
+            <button className="btn-glow" onClick={saveHorarios} disabled={savingHorarios}
+              style={{background:"linear-gradient(135deg,#0369a1,#0284c7)"}}>
+              {savingHorarios
+                ?<div className="spinner spin"/>
+                :<><Icon name="Clock" size={16} color="#fff"/> Salvar Horários</>}
+            </button>
+          </div>
         </div>
       )}
 
