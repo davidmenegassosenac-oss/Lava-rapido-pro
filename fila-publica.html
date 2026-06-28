@@ -74,6 +74,66 @@ const ST_CFG={
 const ORDEM=['Aguardando','Lavando','Concluído'];
 
 /* ── Busca de empresa ── */
+
+// ── Status de funcionamento baseado no horário do banco ──────────────────
+function getBusinessStatus(horario_funcionamento){
+  const DIAS=['dom','seg','ter','qua','qui','sex','sab'];
+  const agora=new Date();
+  const diaKey=DIAS[agora.getDay()];
+  const h=horario_funcionamento;
+  if(!h||!h[diaKey]){return'fechado';}
+  const cfg=h[diaKey];
+  if(!cfg.aberto){return'fechado';}
+  // Converte hh:mm para minutos desde meia-noite
+  const toMin=str=>{if(!str)return 0;const[hh,mm]=str.split(':').map(Number);return hh*60+mm;};
+  const now=agora.getHours()*60+agora.getMinutes();
+  const ini=toMin(cfg.inicio);
+  const fim=toMin(cfg.fim);
+  if(now<ini||now>=fim){return'fechado';}
+  if(fim-now<=30){return'fecha_logo';}
+  return'aberto';
+}
+
+function StatusHorario({horario_funcionamento}){
+  const status=getBusinessStatus(horario_funcionamento);
+  if(status==='aberto')return(
+    <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 9px',borderRadius:99,
+      background:'rgba(74,222,128,.12)',border:'1px solid rgba(74,222,128,.3)'}}>
+      <div style={{width:6,height:6,borderRadius:99,background:'#4ade80',animation:'pl 1.5s ease-in-out infinite'}}/>
+      <span style={{fontSize:10,fontWeight:800,color:'#4ade80'}}>Aberto</span>
+    </div>
+  );
+  if(status==='fecha_logo')return(
+    <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 9px',borderRadius:99,
+      background:'rgba(251,191,36,.12)',border:'1px solid rgba(251,191,36,.3)',animation:'pl 2s ease-in-out infinite'}}>
+      <div style={{width:6,height:6,borderRadius:99,background:'#fbbf24'}}/>
+      <span style={{fontSize:10,fontWeight:800,color:'#fbbf24'}}>Fecha logo</span>
+    </div>
+  );
+  return(
+    <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 9px',borderRadius:99,
+      background:'rgba(125,211,252,.06)',border:'1px solid rgba(125,211,252,.1)'}}>
+      <div style={{width:6,height:6,borderRadius:99,background:'rgba(186,230,253,.3)'}}/>
+      <span style={{fontSize:10,fontWeight:800,color:'rgba(186,230,253,.35)'}}>Fechado</span>
+    </div>
+  );
+}
+
+function MiniStatusDot({horario_funcionamento}){
+  const status=getBusinessStatus(horario_funcionamento);
+  const cfg={
+    aberto:  {c:'#4ade80',anim:'pl 2s ease-in-out infinite',label:'Aberto',lc:'#4ade80'},
+    fecha_logo:{c:'#fbbf24',anim:'none',label:'Fecha logo',lc:'#fbbf24'},
+    fechado: {c:'rgba(186,230,253,.3)',anim:'none',label:'Fechado',lc:'rgba(186,230,253,.4)'},
+  }[status];
+  return(
+    <div style={{display:'flex',alignItems:'center',gap:4}}>
+      <div style={{width:6,height:6,borderRadius:99,background:cfg.c,animation:cfg.anim}}/>
+      <span style={{fontSize:9,fontWeight:700,color:cfg.lc}}>{cfg.label}</span>
+    </div>
+  );
+}
+
 function BuscaScreen({onSelect}){
   const [q,setQ]=useState('');
   const [res,setRes]=useState([]);
@@ -85,7 +145,7 @@ function BuscaScreen({onSelect}){
   const t=useRef(null);
 
   useEffect(()=>{
-    sb.from('empresas').select('id,nome_fantasia,telefone').limit(8)
+    sb.from('empresas').select('id,nome_fantasia,telefone,horario_funcionamento').limit(8)
       .then(async({data,error})=>{
         if(error){setLoadAfil(false);return;}
         const lista=data||[];
@@ -112,7 +172,7 @@ function BuscaScreen({onSelect}){
     t.current=setTimeout(async()=>{
       setLoad(true);setErro('');
       const{data,error}=await sb.from('empresas')
-        .select('id,nome_fantasia,telefone')
+        .select('id,nome_fantasia,telefone,horario_funcionamento')
         .ilike('nome_fantasia','%'+q.trim()+'%')
         .limit(8);
       setLoad(false);
@@ -259,19 +319,8 @@ function BuscaScreen({onSelect}){
                                 overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,marginRight:8}}>
                                 {e.nome_fantasia}
                               </div>
-                              {/* Badge ao vivo */}
-                              <div style={{display:'flex',alignItems:'center',gap:5,
-                                padding:'3px 9px',borderRadius:99,flexShrink:0,
-                                background:aberto?'rgba(74,222,128,.15)':'rgba(248,113,113,.15)',
-                                border:`1px solid ${aberto?'rgba(74,222,128,.35)':'rgba(248,113,113,.35)'}`}}>
-                                <div style={{width:6,height:6,borderRadius:99,
-                                  background:aberto?'#4ade80':'#f87171',
-                                  animation:'pl 1.5s ease-in-out infinite'}}/>
-                                <span style={{fontSize:10,fontWeight:800,
-                                  color:aberto?'#4ade80':'#f87171'}}>
-                                  {aberto?'Aberto':'Cheio'}
-                                </span>
-                              </div>
+                              {/* Badge horário ao vivo */}
+                              <StatusHorario horario_funcionamento={e.horario_funcionamento}/>
                             </div>
                             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                               <span style={{fontSize:12,color:'rgba(186,230,253,.45)'}}>
@@ -302,10 +351,7 @@ function BuscaScreen({onSelect}){
                           <button key={e.id} onClick={()=>onSelect(e)} style={{flexShrink:0,width:155,padding:'16px 14px',borderRadius:20,cursor:'pointer',textAlign:'left',background:'rgba(255,255,255,.06)',backdropFilter:'blur(16px)',WebkitBackdropFilter:'blur(16px)',border:'1px solid rgba(255,255,255,.1)',display:'flex',flexDirection:'column',gap:10,boxShadow:'0 4px 24px rgba(0,0,0,.3)'}}>
                             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                               <div style={{width:36,height:36,borderRadius:12,flexShrink:0,background:GRAD[i%GRAD.length],display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:'#fff'}}>{e.nome_fantasia?.charAt(0).toUpperCase()}</div>
-                              <div style={{display:'flex',alignItems:'center',gap:4}}>
-                                <div style={{width:6,height:6,borderRadius:99,background:aberto?'#4ade80':'#f87171',animation:aberto?'pl 2s ease-in-out infinite':'none'}}/>
-                                <span style={{fontSize:9,fontWeight:700,color:aberto?'#4ade80':'rgba(248,113,113,.7)'}}>{aberto?'Aberto':'Cheio'}</span>
-                              </div>
+                              <MiniStatusDot horario_funcionamento={e.horario_funcionamento}/>
                             </div>
                             <div style={{fontSize:12,fontWeight:800,color:'#e0f2fe',lineHeight:1.3,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{e.nome_fantasia}</div>
                             <div style={{fontSize:10,color:'rgba(186,230,253,.4)',fontWeight:600}}>{count===0?'Sem fila':count+' na fila'} · Ver →</div>
