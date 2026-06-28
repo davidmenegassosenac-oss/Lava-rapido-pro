@@ -2617,6 +2617,28 @@ function HistoryScreen({empresaId,embedded,isOwner}){
     })
   ,[hist,search,paymentFilter,filtrarHoje,dataFiltro]);
 
+  // Detecta recuperados pelo padrão de visita: gap de 30+ dias ANTES desta visita
+  // Funciona mesmo sem cliente_recuperado no banco
+  const recuperadosSet=useMemo(()=>{
+    const set=new Set();
+    // Agrupa registros por placa
+    const byPlaca={};
+    hist.forEach(r=>{
+      const k=(r.plate||'').toUpperCase();
+      if(!k)return;
+      if(!byPlaca[k])byPlaca[k]=[];
+      byPlaca[k].push(new Date(r.completed_at).getTime());
+    });
+    Object.entries(byPlaca).forEach(([placa,datas])=>{
+      const sorted=datas.sort((a,b)=>a-b); // mais antigo → mais recente
+      for(let i=1;i<sorted.length;i++){
+        const gap=(sorted[i]-sorted[i-1])/(86400000);
+        if(gap>=30)set.add(placa); // esta placa teve um retorno após 30+ dias de ausência
+      }
+    });
+    return set;
+  },[hist]);
+
   // Totalizador exclui estornados — não contam para receita
   const totalFiltrado=useMemo(()=>
     filtered.filter(h=>h.status_pagamento!=="estornado")
@@ -2777,17 +2799,20 @@ function HistoryScreen({empresaId,embedded,isOwner}){
             const stPgto=STATUS_PGTO[h.status_pagamento||"pago"]||STATUS_PGTO.pago;
             const isEstornado=h.status_pagamento==="estornado";
             const estaEditando=editando===h.id;
-            // rec: flag do banco OU placa que estava inativa há 30+ dias no histórico anterior
-            const rec=(h.cliente_recuperado===true)&&!isEstornado;
+            // isRecuperado: flag do banco OU placa identificada com gap 30+ dias no histórico local
+            const isRecuperado=!isEstornado&&(
+              h.cliente_recuperado===true||
+              recuperadosSet.has((h.plate||'').toUpperCase())
+            );
             return(
             <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`,
               opacity:isEstornado?.6:1,
-              background:rec?"linear-gradient(135deg,rgba(251,191,36,.1),rgba(202,138,4,.05),rgba(255,255,255,.04))":undefined,
-              border:rec?"1.5px solid rgba(251,191,36,.3)":isEstornado?"1px solid rgba(148,163,184,.2)":undefined,
-              boxShadow:rec?"0 4px 16px rgba(251,191,36,.1)":undefined}}>
+              background:isRecuperado?"linear-gradient(135deg,rgba(251,191,36,.1),rgba(202,138,4,.05),rgba(255,255,255,.04))":undefined,
+              border:isRecuperado?"1.5px solid rgba(251,191,36,.3)":isEstornado?"1px solid rgba(148,163,184,.2)":undefined,
+              boxShadow:isRecuperado?"0 4px 16px rgba(251,191,36,.1)":undefined}}>
               <div style={{padding:14}}>
                 {/* Badge reconquistado */}
-                {rec&&(
+                {isRecuperado&&(
                   <div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:8,
                     padding:"3px 9px",borderRadius:8,
                     background:"rgba(251,191,36,.15)",border:"1px solid rgba(251,191,36,.3)"}}>
