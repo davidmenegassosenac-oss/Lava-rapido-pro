@@ -2759,11 +2759,24 @@ function HistoryScreen({empresaId,embedded,isOwner}){
             const stPgto=STATUS_PGTO[h.status_pagamento||"pago"]||STATUS_PGTO.pago;
             const isEstornado=h.status_pagamento==="estornado";
             const estaEditando=editando===h.id;
+            const rec=h.cliente_recuperado===true&&!isEstornado;
             return(
             <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`,
               opacity:isEstornado?.6:1,
-              borderColor:isEstornado?"rgba(148,163,184,.2)":undefined}}>
+              background:rec?"linear-gradient(135deg,rgba(251,191,36,.1),rgba(202,138,4,.05),rgba(255,255,255,.04))":undefined,
+              border:rec?"1.5px solid rgba(251,191,36,.3)":isEstornado?"1px solid rgba(148,163,184,.2)":undefined,
+              boxShadow:rec?"0 4px 16px rgba(251,191,36,.1)":undefined}}>
               <div style={{padding:14}}>
+                {/* Badge reconquistado */}
+                {rec&&(
+                  <div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:8,
+                    padding:"3px 9px",borderRadius:8,
+                    background:"rgba(251,191,36,.15)",border:"1px solid rgba(251,191,36,.3)"}}>
+                    <Icon name="Sparkles" size={11} color="#fbbf24"/>
+                    <span style={{fontSize:10,fontWeight:800,color:"#fbbf24",
+                      textTransform:"uppercase",letterSpacing:".08em"}}>Reconquistado</span>
+                  </div>
+                )}
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{color:"#e0f2fe",fontWeight:800,fontSize:14,
@@ -3021,14 +3034,17 @@ function CRMScreen({empresaId,onBadgeUpdate}){
   const [disparados,setDisparados]=useState(new Set());
 
   useEffect(()=>{
-    sb.from('historico').select('phone,client,model,plate,type,completed_at').eq('empresa_id',empresaId).order('completed_at',{ascending:false})
+    sb.from('historico').select('phone,client,model,plate,type,completed_at,cliente_recuperado').eq('empresa_id',empresaId).order('completed_at',{ascending:false})
       .then(({data})=>{setHist(data||[]);setLoading(false);});
   },[empresaId]);
 
-  // Latest per phone
+  // Latest per phone — exclui clientes já recuperados (voltaram ao pátio)
   const map={};
   hist.forEach(r=>{if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))map[r.phone]=r;});
-  const sumidos=Object.values(map).map(r=>({...r,dias:daysSince(r.completed_at)})).filter(r=>r.dias>=min).sort((a,b)=>b.dias-a.dias);
+  const sumidos=Object.values(map)
+    .map(r=>({...r,dias:daysSince(r.completed_at)}))
+    .filter(r=>r.dias>=min&&r.cliente_recuperado!==true)
+    .sort((a,b)=>b.dias-a.dias);
 
   // Clientes que completaram exatamente 45 dias hoje (±1 dia) — gatilho de ação rápida
   const gatilho45=useMemo(()=>
