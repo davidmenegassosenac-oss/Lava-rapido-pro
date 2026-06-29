@@ -4600,22 +4600,20 @@ function SupportScreen({embedded}){
    APP ROOT
 ══════════════════════════════════════════════════════════════════════════ */
 function App(){
-  const [session,setSession]=useState(undefined);
+  const [session,setSession]=useState(null);
   const [profile,setProfile]=useState(null);
   const [empresa,setEmpresa]=useState(null);
   const [assInfo,setAssInfo]=useState(null);
   const [tab,setTab]=useState("home");
   const [toast,setToast]=useState(null);
-  const [authReady,setAuthReady]=useState(false);
+  // initializing: único estado de loading — true até auth+profile estarem resolvidos
+  const [initializing,setInitializing]=useState(true);
   const [weekWeather,setWeekWeather]=useState(null);
   const [showWeeklyPopup,setShowWeeklyPopup]=useState(false);
   const [showSupport,setShowSupport]=useState(false);
   const [crmBadge,setCrmBadge]=useState(0);
   // G1 — visited deve estar no topo (Regras dos Hooks: nunca após early return)
   const [visited,setVisited]=useState({home:true});
-  // profileLoading: evita falso positivo na tela de Cadastrar Empresa enquanto
-  // o perfil ainda está sendo buscado no Supabase
-  const [profileLoading,setProfileLoading]=useState(true);
 
   // G1 — marca aba como visitada; usa `tab` (top-level state) em vez de `safeTab`
   useEffect(()=>{
@@ -4624,7 +4622,7 @@ function App(){
 
   // Badge CRM — usa calcSumidos (fonte única, mesma lógica do CRMScreen)
   useEffect(()=>{
-    if(!profile?.empresa_id||profile.role==="master")return;
+    if(!profile?.empresa_id||profile.role==="master"||initializing)return;
     const hoje=toLocalDateStr(new Date());
     // G3 — limita ao últimos 6 meses: clientes sumidos há +180 dias são irrelevantes para CRM
     const seisAtras=toLocalDateStr(new Date(Date.now()-180*86400000));
@@ -4659,26 +4657,22 @@ function App(){
     }
   },[weekWeather,profile]);
 
-  // Auth listener
+  // Auth listener — inicializa sessão; initializing permanece true até profile ser resolvido
   useEffect(()=>{
-    sb.auth.getSession().then(({data:{session}})=>{
-      setSession(session);
-      setAuthReady(true);
+    sb.auth.getSession().then(({data:{session:s}})=>{
+      setSession(s);
+      if(!s) setInitializing(false); // sem sessão: nada a carregar, libera imediatamente
     });
     const{data:{subscription}}=sb.auth.onAuthStateChange((_,s)=>{
       setSession(s);
-      if(!s){setProfile(null);setAssInfo(null);}
+      if(!s){setProfile(null);setAssInfo(null);setInitializing(false);}
     });
     return()=>subscription.unsubscribe();
   },[]);
 
   // Load profile + assinatura after session
   useEffect(()=>{
-    if(!session){
-      // Sem sessão → não há profile para carregar
-      setProfileLoading(false);
-      return;
-    }
+    if(!session)return; // auth listener já tratou initializing=false sem sessão
     (async()=>{
       // Tentar buscar perfil com retry (RLS pode demorar após signup)
       let prof=null;
@@ -4706,15 +4700,17 @@ function App(){
         setAssInfo(ass);
         setEmpresa(emp);
       }
-      setProfileLoading(false); // libera guards após fetch completo
+      setInitializing(false); // tudo resolvido — libera renderização final
     })();
   },[session]);
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),2500);};
   const logout=async()=>{await sb.auth.signOut();setTab("home");};
 
-  // Loading state
-  if(!authReady||session===undefined){
+  // ── Trava de inicialização ────────────────────────────────────────────────
+  // initializing=true até auth+profile estarem 100% resolvidos.
+  // Garante que CadastroEmpresaScreen NUNCA apareça por race condition.
+  if(initializing){
     return(
       <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
         <AquaBg/>
@@ -4723,6 +4719,7 @@ function App(){
             <Icon name="Droplets" size={36} color="#38bdf8"/>
           </div>
           <div className="spinner spin" style={{margin:"0 auto",width:28,height:28,borderWidth:3}}/>
+          <div style={{color:"rgba(186,230,253,.45)",fontSize:13,marginTop:16,fontWeight:600}}>Carregando...</div>
         </div>
       </div>
     );
@@ -4730,18 +4727,8 @@ function App(){
 
   if(!session) return <LoginScreen onLogin={s=>setSession(s)}/>;
 
-  // Profile ainda carregando
-  if(!profile){
-    return(
-      <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
-        <AquaBg/>
-        <div style={{position:"relative",zIndex:1,textAlign:"center"}}>
-          <div className="spinner spin" style={{margin:"0 auto",width:28,height:28,borderWidth:3}}/>
-          <div style={{color:"rgba(186,230,253,.6)",marginTop:16,fontSize:14}}>Carregando perfil...</div>
-        </div>
-      </div>
-    );
-  }
+  // Após initializing=false, profile deve existir se há sessão
+  if(!profile) return <LoginScreen onLogin={s=>setSession(s)}/>;
 
   // Master → painel da plataforma
   if(profile.role==="master"){
@@ -4774,20 +4761,8 @@ function App(){
     );
   }
 
-  // Sem empresa → cadastro (só exibe após profile fetch completo)
+  // Sem empresa — CadastroEmpresaScreen só chega aqui com initializing=false garantido
   if(!profile.empresa_id){
-    // Ainda carregando — evita falso positivo por race condition no refresh
-    if(profileLoading){
-      return(
-        <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
-          <AquaBg/>
-          <div style={{position:"relative",zIndex:1,textAlign:"center"}}>
-            <div className="spinner spin" style={{margin:"0 auto",width:28,height:28,borderWidth:3}}/>
-            <div style={{color:"rgba(186,230,253,.6)",marginTop:16,fontSize:14}}>Verificando cadastro...</div>
-          </div>
-        </div>
-      );
-    }
     return <CadastroEmpresaScreen user={session.user}
       onBack={async()=>{
         // Quebra o loop fazendo logout completo — limpa qualquer estado corrompido
