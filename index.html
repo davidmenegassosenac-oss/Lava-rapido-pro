@@ -2211,8 +2211,8 @@ function HomeScreen({empresaId}){
     const ch=sb.channel(`queue_${empresaId}`)
       .on('postgres_changes',{event:'*',schema:'public',table:'ordens_servico',filter:`empresa_id=eq.${empresaId}`},(payload)=>{
         if(payload.eventType==='INSERT'&&payload.new){
+          // G2 — usa o payload direto sem re-fetch; join de profiles não crítico no insert
           setQueue(prev=>prev.some(v=>v.id===payload.new.id)?prev:[...prev,payload.new]);
-          fetchQueue();
         }else if(payload.eventType==='UPDATE'&&payload.new){
           setQueue(prev=>prev.map(v=>v.id===payload.new.id?{...payload.new,criador:v.criador,lavador:v.lavador}:v));
         }else if(payload.eventType==='DELETE'&&payload.old){
@@ -3181,13 +3181,16 @@ function CRMScreen({empresaId,onBadgeUpdate}){
   const [disparados,setDisparados]=useState(new Set());
 
   useEffect(()=>{
-    // P1 — usa toLocalDateStr para data local, não UTC
     const hoje=toLocalDateStr(new Date());
+    // G3 — limita ao últimos 6 meses: reduz payload de 3.600+ para ~270 registros
+    const seisAtras=toLocalDateStr(new Date(Date.now()-180*86400000));
 
     const carregar=()=>{
       Promise.all([
         sb.from('historico').select('phone,client,model,plate,type,completed_at,cliente_recuperado')
-          .eq('empresa_id',empresaId).order('completed_at',{ascending:false}),
+          .eq('empresa_id',empresaId)
+          .gte('completed_at',seisAtras+'T00:00:00')
+          .order('completed_at',{ascending:false}),
         sb.from('ordens_servico').select('plate,phone')
           .eq('empresa_id',empresaId).neq('status','Concluído'),
         sb.from('historico').select('plate,phone,completed_at')
@@ -3645,29 +3648,17 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
   useEffect(()=>{
     fetchTudo();
 
-    // Realtime: recalcula quando qualquer lavagem é paga (afeta faturamento semanal)
-    const chFaturamento=sb.channel("folha-fat-"+empresaId)
+    // G4 — 1 canal único com 3 listeners em vez de 3 WebSockets paralelos
+    const ch=sb.channel("folha-"+empresaId)
       .on("postgres_changes",{event:"*",schema:"public",table:"historico",
         filter:`empresa_id=eq.${empresaId}`},()=>fetchTudo())
-      .subscribe();
-
-    // Realtime: recalcula quando pagamentos da folha são lançados/alterados
-    const chFolha=sb.channel("folha-pgto-"+empresaId)
       .on("postgres_changes",{event:"*",schema:"public",table:"folha_pagamentos",
         filter:`empresa_id=eq.${empresaId}`},()=>fetchTudo())
-      .subscribe();
-
-    // Realtime: recalcula quando dias trabalhados são alterados (afeta comissões e saldo)
-    const chDias=sb.channel("folha-dias-"+empresaId)
       .on("postgres_changes",{event:"*",schema:"public",table:"folha_dias_trabalhados",
         filter:`empresa_id=eq.${empresaId}`},()=>fetchTudo())
       .subscribe();
 
-    return()=>{
-      sb.removeChannel(chFaturamento);
-      sb.removeChannel(chFolha);
-      sb.removeChannel(chDias);
-    };
+    return()=>sb.removeChannel(ch);
   },[fetchTudo]);
 
   // Faturamento por semana — todas as pílulas usam a mesma lógica agora
@@ -4241,11 +4232,13 @@ function RelatoriosScreen({empresaId,embedded}){
       .then(({data})=>setHistAll(data||[]));
   },[empresaId]);
 
-  // KPIs calculados sobre hist (período filtrado) — fonte única para evitar divergência
-  const entradas=hist.filter(h=>h.status_pagamento!=="estornado").reduce((s,h)=>s+(parseFloat(h.value)||0),0);
-  const saidas=movs.filter(m=>m.tipo==="saida").reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
-  const saldo=entradas-saidas;
-  const totalAtend=hist.length;
+  // G5 — useMemo: evita recalcular iterações sobre hist+movs em cada re-render
+  const {entradas,saidas,saldo,totalAtend}=useMemo(()=>({
+    entradas: hist.filter(h=>h.status_pagamento!=="estornado").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
+    saidas:   movs.filter(m=>m.tipo==="saida").reduce((s,m)=>s+(parseFloat(m.valor)||0),0),
+    get saldo(){return this.entradas-this.saidas;},
+    totalAtend: hist.length,
+  }),[hist,movs]);
 
   // ── Métricas avançadas via useMemo ─────────────────────────────────────
 
@@ -4611,18 +4604,20 @@ function App(){
   // Badge CRM — usa calcSumidos (fonte única, mesma lógica do CRMScreen)
   useEffect(()=>{
     if(!profile?.empresa_id||profile.role==="master")return;
-    // P1 — data local, não UTC
     const hoje=toLocalDateStr(new Date());
+    // G3 — limita ao últimos 6 meses: clientes sumidos há +180 dias são irrelevantes para CRM
+    const seisAtras=toLocalDateStr(new Date(Date.now()-180*86400000));
     Promise.all([
       sb.from("historico").select("phone,plate,completed_at,cliente_recuperado")
-        .eq("empresa_id",profile.empresa_id).order("completed_at",{ascending:false}),
+        .eq("empresa_id",profile.empresa_id)
+        .gte("completed_at",seisAtras+"T00:00:00")
+        .order("completed_at",{ascending:false}),
       sb.from("ordens_servico").select("plate,phone")
         .eq("empresa_id",profile.empresa_id).neq("status","Concluído"),
       sb.from("historico").select("plate,phone,completed_at")
         .eq("empresa_id",profile.empresa_id).gte("completed_at",hoje+"T00:00:00"),
     ]).then(([{data:h},{data:fila},{data:hj}])=>{
       if(!h)return;
-      // P3 — calcSumidos substitui lógica duplicada
       setCrmBadge(calcSumidos(h,fila||[],hj||[],30).length);
     });
   },[profile]);
@@ -4793,6 +4788,14 @@ function App(){
   const TITLES={home:"Fila de Lavagem",new:"Nova Lavagem",crm:"CRM / Fidelização",history:"Histórico",config:"Configurações"};
   const safeTab=TABS.find(t=>t.id===tab)?tab:"home";
 
+  // G1 — lazy-mount: registra quais abas já foram visitadas (nunca remove)
+  const [visited,setVisited]=useState({home:true});
+  useEffect(()=>{
+    setVisited(v=>v[safeTab]?v:{...v,[safeTab]:true});
+    // G6 — ao sair do CRM, badge já está sincronizado pelo onBadgeUpdate do CRMScreen;
+    // ao retornar de outra aba ao home, relê badge para capturar mudanças em tempo real
+  },[safeTab]);
+
   // Trial banner
   const showTrialBanner=assInfo?.status==="trial"&&(assInfo?.dias_restantes<=7);
 
@@ -4837,15 +4840,25 @@ function App(){
         </div>
       </div>
 
-      {/* Screen — minHeight:0 é a correção crítica: sem isso, este flex item nunca encolhe
-          abaixo do tamanho do seu conteúdo, o que estoura a altura do container pai e
-          empurra a bottom nav para fora da viewport visível em navegadores mobile. */}
+      {/* Screens — lazy-mount: cada tela monta na primeira visita e permanece viva.
+          display:none oculta sem desmontar, preservando estado e canais Realtime.
+          Isso elimina ~160 queries desnecessárias por dia de operação. */}
       <div style={{flex:"1 1 auto",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column",position:"relative",zIndex:5}}>
-        {safeTab==="home"    &&<HomeScreen     key="home"    empresaId={profile.empresa_id}/>}
-        {safeTab==="new"     &&<NewWashScreen  key="new"     empresaId={profile.empresa_id} userId={profile.id} onSuccess={()=>{setTab("home");showToast("✅ Veículo adicionado à fila!");}}/>}
-        {safeTab==="crm"     &&isOwner&&<CRMScreen     key="crm"     empresaId={profile.empresa_id} onBadgeUpdate={()=>setCrmBadge(0)}/>}
-        {safeTab==="history"&&<HistoryScreen key="history" empresaId={profile.empresa_id} isOwner={isOwner}/>}
-        {safeTab==="config"  &&isOwner&&<ConfigScreen  key="config"  empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} plano={assInfo?.plano||empresa?.plano||"trial"} onUpgrade={()=>setTab("config")} onUpdate={name=>{setEmpresa(e=>({...e,nome_fantasia:name}));showToast("✅ "+name+" atualizado!");}}/>}
+        {(visited.home)&&<div style={{display:safeTab==="home"?undefined:"none",height:"100%",overflow:"hidden"}}>
+          <HomeScreen empresaId={profile.empresa_id}/>
+        </div>}
+        {(visited.new)&&<div style={{display:safeTab==="new"?undefined:"none",height:"100%",overflow:"hidden"}}>
+          <NewWashScreen empresaId={profile.empresa_id} userId={profile.id} onSuccess={()=>{setTab("home");showToast("✅ Veículo adicionado à fila!");}}/>
+        </div>}
+        {(visited.crm&&isOwner)&&<div style={{display:safeTab==="crm"?undefined:"none",height:"100%",overflow:"hidden"}}>
+          <CRMScreen empresaId={profile.empresa_id} onBadgeUpdate={()=>setCrmBadge(0)}/>
+        </div>}
+        {(visited.history)&&<div style={{display:safeTab==="history"?undefined:"none",height:"100%",overflow:"hidden"}}>
+          <HistoryScreen empresaId={profile.empresa_id} isOwner={isOwner}/>
+        </div>}
+        {(visited.config&&isOwner)&&<div style={{display:safeTab==="config"?undefined:"none",height:"100%",overflow:"hidden"}}>
+          <ConfigScreen empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} plano={assInfo?.plano||empresa?.plano||"trial"} onUpgrade={()=>setTab("config")} onUpdate={name=>{setEmpresa(e=>({...e,nome_fantasia:name}));showToast("✅ "+name+" atualizado!");}}/>
+        </div>}
       </div>
 
       {/* Bottom nav — flexShrink:0 garante que nunca seja comprimida nem empurrada para fora */}
