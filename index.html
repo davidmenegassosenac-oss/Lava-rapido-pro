@@ -2552,7 +2552,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState("");
   const [paymentFilter,setPaymentFilter]=useState("todos");
-  const [filtrarHoje,setFiltrarHoje]=useState(false);
+  const [filtrarHoje,setFiltrarHoje]=useState(true);
   const [dataFiltro,setDataFiltro]=useState(toLocalDateStr(new Date()));
   const [editando,setEditando]=useState(null);     // id do registro em edição
   const [editForm,setEditForm]=useState({});        // {forma_pagamento, status_pagamento, lavado_por}
