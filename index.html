@@ -423,7 +423,24 @@ function toLocalDateStr(ds){
   return`${y}-${m}-${dia}`;
 }
 
-// Helper global: verifica se cliente tem ordem ativa hoje (fila ou histórico de hoje)
+// Calcula lista de sumidos — fonte única usada pelo CRMScreen e pelo badge do App
+// Evita duplicidade e garante sincronismo entre os dois
+function calcSumidos(hist,filaAtiva,histHoje,min){
+  const map={};
+  hist.forEach(r=>{
+    if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))
+      map[r.phone]=r;
+  });
+  return Object.values(map)
+    .map(r=>({...r,dias:daysSince(r.completed_at)}))
+    .filter(r=>{
+      if(r.dias<min)return false;
+      if(r.cliente_recuperado===true)return false;
+      if(clienteEstaAtivoHoje(r.phone,r.plate,filaAtiva,histHoje))return false;
+      return true;
+    })
+    .sort((a,b)=>b.dias-a.dias);
+}
 function clienteEstaAtivoHoje(phone,plate,listaFila,listaHistorico){
   const fone=(phone?String(phone).replace(/\D/g,''):'');
   const placa=(plate?String(plate).trim().toUpperCase():'');
@@ -2309,21 +2326,33 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   const [limiteAtingido,setLimiteAtingido]=useState([]);
   const [clienteRecuperado,setClienteRecuperado]=useState(false);
   const [checkingRecuperado,setCheckingRecuperado]=useState(false);
+  const verificarRef=useRef(0); // controla race condition: só aplica o resultado da chamada mais recente
 
   // Verifica cliente recuperado ao preencher placa ou telefone
   const verificarClienteRecuperado=async()=>{
     const plate=(refs.plate?.current?.value||"").trim().toUpperCase();
     const phone=(refs.phone?.current?.value||"").replace(/\D/g,"");
+
+    // PROBLEMA 3 — reseta antes do early return para não deixar banner preso
     if(!plate&&phone.length<8){setClienteRecuperado(false);return;}
+
+    // PROBLEMA 1 — incrementa token: chamadas antigas serão ignoradas ao resolver
+    const token=++verificarRef.current;
     setCheckingRecuperado(true);
+
     try{
       const{data}=await sb.rpc("fn_verificar_cliente_recuperado",{
         p_empresa_id:empresaId,p_phone:phone,p_plate:plate
       });
-      setClienteRecuperado(data===true);
-    }catch(_){setClienteRecuperado(false);}
-    setCheckingRecuperado(false);
-  }; // nomes de serviços bloqueados
+      // Só aplica se ainda for a chamada mais recente
+      if(token===verificarRef.current)setClienteRecuperado(data===true);
+    }catch(_){
+      if(token===verificarRef.current)setClienteRecuperado(false);
+    }finally{
+      // PROBLEMA 2 — finally garante que o spinner sempre some, mesmo em erro
+      if(token===verificarRef.current)setCheckingRecuperado(false);
+    }
+  };
 
   useEffect(()=>{
     sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).eq('ativo',true)
@@ -2379,6 +2408,9 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   };
 
   const submit=async()=>{
+    // PROBLEMA 4 — invalida qualquer verificação pendente antes de submeter
+    verificarRef.current=Number.MAX_SAFE_INTEGER;
+    setCheckingRecuperado(false);
     if(!validate())return;
     setLoading(true);
     setLimitError("");
@@ -3135,43 +3167,45 @@ function CRMScreen({empresaId,onBadgeUpdate}){
   const [disparados,setDisparados]=useState(new Set());
 
   useEffect(()=>{
-    const hoje=new Date().toISOString().split('T')[0];
-    Promise.all([
-      sb.from('historico').select('phone,client,model,plate,type,completed_at,cliente_recuperado')
-        .eq('empresa_id',empresaId).order('completed_at',{ascending:false}),
-      sb.from('ordens_servico').select('plate,phone')
-        .eq('empresa_id',empresaId).neq('status','Concluído'),
-      sb.from('historico').select('plate,phone,completed_at')
-        .eq('empresa_id',empresaId).gte('completed_at',hoje+'T00:00:00'),
-    ]).then(([{data:h},{data:fila},{data:hj}])=>{
-      setHist(h||[]);
-      setFilaAtiva(fila||[]);
-      setHistHoje(hj||[]);
-      setLoading(false);
-    });
+    // P1 — usa toLocalDateStr para data local, não UTC
+    const hoje=toLocalDateStr(new Date());
+
+    const carregar=()=>{
+      Promise.all([
+        sb.from('historico').select('phone,client,model,plate,type,completed_at,cliente_recuperado')
+          .eq('empresa_id',empresaId).order('completed_at',{ascending:false}),
+        sb.from('ordens_servico').select('plate,phone')
+          .eq('empresa_id',empresaId).neq('status','Concluído'),
+        sb.from('historico').select('plate,phone,completed_at')
+          .eq('empresa_id',empresaId).gte('completed_at',hoje+'T00:00:00'),
+      ]).then(([{data:h},{data:fila},{data:hj}])=>{
+        setHist(h||[]);
+        setFilaAtiva(fila||[]);
+        setHistHoje(hj||[]);
+        setLoading(false);
+      });
+    };
+
+    carregar();
+
+    // P2 — Realtime: recarrega quando nova ordem entra na fila
+    const ch=sb.channel('crm-fila-'+empresaId)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'ordens_servico',
+        filter:`empresa_id=eq.${empresaId}`},()=>carregar())
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'ordens_servico',
+        filter:`empresa_id=eq.${empresaId}`},()=>carregar())
+      .subscribe();
+
+    return()=>sb.removeChannel(ch);
   },[empresaId]);
 
-  // Último registro por telefone
-  const map={};
-  hist.forEach(r=>{if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))map[r.phone]=r;});
-
-  // Filtro definitivo: 30+ dias ausente, não recuperado, e não ativo hoje
-  const sumidos=Object.values(map)
-    .map(r=>({...r,dias:daysSince(r.completed_at)}))
-    .filter(r=>{
-      if(r.dias<min)return false;
-      if(r.cliente_recuperado===true)return false;
-      if(clienteEstaAtivoHoje(r.phone,r.plate,filaAtiva,histHoje))return false;
-      return true;
-    })
-    .sort((a,b)=>b.dias-a.dias);
-
-  // Clientes que completaram exatamente 45 dias hoje (±1 dia) — gatilho de ação rápida
-  const gatilho45=useMemo(()=>
-    Object.values(map).map(r=>({...r,dias:daysSince(r.completed_at)}))
-      .filter(r=>r.dias>=44&&r.dias<=46)
-      .sort((a,b)=>b.dias-a.dias)
-  ,[hist]);
+  // P4+P5 — useMemo único: map, sumidos e gatilho45 calculados juntos
+  const {sumidos,gatilho45}=useMemo(()=>{
+    // P3 — usa calcSumidos global (fonte única)
+    const s=calcSumidos(hist,filaAtiva,histHoje,min);
+    const g=s.filter(r=>r.dias>=44&&r.dias<=46);
+    return{sumidos:s,gatilho45:g};
+  },[hist,filaAtiva,histHoje,min]);
 
   const waLink=(r)=>{
     const msg=encodeURIComponent(`Olá ${r.client}! 👋 Notamos que faz ${r.dias} dias desde a última vez que cuidamos do seu ${r.model} (placa ${r.plate}) aqui no nosso lava-jato. Queremos você de volta! 🎁 Preparamos *10% de desconto* na sua próxima lavagem, válido somente até esta semana. Responda essa mensagem ou venha nos visitar para garantir sua vaga — não queremos que essa oferta acabe sem você aproveitar! 🚗💦✨`);
@@ -4560,10 +4594,11 @@ function App(){
   const [showSupport,setShowSupport]=useState(false);
   const [crmBadge,setCrmBadge]=useState(0);
 
-  // Badge CRM — mesma lógica do CRMScreen usando clienteEstaAtivoHoje
+  // Badge CRM — usa calcSumidos (fonte única, mesma lógica do CRMScreen)
   useEffect(()=>{
     if(!profile?.empresa_id||profile.role==="master")return;
-    const hoje=new Date().toISOString().split('T')[0];
+    // P1 — data local, não UTC
+    const hoje=toLocalDateStr(new Date());
     Promise.all([
       sb.from("historico").select("phone,plate,completed_at,cliente_recuperado")
         .eq("empresa_id",profile.empresa_id).order("completed_at",{ascending:false}),
@@ -4573,15 +4608,8 @@ function App(){
         .eq("empresa_id",profile.empresa_id).gte("completed_at",hoje+"T00:00:00"),
     ]).then(([{data:h},{data:fila},{data:hj}])=>{
       if(!h)return;
-      const map={};
-      h.forEach(r=>{if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))map[r.phone]=r;});
-      const count=Object.values(map).filter(r=>{
-        if(daysSince(r.completed_at)<30)return false;
-        if(r.cliente_recuperado===true)return false;
-        if(clienteEstaAtivoHoje(r.phone,r.plate,fila||[],hj||[]))return false;
-        return true;
-      }).length;
-      setCrmBadge(count);
+      // P3 — calcSumidos substitui lógica duplicada
+      setCrmBadge(calcSumidos(h,fila||[],hj||[],30).length);
     });
   },[profile]);
 
