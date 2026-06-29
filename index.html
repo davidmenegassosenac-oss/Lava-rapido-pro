@@ -4672,16 +4672,39 @@ function App(){
 
   // Load profile + assinatura after session
   useEffect(()=>{
-    if(!session)return; // auth listener já tratou initializing=false sem sessão
+    if(!session)return;
+    // Fix 1 — garante initializing=true enquanto profile carrega,
+    // mesmo que venha de um login onde initializing já estava false
+    setInitializing(true);
     (async()=>{
-      // Tentar buscar perfil com retry (RLS pode demorar após signup)
+      // Busca profile com até 3 tentativas (RLS pode demorar após signup)
       let prof=null;
+      let fetchFailed=false;
       for(let i=0;i<3;i++){
-        const{data,error}=await sb.from('profiles').select('id,name,email,role,empresa_id,ativo,cargo').eq('id',session.user.id).single();
+        const{data,error}=await sb.from('profiles')
+          .select('id,name,email,role,empresa_id,ativo,cargo')
+          .eq('id',session.user.id).single();
         if(data){prof=data;break;}
-        await new Promise(r=>setTimeout(r,600));
+        // Erro de "nenhuma linha" (PGRST116) = profile ainda não existe (novo cadastro)
+        if(error?.code==='PGRST116')break;
+        // Qualquer outro erro = oscilação de rede, tentar novamente
+        await new Promise(r=>setTimeout(r,700));
+        if(i===2)fetchFailed=true;
       }
-      // Se ainda null, criar profile básico via upsert
+
+      // Fix 2 — NÃO faz upsert em falha de rede: seria um profile vazio que
+      // sobrescreve o real e joga o usuário na tela de cadastro de empresa.
+      // Em falha genuína, mostra erro e mantém initializing=true para bloquear a UI.
+      if(fetchFailed&&!prof){
+        setProfile({_fetchError:true,id:session.user.id,
+          name:session.user.email?.split('@')[0]||'Usuário',
+          role:'owner',empresa_id:null});
+        setInitializing(false);
+        return;
+      }
+
+      // Novo usuário (profile não existe ainda) → cria via upsert apenas se
+      // o erro foi PGRST116 (sem linha), nunca por falha de rede
       if(!prof){
         const{data:upserted}=await sb.from('profiles').upsert({
           id:session.user.id,
@@ -4691,7 +4714,8 @@ function App(){
         },{onConflict:'id'}).select().single();
         prof=upserted;
       }
-      setProfile(prof||{id:session.user.id,name:session.user.email?.split('@')[0]||'Usuário',role:'owner',empresa_id:null});
+
+      setProfile(prof||null);
       if(prof?.empresa_id){
         const[{data:ass},{data:emp}]=await Promise.all([
           sb.rpc('fn_assinatura_valida',{p_empresa_id:prof.empresa_id}),
@@ -4725,10 +4749,17 @@ function App(){
     );
   }
 
-  if(!session) return <LoginScreen onLogin={s=>setSession(s)}/>;
+  if(!session) return <LoginScreen onLogin={s=>{
+    // Fix 1 — seta initializing ANTES da sessão para não piscar LoginScreen durante o fetch do profile
+    setInitializing(true);
+    // Fix 3 — reseta abas visitadas para não herdar estado de sessão anterior
+    setVisited({home:true});
+    setProfile(null);setEmpresa(null);setAssInfo(null);
+    setSession(s);
+  }}/>;
 
   // Após initializing=false, profile deve existir se há sessão
-  if(!profile) return <LoginScreen onLogin={s=>setSession(s)}/>;
+  if(!profile) return <LoginScreen onLogin={s=>{setInitializing(true);setVisited({home:true});setProfile(null);setEmpresa(null);setAssInfo(null);setSession(s);}}/>;
 
   // Master → painel da plataforma
   if(profile.role==="master"){
@@ -4756,6 +4787,32 @@ function App(){
         </div>
         <div style={{flex:"1 1 auto",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column",position:"relative",zIndex:5}}>
           <MasterScreen/>
+        </div>
+      </div>
+    );
+  }
+
+  // Fix 2 — Falha de rede ao buscar profile: mostra erro, não a tela de cadastro
+  if(profile?._fetchError){
+    return(
+      <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:24,position:"relative",overflow:"hidden"}}>
+        <AquaBg/>
+        <div style={{position:"relative",zIndex:1,textAlign:"center",maxWidth:300}}>
+          <div style={{width:64,height:64,borderRadius:20,background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.3)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+            <Icon name="WifiOff" size={28} color="#f87171"/>
+          </div>
+          <div style={{color:"#e0f2fe",fontWeight:800,fontSize:18,marginBottom:8}}>Falha ao conectar</div>
+          <div style={{color:"rgba(186,230,253,.5)",fontSize:14,lineHeight:1.5,marginBottom:24}}>
+            Não foi possível carregar seu perfil. Verifique sua conexão e tente novamente.
+          </div>
+          <button onClick={()=>{setInitializing(true);setProfile(null);setSession(s=>s);}}
+            style={{padding:"12px 28px",borderRadius:14,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",border:"none",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",boxShadow:"0 6px 20px rgba(14,165,233,.35)"}}>
+            Tentar novamente
+          </button>
+          <button onClick={async()=>{await sb.auth.signOut();}}
+            style={{display:"block",margin:"12px auto 0",background:"transparent",border:"none",color:"rgba(186,230,253,.4)",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
+            Sair da conta
+          </button>
         </div>
       </div>
     );
