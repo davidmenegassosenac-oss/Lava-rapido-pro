@@ -2646,11 +2646,18 @@ function HistoryScreen({empresaId,embedded,isOwner}){
 
   useEffect(()=>{
     sb.from('historico').select('*, criador:profiles!criado_por(name), lavador:profiles!lavado_por(name)')
-      .eq('empresa_id',empresaId).order('completed_at',{ascending:false}).limit(100)
+      .eq('empresa_id',empresaId).order('completed_at',{ascending:false}).limit(200)
       .then(({data})=>{setHist(data||[]);setLoading(false);});
-    // Buscar funcionários para o seletor de edição
     sb.from('profiles').select('id,name').eq('empresa_id',empresaId).eq('ativo',true)
       .then(({data})=>setFuncionarios(data||[]));
+
+    // P5 — Realtime: atualiza lista quando nova lavagem é concluída
+    const ch=sb.channel('hist-'+empresaId)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'historico',
+        filter:`empresa_id=eq.${empresaId}`},
+        ({new:novo})=>setHist(prev=>[novo,...prev]))
+      .subscribe();
+    return()=>sb.removeChannel(ch);
   },[empresaId]);
 
   const fetchMovs=useCallback(async()=>{
@@ -2704,40 +2711,47 @@ function HistoryScreen({empresaId,embedded,isOwner}){
     })
   ,[hist,search,paymentFilter,filtrarHoje,dataFiltro]);
 
-  // Detecta recuperados pelo padrão de visita: gap de 30+ dias ANTES desta visita
-  // Funciona mesmo sem cliente_recuperado no banco
+  // P2 — recuperadosSet rastreia o ID do registro específico que marcou o retorno
+  // (não a placa para sempre). Badge aparece APENAS na lavagem do retorno, não nas futuras.
   const recuperadosSet=useMemo(()=>{
-    const set=new Set();
-    // Agrupa registros por placa
+    const set=new Set(); // Set de h.id, não de placas
     const byPlaca={};
     hist.forEach(r=>{
       const k=(r.plate||'').toUpperCase();
-      if(!k)return;
+      if(!k||!r.id)return;
       if(!byPlaca[k])byPlaca[k]=[];
-      byPlaca[k].push(new Date(r.completed_at).getTime());
+      byPlaca[k].push({id:r.id,ts:new Date(r.completed_at).getTime()});
     });
-    Object.entries(byPlaca).forEach(([placa,datas])=>{
-      const sorted=datas.sort((a,b)=>a-b); // mais antigo → mais recente
+    Object.values(byPlaca).forEach(registros=>{
+      const sorted=registros.sort((a,b)=>a.ts-b.ts); // crescente: mais antigo → mais recente
       for(let i=1;i<sorted.length;i++){
-        const gap=(sorted[i]-sorted[i-1])/(86400000);
-        if(gap>=30)set.add(placa); // esta placa teve um retorno após 30+ dias de ausência
+        const gap=(sorted[i].ts-sorted[i-1].ts)/86400000;
+        // Só o registro IMEDIATAMENTE após o gap de 30+ dias recebe o badge
+        if(gap>=30)set.add(sorted[i].id);
       }
     });
     return set;
   },[hist]);
 
-  // Totalizador exclui estornados — não contam para receita
+  // P3 — total e tod em useMemo para não recalcular a cada re-render
+  const {total,tod}=useMemo(()=>{
+    const hoje=toLocalDateStr(new Date()); // P4 — data local, não UTC
+    const semEstorno=hist.filter(h=>h.status_pagamento!=="estornado");
+    return{
+      total: semEstorno.reduce((s,h)=>s+(parseFloat(h.value)||0),0),
+      // P4 — compara data local do registro com data local de hoje
+      tod:   semEstorno.filter(h=>toLocalDateStr(h.completed_at)===hoje)
+               .reduce((s,h)=>s+(parseFloat(h.value)||0),0),
+    };
+  },[hist]);
+
+  // Totalizador do período filtrado
   const totalFiltrado=useMemo(()=>
     filtered.filter(h=>h.status_pagamento!=="estornado")
       .reduce((s,h)=>s+(parseFloat(h.value)||0),0)
   ,[filtered]);
 
-  const total=hist.filter(h=>h.status_pagamento!=="estornado")
-    .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
-  const tod=hist.filter(h=>daysSince(h.completed_at)===0&&h.status_pagamento!=="estornado")
-    .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
-
-  const hoje=new Date().toISOString().split("T")[0];
+  const hoje=toLocalDateStr(new Date()); // P4 — data local, não UTC
   const entradasHoje=movs.filter(m=>m.tipo==="entrada"&&m.data===hoje).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
   const saidasHoje=movs.filter(m=>m.tipo==="saida"&&m.data===hoje).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
   const saldoHoje=entradasHoje-saidasHoje;
@@ -2886,10 +2900,10 @@ function HistoryScreen({empresaId,embedded,isOwner}){
             const stPgto=STATUS_PGTO[h.status_pagamento||"pago"]||STATUS_PGTO.pago;
             const isEstornado=h.status_pagamento==="estornado";
             const estaEditando=editando===h.id;
-            // isRecuperado: flag do banco OU placa identificada com gap 30+ dias no histórico local
+            // P2 — verifica o ID do registro específico (não a placa para sempre)
             const isRecuperado=!isEstornado&&(
               h.cliente_recuperado===true||
-              recuperadosSet.has((h.plate||'').toUpperCase())
+              recuperadosSet.has(h.id)
             );
             return(
             <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`,

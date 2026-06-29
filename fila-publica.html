@@ -381,9 +381,9 @@ function CadastroModal({empresa,onClose,onSuccess}){
     const bloq=limiteAtingido.includes(s.nome);
     // Bloqueado e NÃO selecionado → ignora
     if(bloq&&!jasel)return;
-    // Já selecionado → remove sempre (mesmo bloqueado)
+    // Já selecionado → remove da seleção
+    // P3 — NÃO limpa limiteAtingido ao desmarcar: o limite no banco não mudou
     if(jasel){
-      setLimiteAtingido(l=>l.filter(n=>n!==s.nome));
       setSvcsSelected(prev=>prev.filter(x=>x.id!==s.id));
       return;
     }
@@ -396,16 +396,22 @@ function CadastroModal({empresa,onClose,onSuccess}){
   const [limiteAtingido,setLimiteAtingido]=useState([]);
 
   const verificarLimite=async(svc)=>{
-    const hoje=new Date().toISOString().split('T')[0];
-    const{data}=await sb.rpc('fn_verificar_limite_servico',{
-      p_empresa_id:empresa.id,
-      p_servico_nome:svc.nome,
-      p_data:hoje,
-    });
-    if(data&&data.permitido===false){
+    // P1 — data local, não UTC (evita overbooking após 22h no Brasil)
+    const hoje=toLocalDateStr(new Date());
+    try{
+      const{data}=await sb.rpc('fn_verificar_limite_servico',{
+        p_empresa_id:empresa.id,
+        p_servico_nome:svc.nome,
+        p_data:hoje,
+      });
+      if(data&&data.permitido===false){
+        setLimiteAtingido(prev=>prev.includes(svc.nome)?prev:[...prev,svc.nome]);
+      }else{
+        setLimiteAtingido(prev=>prev.filter(n=>n!==svc.nome));
+      }
+    }catch(_){
+      // P4 — falha de rede: bloqueia preventivamente para não gerar overbooking
       setLimiteAtingido(prev=>prev.includes(svc.nome)?prev:[...prev,svc.nome]);
-    }else{
-      setLimiteAtingido(prev=>prev.filter(n=>n!==svc.nome));
     }
   };
 
@@ -429,13 +435,33 @@ function CadastroModal({empresa,onClose,onSuccess}){
       setErro('Preencha todos os campos obrigatórios.');return;
     }
     setSaving(true);setErro('');
+    const hoje=toLocalDateStr(new Date()); // P1 — data local
+
+    // P2 — revalida limites no momento do submit (trava atômica contra race condition)
+    try{
+      const checks=await Promise.all(
+        svcsSelected.map(s=>sb.rpc('fn_verificar_limite_servico',{
+          p_empresa_id:empresa.id,p_servico_nome:s.nome,p_data:hoje
+        }))
+      );
+      const esgotados=svcsSelected.filter((_,i)=>checks[i]?.data?.permitido===false);
+      if(esgotados.length>0){
+        setLimiteAtingido(esgotados.map(s=>s.nome));
+        setErro(`Limite atingido para: ${esgotados.map(s=>s.nome).join(', ')}. Remova o serviço e tente novamente.`);
+        setSaving(false);return;
+      }
+    }catch(_){
+      setErro('Não foi possível verificar disponibilidade. Verifique sua conexão.');
+      setSaving(false);return;
+    }
+
     const typeLabel=svcsSelected.map(s=>s.nome).join(' + ');
     const phone=form.phone.replace(/\D/g,'');
 
     // Verifica se é cliente recuperado (sumiu há +30 dias)
     let recuperado=false;
     try{
-    const{data:rData}=await sb.rpc('fn_verificar_cliente_recuperado',{
+      const{data:rData}=await sb.rpc('fn_verificar_cliente_recuperado',{
         p_empresa_id:empresa.id,p_phone:phone,p_plate:form.plate.trim().toUpperCase()
       });
       recuperado=rData===true;
@@ -1009,6 +1035,15 @@ function BubbleRise(){
       ))}
     </>
   );
+}
+
+// Extrai data local YYYY-MM-DD ignorando UTC — evita bug de fuso horário
+function toLocalDateStr(ds){
+  const d=new Date(ds);
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const dia=String(d.getDate()).padStart(2,'0');
+  return`${y}-${m}-${dia}`;
 }
 
 /* ── App ── */
