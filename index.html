@@ -677,10 +677,10 @@ function CadastroEmpresaScreen({user,onComplete,onBack}){
             {onBack&&(
               <button onClick={onBack}
                 style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:10,
-                  background:"rgba(255,255,255,.05)",border:"1px solid rgba(125,211,252,.15)",
-                  color:"rgba(186,230,253,.5)",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-                <Icon name="ArrowLeft" size={13} color="rgba(186,230,253,.5)"/>
-                Voltar
+                  background:"rgba(239,68,68,.08)",border:"1px solid rgba(239,68,68,.2)",
+                  color:"rgba(248,113,113,.7)",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                <Icon name="LogOut" size={13} color="rgba(248,113,113,.7)"/>
+                Sair da conta
               </button>
             )}
           </div>
@@ -4674,7 +4674,11 @@ function App(){
 
   // Load profile + assinatura after session
   useEffect(()=>{
-    if(!session)return;
+    if(!session){
+      // Sem sessão → não há profile para carregar
+      setProfileLoading(false);
+      return;
+    }
     (async()=>{
       // Tentar buscar perfil com retry (RLS pode demorar após signup)
       let prof=null;
@@ -4786,17 +4790,11 @@ function App(){
     }
     return <CadastroEmpresaScreen user={session.user}
       onBack={async()=>{
-        setProfileLoading(true);
-        const{data}=await sb.from('profiles').select('id,name,email,role,empresa_id,ativo,cargo').eq('id',session.user.id).single();
-        if(data?.empresa_id){
-          setProfile(data);
-          const[{data:ass},{data:emp}]=await Promise.all([
-            sb.rpc('fn_assinatura_valida',{p_empresa_id:data.empresa_id}),
-            sb.from('empresas').select('id,nome_fantasia,telefone').eq('id',data.empresa_id).single(),
-          ]);
-          setAssInfo(ass);setEmpresa(emp);
-        }
-        setProfileLoading(false);
+        // Quebra o loop fazendo logout completo — limpa qualquer estado corrompido
+        localStorage.clear();
+        await sb.auth.signOut();
+        // Após signOut, o onAuthStateChange limpa session/profile automaticamente
+        // e o app cai na tela de login
       }}
       onComplete={async()=>{
       // Retry com até 5 tentativas aguardando propagação do RLS
