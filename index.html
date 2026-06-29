@@ -2306,7 +2306,24 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   const [svcs,setSvcs]=useState(SVC_DEFAULT);
   const [tipoContrato,setTipoContrato]=useState("avulso");
   const [limitError,setLimitError]=useState("");
-  const [limiteAtingido,setLimiteAtingido]=useState([]); // nomes de serviços bloqueados
+  const [limiteAtingido,setLimiteAtingido]=useState([]);
+  const [clienteRecuperado,setClienteRecuperado]=useState(false);
+  const [checkingRecuperado,setCheckingRecuperado]=useState(false);
+
+  // Verifica cliente recuperado ao preencher placa ou telefone
+  const verificarClienteRecuperado=async()=>{
+    const plate=(refs.plate?.current?.value||"").trim().toUpperCase();
+    const phone=(refs.phone?.current?.value||"").replace(/\D/g,"");
+    if(!plate&&phone.length<8){setClienteRecuperado(false);return;}
+    setCheckingRecuperado(true);
+    try{
+      const{data}=await sb.rpc("fn_verificar_cliente_recuperado",{
+        p_empresa_id:empresaId,p_phone:phone,p_plate:plate
+      });
+      setClienteRecuperado(data===true);
+    }catch(_){setClienteRecuperado(false);}
+    setCheckingRecuperado(false);
+  }; // nomes de serviços bloqueados
 
   useEffect(()=>{
     sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).eq('ativo',true)
@@ -2380,6 +2397,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
       status:"Aguardando",
       criado_por:userId||null,
       tipo_contrato:tipoContrato,
+      cliente_recuperado:clienteRecuperado,
     });
     setLoading(false);
     if(error){
@@ -2404,6 +2422,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
       <div style={{marginBottom:14}}>
         <label className="lbl">Placa</label>
         <input ref={refs.plate} className="glass-input" type="text" defaultValue="" placeholder="ABC-1234"
+          onBlur={verificarClienteRecuperado}
           style={{borderColor:errors.plate?"rgba(239,68,68,.5)":undefined}}
           autoCapitalize="characters"/>
         {errors.plate&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.plate}</div>}
@@ -2426,6 +2445,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
       <div style={{marginBottom:14}}>
         <label className="lbl">Telefone (com DDD)</label>
         <input ref={refs.phone} className="glass-input" type="tel" defaultValue="" placeholder="5549991234567"
+          onBlur={verificarClienteRecuperado}
           style={{borderColor:errors.phone?"rgba(239,68,68,.5)":undefined}}/>
         {errors.phone&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.phone}</div>}
       </div>
@@ -2518,6 +2538,31 @@ function NewWashScreen({empresaId,userId,onSuccess}){
         <label className="lbl">Observações (opcional)</label>
         <textarea ref={refs.observacoes} className="glass-input" defaultValue="" placeholder="Arranhado no para-choque, etc." rows={2} style={{resize:"none"}}/>
       </div>
+      {/* Banner cliente recuperado */}
+      {checkingRecuperado&&(
+        <div style={{marginBottom:12,padding:"10px 14px",borderRadius:14,
+          background:"rgba(125,211,252,.08)",border:"1px solid rgba(125,211,252,.2)",
+          fontSize:12,color:"rgba(186,230,253,.6)",display:"flex",alignItems:"center",gap:8}}>
+          <div className="spinner spin" style={{width:12,height:12,flexShrink:0}}/>
+          Verificando histórico do cliente...
+        </div>
+      )}
+      {clienteRecuperado&&!checkingRecuperado&&(
+        <div style={{marginBottom:12,padding:"12px 16px",borderRadius:16,
+          background:"rgba(251,191,36,.1)",border:"1.5px solid rgba(251,191,36,.4)",
+          display:"flex",alignItems:"center",gap:10,
+          boxShadow:"0 4px 16px rgba(251,191,36,.15)"}}>
+          <span style={{fontSize:22,flexShrink:0}}>⭐</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:800,color:"#fbbf24",marginBottom:2}}>
+              Cliente Recuperado!
+            </div>
+            <div style={{fontSize:11,color:"rgba(251,191,36,.7)",lineHeight:1.4}}>
+              Este cliente estava sumido há 30+ dias. O card dourado será ativado na fila.
+            </div>
+          </div>
+        </div>
+      )}
       {limitError&&(
         <div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",borderRadius:12,padding:"12px 14px",marginBottom:14,display:"flex",alignItems:"flex-start",gap:8}}>
           <Icon name="AlertTriangle" size={15} color="#f87171" style={{marginTop:1,flexShrink:0}}/>
