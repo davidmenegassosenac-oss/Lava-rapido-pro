@@ -413,6 +413,16 @@ const today=new Date();
 function daysSince(ds){return Math.floor((today-new Date(ds))/86400000);}
 function fmtDate(ds){return new Date(ds).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"});}
 
+// Extrai data local (YYYY-MM-DD) ignorando UTC — evita bug de fuso horário no filtro de histórico
+function toLocalDateStr(ds){
+  if(!ds)return"";
+  const d=new Date(ds);
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,"0");
+  const dia=String(d.getDate()).padStart(2,"0");
+  return`${y}-${m}-${dia}`;
+}
+
 // Helper global: verifica se cliente tem ordem ativa hoje (fila ou histórico de hoje)
 function clienteEstaAtivoHoje(phone,plate,listaFila,listaHistorico){
   const fone=(phone?String(phone).replace(/\D/g,''):'');
@@ -2543,7 +2553,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
   const [search,setSearch]=useState("");
   const [paymentFilter,setPaymentFilter]=useState("todos");
   const [filtrarHoje,setFiltrarHoje]=useState(false);
-  const [dataFiltro,setDataFiltro]=useState(new Date().toISOString().split("T")[0]);
+  const [dataFiltro,setDataFiltro]=useState(toLocalDateStr(new Date()));
   const [editando,setEditando]=useState(null);     // id do registro em edição
   const [editForm,setEditForm]=useState({});        // {forma_pagamento, status_pagamento, lavado_por}
   const [salvandoEdit,setSalvandoEdit]=useState(false);
@@ -2612,7 +2622,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
         h.plate?.toLowerCase().includes(search.toLowerCase())||
         h.model?.toLowerCase().includes(search.toLowerCase());
       const matchPayment=paymentFilter==="todos"||h.forma_pagamento===paymentFilter;
-      const matchHoje=!filtrarHoje||(h.completed_at&&h.completed_at.slice(0,10)===dataFiltro);
+      const matchHoje=!filtrarHoje||(h.completed_at&&toLocalDateStr(h.completed_at)===dataFiltro);
       return matchSearch&&matchPayment&&matchHoje;
     })
   ,[hist,search,paymentFilter,filtrarHoje,dataFiltro]);
@@ -2680,7 +2690,7 @@ function HistoryScreen({empresaId,embedded,isOwner}){
         h.client?.toLowerCase().includes(search.toLowerCase())||
         h.plate?.toLowerCase().includes(search.toLowerCase())||
         h.model?.toLowerCase().includes(search.toLowerCase());
-      const matchHoje=!filtrarHoje||(h.completed_at&&h.completed_at.slice(0,10)===dataFiltro);
+      const matchHoje=!filtrarHoje||(h.completed_at&&toLocalDateStr(h.completed_at)===dataFiltro);
       return matchSearch&&matchHoje&&h.status_pagamento!=="estornado";
     });
     return{
