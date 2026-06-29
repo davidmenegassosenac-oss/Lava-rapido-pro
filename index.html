@@ -4444,19 +4444,6 @@ function RelatoriosScreen({empresaId,embedded}){
             </div>
           )}
 
-          {/* Por categoria financeira */}
-          {cats.length>0&&(
-            <div className="glass-card" style={{padding:16,marginBottom:14}}>
-              <div style={{fontSize:12,fontWeight:700,color:"rgba(186,230,253,.6)",marginBottom:12}}>💰 Receita por Categoria</div>
-              {cats.map(([cat,val])=>(
-                <div key={cat} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                  <span style={{fontSize:13,color:"rgba(186,230,253,.7)",textTransform:"capitalize"}}>{cat.replace("_"," ")}</span>
-                  <span style={{fontSize:13,fontWeight:700,color:"#4ade80"}}>{fmtBRL(val)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
           {cats.length===0&&svcs.length===0&&(
             <div style={{textAlign:"center",color:"rgba(186,230,253,.3)",padding:"30px 0",fontSize:13}}>Nenhum dado no período selecionado</div>
           )}
