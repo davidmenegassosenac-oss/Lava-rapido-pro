@@ -4193,7 +4193,8 @@ function RelatoriosScreen({empresaId,embedded}){
       .then(({data})=>setHistAll(data||[]));
   },[empresaId]);
 
-  const entradas=movs.filter(m=>m.tipo==="entrada").reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  // KPIs calculados sobre hist (período filtrado) — fonte única para evitar divergência
+  const entradas=hist.filter(h=>h.status_pagamento!=="estornado").reduce((s,h)=>s+(parseFloat(h.value)||0),0);
   const saidas=movs.filter(m=>m.tipo==="saida").reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
   const saldo=entradas-saidas;
   const totalAtend=hist.length;
