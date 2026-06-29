@@ -938,7 +938,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   },[empresaId]);
 
   useEffect(()=>{
-    sb.from('empresas').select('*').eq('id',empresaId).single()
+    sb.from('empresas').select('id,nome_fantasia,telefone,horario_funcionamento,ignorar_limites_hoje,plano,criado_em').eq('id',empresaId).single()
       .then(({data,error})=>{
         if(error||!data)return;
         setEmpresa(data);
@@ -952,7 +952,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     sb.rpc('fn_assinatura_valida',{p_empresa_id:empresaId}).then(({data})=>{if(data)setAss(data);}).catch(()=>{});
     sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId}).then(({data,error})=>{if(!error&&data)setLimites(data);}).catch(()=>{});
     sb.rpc('fn_listar_cobrancas',{p_empresa_id:empresaId}).then(({data,error})=>{if(!error)setCobrancas(data||[]);}).catch(()=>{});
-    sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).order('created_at')
+    sb.from('servicos_catalogo').select('id,nome,valor,ativo,limite_diario,criado_em').eq('empresa_id',empresaId).order('created_at')
       .then(({data})=>setSvcs(data||[])).catch(()=>{});
   },[empresaId]);
 
@@ -1433,7 +1433,7 @@ function MasterScreen(){
     if(billingLogs[empresaId])return;
     setLoadingLogs(empresaId);
     const{data}=await sb.from("saas_billing_logs")
-      .select("*").eq("empresa_id",empresaId)
+      .select("id,evento,descricao,created_at").eq("empresa_id",empresaId)
       .order("created_at",{ascending:false}).limit(10);
     setBillingLogs(m=>({...m,[empresaId]:data||[]}));
     setLoadingLogs(null);
@@ -2355,7 +2355,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   };
 
   useEffect(()=>{
-    sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).eq('ativo',true)
+    sb.from('servicos_catalogo').select('id,nome,valor').eq('empresa_id',empresaId).eq('ativo',true)
       .then(({data})=>{if(data&&data.length>0)setSvcs(data.map(s=>({label:s.nome,value:s.valor})));});
   },[empresaId]);
 
@@ -3372,7 +3372,7 @@ function AdminScreen({empresaId,currentUser,embedded}){
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
 
   const fetchUsers=useCallback(async()=>{
-    const{data}=await sb.from('profiles').select('*').eq('empresa_id',empresaId).order('created_at');
+    const{data}=await sb.from('profiles').select('id,name,email,role,ativo,cargo,tipo_pagamento,valor_diaria,percentual_comissao,created_at').eq('empresa_id',empresaId).order('created_at');
     setUsers(data||[]);setLoading(false);
   },[empresaId]);
 
@@ -3606,9 +3606,9 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
     const{inicio,fim}=semanaParaDatas(semana);
     const[{data:funcs},{data:dirs},{data:pgtos},{data:dias}]=await Promise.all([
       sb.from("profiles").select("id,name,role").eq("empresa_id",empresaId).eq("role","employee"),
-      sb.from("funcionario_diaria").select("*").eq("empresa_id",empresaId),
-      sb.from("folha_pagamentos").select("*").eq("empresa_id",empresaId).eq("semana_ref",semana).order("created_at",{ascending:false}),
-      sb.from("folha_dias_trabalhados").select("*").eq("empresa_id",empresaId).eq("semana_ref",semana),
+      sb.from("funcionario_diaria").select("id,funcionario_id,data,empresa_id").eq("empresa_id",empresaId),
+      sb.from("folha_pagamentos").select("id,funcionario_id,semana_ref,valor_pago,status,created_at").eq("empresa_id",empresaId).eq("semana_ref",semana).order("created_at",{ascending:false}),
+      sb.from("folha_dias_trabalhados").select("id,funcionario_id,semana_ref,dias,empresa_id").eq("empresa_id",empresaId).eq("semana_ref",semana),
     ]);
     setFuncionarios(funcs||[]);
     const dMap={};
@@ -3681,7 +3681,7 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
     const{inicio,fim}=semanaParaDatas(semana);
     const d1=new Date(inicio);d1.setHours(0,0,0,0);
     const d2=new Date(fim);d2.setHours(23,59,59,999);
-    sb.from("historico").select("*")
+    sb.from("historico").select("value,status_pagamento,completed_at,lavado_por")
       .eq("empresa_id",empresaId)
       .gte("completed_at",d1.toISOString())
       .lte("completed_at",d2.toISOString())
@@ -4663,7 +4663,7 @@ function App(){
       // Tentar buscar perfil com retry (RLS pode demorar após signup)
       let prof=null;
       for(let i=0;i<3;i++){
-        const{data,error}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
+        const{data,error}=await sb.from('profiles').select('id,name,email,role,empresa_id,ativo,cargo').eq('id',session.user.id).single();
         if(data){prof=data;break;}
         await new Promise(r=>setTimeout(r,600));
       }
@@ -4760,7 +4760,7 @@ function App(){
       let prof=null;
       for(let i=0;i<5;i++){
         await new Promise(r=>setTimeout(r,900));
-        const{data}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
+        const{data}=await sb.from('profiles').select('id,name,email,role,empresa_id,ativo,cargo').eq('id',session.user.id).single();
         if(data?.empresa_id){prof=data;break;}
       }
       if(prof){

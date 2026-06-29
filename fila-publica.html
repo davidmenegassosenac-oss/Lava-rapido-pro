@@ -61,9 +61,22 @@ function getEmpresaId(){
   catch(e){return null;}
 }
 
+// Mascara a placa: exibe os 3 primeiros caracteres + **** (ex: ABC****)
+// Impede identificação do veículo por quem vê o painel na rua
 function mascaraPlaca(p){
-  if(!p)return'***';
-  return'***'+p.replace(/[^a-zA-Z0-9]/g,'').slice(-3).toUpperCase();
+  if(!p)return'***-****';
+  const limpa=p.replace(/[^a-zA-Z0-9]/g,'').toUpperCase();
+  const visiveis=limpa.slice(0,3).padEnd(3,'*');
+  return visiveis+'****';
+}
+
+// Mascara o modelo: exibe apenas a marca (primeira palavra) + ***
+// ex: "Honda Civic" → "Honda ***"
+function mascaraModelo(m){
+  if(!m)return'***';
+  const partes=m.trim().split(/\s+/);
+  if(partes.length===1)return partes[0].slice(0,4)+'***';
+  return partes[0]+' ***';
 }
 
 const ST_CFG={
@@ -145,7 +158,7 @@ function BuscaScreen({onSelect}){
   const t=useRef(null);
 
   useEffect(()=>{
-    sb.from('empresas').select('id,nome_fantasia,telefone,horario_funcionamento').limit(8)
+    sb.from('empresas').select('id,nome_fantasia,horario_funcionamento').limit(8)
       .then(async({data,error})=>{
         if(error){setLoadAfil(false);return;}
         const lista=data||[];
@@ -172,7 +185,7 @@ function BuscaScreen({onSelect}){
     t.current=setTimeout(async()=>{
       setLoad(true);setErro('');
       const{data,error}=await sb.from('empresas')
-        .select('id,nome_fantasia,telefone,horario_funcionamento')
+        .select('id,nome_fantasia,horario_funcionamento')
         .ilike('nome_fantasia','%'+q.trim()+'%')
         .limit(8);
       setLoad(false);
@@ -264,7 +277,7 @@ function BuscaScreen({onSelect}){
                 </div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:15,fontWeight:800,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.nome_fantasia}</div>
-                  {e.telefone&&<div style={{fontSize:12,color:'rgba(186,230,253,.4)',marginTop:1}}>📞 {e.telefone}</div>}
+                  
                 </div>
                 <div style={{color:'rgba(56,189,248,.5)',fontSize:18,flexShrink:0}}>›</div>
               </button>
@@ -908,7 +921,7 @@ function FilaScreen({empresa,onVoltar}){
                                 {mascaraPlaca(c.plate)}
                               </div>
                               <div style={{fontSize:11,color:rec?'rgba(251,191,36,.6)':'rgba(186,230,253,.5)',marginTop:2}}>
-                                {c.model}
+                                {mascaraModelo(c.model)}
                                 {hora&&<span style={{color:rec?'#fbbf24':'#38bdf8',marginLeft:6}}>· ⏰ {hora}</span>}
                               </div>
                             </div>
@@ -1055,7 +1068,7 @@ function App(){
     const id=getEmpresaId();
     if(!id)return;
     setInitLoad(true);
-    sb.from('empresas').select('id,nome_fantasia,telefone').eq('id',id).single()
+    sb.from('empresas').select('id,nome_fantasia,horario_funcionamento').eq('id',id).single()
       .then(({data})=>{if(data)setEmpresa(data);setInitLoad(false);})
       .catch(()=>setInitLoad(false));
   },[]);
