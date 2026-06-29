@@ -621,7 +621,7 @@ function AssinaturaScreen({info,onLogout}){
 /* ══════════════════════════════════════════════════════════════════════════
    TELA DE CADASTRO DE EMPRESA (primeiro acesso owner)
 ══════════════════════════════════════════════════════════════════════════ */
-function CadastroEmpresaScreen({user,onComplete}){
+function CadastroEmpresaScreen({user,onComplete,onBack}){
   const [form,setForm]=useState({nome_fantasia:"",telefone:"",cnpj:""});
   const [loading,setLoading]=useState(false);
   const [err,setErr]=useState("");
@@ -672,7 +672,18 @@ function CadastroEmpresaScreen({user,onComplete}){
           <div style={{width:72,height:72,borderRadius:24,background:"rgba(14,165,233,.2)",border:"2px solid rgba(56,189,248,.4)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 0 40px rgba(14,165,233,.3)"}}>
             <Icon name="Building" size={36} color="#38bdf8"/>
           </div>
-          <div style={{color:"#e0f2fe",fontWeight:900,fontSize:22}}>Cadastrar Empresa</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+            <div style={{color:"#e0f2fe",fontWeight:900,fontSize:22}}>Cadastrar Empresa</div>
+            {onBack&&(
+              <button onClick={onBack}
+                style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:10,
+                  background:"rgba(255,255,255,.05)",border:"1px solid rgba(125,211,252,.15)",
+                  color:"rgba(186,230,253,.5)",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                <Icon name="ArrowLeft" size={13} color="rgba(186,230,253,.5)"/>
+                Voltar
+              </button>
+            )}
+          </div>
           <div style={{color:"rgba(186,230,253,.6)",fontSize:13,marginTop:4}}>Configure seu lava-jato para começar</div>
         </div>
         <div className="glass" style={{borderRadius:24,padding:24,boxShadow:"0 24px 64px rgba(0,0,0,.4)"}}>
@@ -4600,6 +4611,16 @@ function App(){
   const [showWeeklyPopup,setShowWeeklyPopup]=useState(false);
   const [showSupport,setShowSupport]=useState(false);
   const [crmBadge,setCrmBadge]=useState(0);
+  // G1 — visited deve estar no topo (Regras dos Hooks: nunca após early return)
+  const [visited,setVisited]=useState({home:true});
+  // profileLoading: evita falso positivo na tela de Cadastrar Empresa enquanto
+  // o perfil ainda está sendo buscado no Supabase
+  const [profileLoading,setProfileLoading]=useState(true);
+
+  // G1 — marca aba como visitada; usa `tab` (top-level state) em vez de `safeTab`
+  useEffect(()=>{
+    setVisited(v=>v[tab]?v:{...v,[tab]:true});
+  },[tab]);
 
   // Badge CRM — usa calcSumidos (fonte única, mesma lógica do CRMScreen)
   useEffect(()=>{
@@ -4681,6 +4702,7 @@ function App(){
         setAssInfo(ass);
         setEmpresa(emp);
       }
+      setProfileLoading(false); // libera guards após fetch completo
     })();
   },[session]);
 
@@ -4748,9 +4770,35 @@ function App(){
     );
   }
 
-  // Sem empresa → cadastro
+  // Sem empresa → cadastro (só exibe após profile fetch completo)
   if(!profile.empresa_id){
-    return <CadastroEmpresaScreen user={session.user} onComplete={async()=>{
+    // Ainda carregando — evita falso positivo por race condition no refresh
+    if(profileLoading){
+      return(
+        <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
+          <AquaBg/>
+          <div style={{position:"relative",zIndex:1,textAlign:"center"}}>
+            <div className="spinner spin" style={{margin:"0 auto",width:28,height:28,borderWidth:3}}/>
+            <div style={{color:"rgba(186,230,253,.6)",marginTop:16,fontSize:14}}>Verificando cadastro...</div>
+          </div>
+        </div>
+      );
+    }
+    return <CadastroEmpresaScreen user={session.user}
+      onBack={async()=>{
+        setProfileLoading(true);
+        const{data}=await sb.from('profiles').select('id,name,email,role,empresa_id,ativo,cargo').eq('id',session.user.id).single();
+        if(data?.empresa_id){
+          setProfile(data);
+          const[{data:ass},{data:emp}]=await Promise.all([
+            sb.rpc('fn_assinatura_valida',{p_empresa_id:data.empresa_id}),
+            sb.from('empresas').select('id,nome_fantasia,telefone').eq('id',data.empresa_id).single(),
+          ]);
+          setAssInfo(ass);setEmpresa(emp);
+        }
+        setProfileLoading(false);
+      }}
+      onComplete={async()=>{
       // Retry com até 5 tentativas aguardando propagação do RLS
       let prof=null;
       for(let i=0;i<5;i++){
@@ -4787,14 +4835,6 @@ function App(){
   const TABS=ALL_TABS.filter(t=>t.roles.includes(profile.role));
   const TITLES={home:"Fila de Lavagem",new:"Nova Lavagem",crm:"CRM / Fidelização",history:"Histórico",config:"Configurações"};
   const safeTab=TABS.find(t=>t.id===tab)?tab:"home";
-
-  // G1 — lazy-mount: registra quais abas já foram visitadas (nunca remove)
-  const [visited,setVisited]=useState({home:true});
-  useEffect(()=>{
-    setVisited(v=>v[safeTab]?v:{...v,[safeTab]:true});
-    // G6 — ao sair do CRM, badge já está sincronizado pelo onBadgeUpdate do CRMScreen;
-    // ao retornar de outra aba ao home, relê badge para capturar mudanças em tempo real
-  },[safeTab]);
 
   // Trial banner
   const showTrialBanner=assInfo?.status==="trial"&&(assInfo?.dias_restantes<=7);
