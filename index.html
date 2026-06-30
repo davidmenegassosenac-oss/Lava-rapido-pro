@@ -4314,8 +4314,12 @@ function RelatoriosScreen({empresaId,embedded}){
   useEffect(()=>{
     setLoading(true);
     const dias=periodo==="dia"?1:periodo==="semana"?7:30;
-    const desde=new Date(Date.now()-dias*86400000).toISOString().split("T")[0];
-    const desdeISO=new Date(Date.now()-dias*86400000).toISOString();
+    // Usa meia-noite LOCAL do dia início — evita bug de fuso UTC vs local
+    const inicioLocal=new Date();
+    inicioLocal.setDate(inicioLocal.getDate()-(dias-1));
+    inicioLocal.setHours(0,0,0,0);
+    const desde=toLocalDateStr(inicioLocal);       // YYYY-MM-DD local para caixa_movimentos
+    const desdeISO=inicioLocal.toISOString();      // ISO para comparação em historico
     Promise.all([
       sb.from('caixa_movimentos').select('tipo,categoria,valor,data').eq('empresa_id',empresaId).gte('data',desde).order('data'),
       sb.from('historico').select('type,value,completed_at,forma_pagamento').eq('empresa_id',empresaId).gte('completed_at',desdeISO).order('completed_at'),
