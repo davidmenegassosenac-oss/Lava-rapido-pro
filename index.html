@@ -962,8 +962,16 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     sb.rpc('fn_assinatura_valida',{p_empresa_id:empresaId}).then(({data})=>{if(data)setAss(data);}).catch(()=>{});
     sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId}).then(({data,error})=>{if(!error&&data)setLimites(data);}).catch(()=>{});
     sb.rpc('fn_listar_cobrancas',{p_empresa_id:empresaId}).then(({data,error})=>{if(!error)setCobrancas(data||[]);}).catch(()=>{});
-    sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).order('criado_em')
-      .then(({data,error})=>{if(error)console.error('ERRO ao carregar servicos_catalogo:',error);setSvcs(data||[]);}).catch(e=>console.error('ERRO crítico servicos_catalogo:',e));
+    sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId)
+      .then(({data,error})=>{
+        if(error){
+          console.error('ERRO ao carregar servicos_catalogo:',error);
+          alert('Erro ao carregar serviços: '+error.message);
+        }
+        // Ordena no cliente por nome — evita depender de nome de coluna de data
+        // incerto no banco (created_at/criado_em variam entre ambientes)
+        setSvcs((data||[]).sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')));
+      }).catch(e=>{console.error('ERRO crítico servicos_catalogo:',e);alert('Erro crítico ao carregar serviços: '+e.message);});
   },[empresaId]);
 
   const saveEmpresa=async()=>{
