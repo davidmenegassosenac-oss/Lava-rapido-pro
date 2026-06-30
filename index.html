@@ -3670,9 +3670,9 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
     const{inicio,fim}=semanaParaDatas(semana);
     const[{data:funcs},{data:dirs},{data:pgtos},{data:dias}]=await Promise.all([
       sb.from("profiles").select("id,name,role").eq("empresa_id",empresaId).eq("role","employee"),
-      sb.from("funcionario_diaria").select("id,funcionario_id,data,empresa_id").eq("empresa_id",empresaId),
-      sb.from("folha_pagamentos").select("id,funcionario_id,semana_ref,valor_pago,status,created_at").eq("empresa_id",empresaId).eq("semana_ref",semana).order("created_at",{ascending:false}),
-      sb.from("folha_dias_trabalhados").select("id,funcionario_id,semana_ref,dias,empresa_id").eq("empresa_id",empresaId).eq("semana_ref",semana),
+      sb.from("funcionario_diaria").select("id,profile_id,empresa_id,valor_diaria,tipo_pagamento,taxa_comissao").eq("empresa_id",empresaId),
+      sb.from("folha_pagamentos").select("id,profile_id,empresa_id,semana_ref,valor,tipo,observacao,data_pgto,created_at").eq("empresa_id",empresaId).eq("semana_ref",semana).order("created_at",{ascending:false}),
+      sb.from("folha_dias_trabalhados").select("id,profile_id,empresa_id,semana_ref,dias").eq("empresa_id",empresaId).eq("semana_ref",semana),
     ]);
     setFuncionarios(funcs||[]);
     const dMap={};
@@ -3712,12 +3712,23 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
     // G4 — 1 canal único com 3 listeners em vez de 3 WebSockets paralelos
     const ch=sb.channel("folha-"+empresaId)
       .on("postgres_changes",{event:"*",schema:"public",table:"historico",
-        filter:`empresa_id=eq.${empresaId}`},()=>fetchTudo())
+        filter:`empresa_id=eq.${empresaId}`},(payload)=>{
+          console.log("Realtime Folha recebido [historico]:",payload);
+          fetchTudo();
+        })
       .on("postgres_changes",{event:"*",schema:"public",table:"folha_pagamentos",
-        filter:`empresa_id=eq.${empresaId}`},()=>fetchTudo())
+        filter:`empresa_id=eq.${empresaId}`},(payload)=>{
+          console.log("Realtime Folha recebido [folha_pagamentos]:",payload);
+          fetchTudo();
+        })
       .on("postgres_changes",{event:"*",schema:"public",table:"folha_dias_trabalhados",
-        filter:`empresa_id=eq.${empresaId}`},()=>fetchTudo())
-      .subscribe();
+        filter:`empresa_id=eq.${empresaId}`},(payload)=>{
+          console.log("Realtime Folha recebido [folha_dias_trabalhados]:",payload);
+          fetchTudo();
+        })
+      .subscribe((status)=>{
+        console.log("Canal Folha — status da inscrição:",status);
+      });
 
     return()=>sb.removeChannel(ch);
   },[fetchTudo]);
