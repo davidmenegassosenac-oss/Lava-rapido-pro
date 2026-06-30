@@ -962,8 +962,8 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     sb.rpc('fn_assinatura_valida',{p_empresa_id:empresaId}).then(({data})=>{if(data)setAss(data);}).catch(()=>{});
     sb.rpc('fn_status_limites_plano',{p_empresa_id:empresaId}).then(({data,error})=>{if(!error&&data)setLimites(data);}).catch(()=>{});
     sb.rpc('fn_listar_cobrancas',{p_empresa_id:empresaId}).then(({data,error})=>{if(!error)setCobrancas(data||[]);}).catch(()=>{});
-    sb.from('servicos_catalogo').select('id,nome,valor,ativo,limite_diario,criado_em').eq('empresa_id',empresaId).order('created_at')
-      .then(({data})=>setSvcs(data||[])).catch(()=>{});
+    sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).order('criado_em')
+      .then(({data,error})=>{if(error)console.error('ERRO ao carregar servicos_catalogo:',error);setSvcs(data||[]);}).catch(e=>console.error('ERRO crítico servicos_catalogo:',e));
   },[empresaId]);
 
   const saveEmpresa=async()=>{
@@ -2405,7 +2405,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   };
 
   useEffect(()=>{
-    sb.from('servicos_catalogo').select('id,nome,valor').eq('empresa_id',empresaId).eq('ativo',true)
+    sb.from('servicos_catalogo').select('*').eq('empresa_id',empresaId).eq('ativo',true)
       .then(({data})=>{if(data&&data.length>0)setSvcs(data.map(s=>({label:s.nome,value:s.valor})));});
   },[empresaId]);
 
