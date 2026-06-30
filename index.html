@@ -4405,26 +4405,31 @@ function RelatoriosScreen({empresaId,embedded}){
   const totalAnual=visaoAnual.reduce((s,m)=>s+m.fat,0);
 
   const hoje=new Date();
+  const hojeLocal=new Date(); // referência local para os gráficos
   let chartData;
   if(periodo==="dia"){
-    const key=hoje.toISOString().split("T")[0];
-    const v=movs.filter(m=>m.tipo==="entrada"&&m.data===key).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+    // Gráfico "Hoje" usa hist (lavagens) filtradas por data local, não movs
+    const key=toLocalDateStr(hojeLocal);
+    const v=hist.filter(h=>toLocalDateStr(h.completed_at)===key)
+      .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
     chartData=[{l:"Hoje",v}];
   }else if(periodo==="semana"){
     chartData=[6,5,4,3,2,1,0].map(d=>{
-      const dt=new Date(hoje);dt.setDate(dt.getDate()-d);
-      const key=dt.toISOString().split("T")[0];
-      const v=movs.filter(m=>m.tipo==="entrada"&&m.data===key).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+      const dt=new Date(hojeLocal.getFullYear(),hojeLocal.getMonth(),hojeLocal.getDate()-d);
+      const key=toLocalDateStr(dt);
+      const v=hist.filter(h=>toLocalDateStr(h.completed_at)===key)
+        .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
       return{l:["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][dt.getDay()],v};
     });
   }else{
     const semanas=[];
     for(let w=4;w>=0;w--){
-      const fim=new Date(hoje);fim.setDate(fim.getDate()-w*7);
-      const inicio=new Date(fim);inicio.setDate(inicio.getDate()-6);
-      const inicioKey=inicio.toISOString().split("T")[0];
-      const fimKey=fim.toISOString().split("T")[0];
-      const v=movs.filter(m=>m.tipo==="entrada"&&m.data>=inicioKey&&m.data<=fimKey).reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+      const fim=new Date(hojeLocal.getFullYear(),hojeLocal.getMonth(),hojeLocal.getDate()-w*7);
+      const inicio=new Date(fim.getFullYear(),fim.getMonth(),fim.getDate()-6);
+      const inicioKey=toLocalDateStr(inicio);
+      const fimKey=toLocalDateStr(fim);
+      const v=hist.filter(h=>{const k=toLocalDateStr(h.completed_at);return k>=inicioKey&&k<=fimKey;})
+        .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
       semanas.push({l:`${inicio.getDate()}/${inicio.getMonth()+1}`,v});
     }
     chartData=semanas;
