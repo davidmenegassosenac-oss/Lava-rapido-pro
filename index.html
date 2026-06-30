@@ -4699,95 +4699,73 @@ function App(){
     if(!session)return;
     setInitializing(true);
     (async()=>{
-      // ── BLOCO DE DIAGNÓSTICO (remover após depuração) ──────────────────
-      console.group('🔍 DIAGNÓSTICO DE LOGIN');
-      console.log('1. session.user.id:', session.user.id);
-      console.log('2. session.user.email:', session.user.email);
-
-      // Query RAW — mostra o retorno exato do Supabase sem filtros extras
-      const diagRaw=await sb.from('profiles').select('*').eq('id',session.user.id);
-      console.log('3. profiles RAW (data):', diagRaw.data);
-      console.log('3. profiles RAW (error):', diagRaw.error);
-      console.log('3. profiles RAW (status):', diagRaw.status, diagRaw.statusText);
-
-      // Verifica se empresa_id existe no profile
-      if(diagRaw.data?.length>0){
-        const p=diagRaw.data[0];
-        console.log('4. empresa_id no profile:', p.empresa_id);
-        if(p.empresa_id){
-          const diagEmp=await sb.from('empresas').select('id,nome_fantasia').eq('id',p.empresa_id).single();
-          console.log('5. empresa encontrada:', diagEmp.data);
-          console.log('5. empresa error (RLS?):', diagEmp.error);
-        }else{
-          console.warn('4. ⚠️  empresa_id está NULL no profile!');
+      try{
+        const uid=session?.user?.id;
+        if(!uid){
+          console.error('ERRO CRÍTICO DE LOGIN: session.user.id ausente',session);
+          alert('Erro detectado: sessão inválida (sem user.id). Faça login novamente.');
+          setInitializing(false);
+          return;
         }
-      }else{
-        console.error('3. ❌ Nenhum profile encontrado para esse user.id');
-        // Verifica se existe com query mais permissiva (debug de RLS)
-        const diagAll=await sb.from('profiles').select('id,email,empresa_id').limit(5);
-        console.log('6. profiles visíveis para esse token (RLS):', diagAll.data, diagAll.error);
-      }
-      console.groupEnd();
-      // ── FIM DO BLOCO DE DIAGNÓSTICO ────────────────────────────────────
-      // independente de migrações futuras na tabela profiles
-      let prof=null;
-      let lastError=null;
-      let fetchFailed=false;
-      for(let i=0;i<3;i++){
-        const{data,error}=await sb.from('profiles')
-          .select('*')
-          .eq('id',session.user.id).single();
-        if(data){prof=data;break;}
-        lastError=error;
-        console.error(`[profiles fetch tentativa ${i+1}]`,error?.code,error?.message);
-        // PGRST116 = nenhuma linha (usuário novo) — não precisa tentar de novo
-        if(error?.code==='PGRST116')break;
-        // Qualquer outro erro = oscilação de rede, aguarda e tenta novamente
-        await new Promise(r=>setTimeout(r,700));
-        if(i===2)fetchFailed=true;
-      }
 
-      // Fix 2 — NÃO faz upsert em falha de rede: seria um profile vazio que
-      // sobrescreve o real e joga o usuário na tela de cadastro de empresa.
-      // Em falha genuína, mostra erro e mantém initializing=true para bloquear a UI.
-      if(fetchFailed&&!prof){
-        console.error('[profiles init] falha após 3 tentativas',lastError);
-        setProfile({_fetchError:true,id:session.user.id,
-          name:session.user.email?.split('@')[0]||'Usuário',
-          role:'owner',empresa_id:null});
-        setInitializing(false);
-        return;
-      }
+        // Busca profile com até 3 tentativas (RLS pode demorar após signup)
+        let prof=null;
+        let lastError=null;
+        let fetchFailed=false;
+        for(let i=0;i<3;i++){
+          const res=await sb.from('profiles').select('*').eq('id',uid).single();
+          // Defesa contra array: se por algum motivo vier array em vez de objeto
+          const data=Array.isArray(res.data)?res.data[0]:res.data;
+          if(data){prof=data;break;}
+          lastError=res.error;
+          console.error(`[profiles fetch tentativa ${i+1}]`,res.error?.code,res.error?.message);
+          if(res.error?.code==='PGRST116')break; // sem linha = usuário novo, não insiste
+          await new Promise(r=>setTimeout(r,700));
+          if(i===2)fetchFailed=true;
+        }
 
-      // Novo usuário (profile não existe ainda) → cria via upsert apenas se
-      // o erro foi PGRST116 (sem linha), nunca por falha de rede
-      if(!prof){
-        const{data:upserted}=await sb.from('profiles').upsert({
-          id:session.user.id,
-          name:session.user.user_metadata?.name||session.user.email?.split('@')[0]||'Usuário',
-          role:session.user.user_metadata?.role||'owner',
-          empresa_id:null
-        },{onConflict:'id'}).select().single();
-        prof=upserted;
-      }
+        if(fetchFailed&&!prof){
+          console.error('[profiles init] falha após 3 tentativas',lastError);
+          setProfile({_fetchError:true,id:uid,
+            name:session.user?.email?.split('@')[0]||'Usuário',
+            role:'owner',empresa_id:null});
+          setInitializing(false);
+          return;
+        }
 
-      setProfile(prof||null);
-      if(prof?.empresa_id){
-        try{
-          const[{data:ass,error:eAss},{data:emp,error:eEmp}]=await Promise.all([
+        // Usuário novo (sem profile ainda) → cria via upsert apenas se PGRST116
+        if(!prof){
+          const{data:upserted}=await sb.from('profiles').upsert({
+            id:uid,
+            name:session.user?.user_metadata?.name||session.user?.email?.split('@')[0]||'Usuário',
+            role:session.user?.user_metadata?.role||'owner',
+            empresa_id:null
+          },{onConflict:'id'}).select().single();
+          prof=Array.isArray(upserted)?upserted[0]:upserted;
+        }
+
+        setProfile(prof||null);
+
+        if(prof?.empresa_id){
+          const[assRes,empRes]=await Promise.all([
             sb.rpc('fn_assinatura_valida',{p_empresa_id:prof.empresa_id}),
             sb.from('empresas').select('*').eq('id',prof.empresa_id).single(),
           ]);
-          if(eAss)console.error('ERRO CRÍTICO - fn_assinatura_valida:',eAss);
-          if(eEmp)console.error('ERRO CRÍTICO - empresas fetch:',eEmp);
-          setAssInfo(ass||null);
-          setEmpresa(emp||null);
-        }catch(critErr){
-          console.error('ERRO CRÍTICO DE LOGIN - empresa/assinatura:',critErr);
-          // Não bloqueia: app abre mesmo sem assInfo/empresa para que o dono possa operar
+          if(assRes.error)console.error('ERRO CRÍTICO - fn_assinatura_valida:',assRes.error);
+          if(empRes.error)console.error('ERRO CRÍTICO - empresas fetch:',empRes.error);
+          const empData=Array.isArray(empRes.data)?empRes.data[0]:empRes.data;
+          setAssInfo(assRes.data||null);
+          setEmpresa(empData||null);
         }
+
+        setInitializing(false);
+      }catch(e){
+        // Força bruta: qualquer exceção não prevista cai aqui — expõe o erro
+        // exato em vez de silenciosamente cair na tela de cadastro de empresa
+        console.error('ERRO CRÍTICO DE LOGIN:',e);
+        alert('Erro detectado: '+e.message);
+        setInitializing(false);
       }
-      setInitializing(false); // tudo resolvido — libera renderização final
     })();
   },[session]);
 
@@ -4876,7 +4854,7 @@ function App(){
   }
 
   // Sem empresa — CadastroEmpresaScreen só chega aqui com initializing=false garantido
-  if(!profile.empresa_id){
+  if(!profile?.empresa_id){
     return <CadastroEmpresaScreen user={session.user}
       onBack={async()=>{
         // Quebra o loop fazendo logout completo — limpa qualquer estado corrompido
