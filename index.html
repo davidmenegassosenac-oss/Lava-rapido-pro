@@ -4733,8 +4733,27 @@ function App(){
           return;
         }
 
-        // Usuário novo (sem profile ainda) → cria via upsert apenas se PGRST116
+        // Usuário novo (sem profile ainda) → cria via upsert APENAS se confirmado
+        // que a linha realmente não existe (evita sobrescrever profile real
+        // em caso de RLS temporário ou falha de propagação)
         if(!prof){
+          console.error('🔍 DIAGNÓSTICO: profile não veio na busca principal para uid=',uid,'| erro:',lastError);
+          if(!fetchFailed){
+            // PGRST116 confirmado: 0 linhas. Antes de criar, espera 1.5s e tenta
+            // mais uma vez — RLS pode demorar a propagar logo após login/signup
+            await new Promise(r=>setTimeout(r,1500));
+            const retry=await sb.from('profiles').select('*').eq('id',uid).single();
+            const retryData=Array.isArray(retry.data)?retry.data[0]:retry.data;
+            if(retryData){
+              console.error('🔍 RESOLVIDO no retry tardio — profile real encontrado:',retryData);
+              prof=retryData;
+            }
+          }
+        }
+
+        // Só cria profile novo se, mesmo após o retry tardio, continuar vazio
+        if(!prof){
+          console.error('🔍 CONFIRMADO: nenhum profile existe para uid=',uid,'— criando novo (conta realmente nova)');
           const{data:upserted}=await sb.from('profiles').upsert({
             id:uid,
             name:session.user?.user_metadata?.name||session.user?.email?.split('@')[0]||'Usuário',
@@ -4949,19 +4968,19 @@ function App(){
           display:none oculta sem desmontar, preservando estado e canais Realtime.
           Isso elimina ~160 queries desnecessárias por dia de operação. */}
       <div style={{flex:"1 1 auto",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column",position:"relative",zIndex:5}}>
-        {(visited.home)&&<div style={{display:safeTab==="home"?undefined:"none",height:"100%",overflow:"hidden"}}>
+        {(visited.home)&&<div style={{display:safeTab==="home"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
           <HomeScreen empresaId={profile.empresa_id}/>
         </div>}
-        {(visited.new)&&<div style={{display:safeTab==="new"?undefined:"none",height:"100%",overflow:"hidden"}}>
+        {(visited.new)&&<div style={{display:safeTab==="new"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
           <NewWashScreen empresaId={profile.empresa_id} userId={profile.id} onSuccess={()=>{setTab("home");showToast("✅ Veículo adicionado à fila!");}}/>
         </div>}
-        {(visited.crm&&isOwner)&&<div style={{display:safeTab==="crm"?undefined:"none",height:"100%",overflow:"hidden"}}>
+        {(visited.crm&&isOwner)&&<div style={{display:safeTab==="crm"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
           <CRMScreen empresaId={profile.empresa_id} onBadgeUpdate={()=>setCrmBadge(0)}/>
         </div>}
-        {(visited.history)&&<div style={{display:safeTab==="history"?undefined:"none",height:"100%",overflow:"hidden"}}>
+        {(visited.history)&&<div style={{display:safeTab==="history"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
           <HistoryScreen empresaId={profile.empresa_id} isOwner={isOwner}/>
         </div>}
-        {(visited.config&&isOwner)&&<div style={{display:safeTab==="config"?undefined:"none",height:"100%",overflow:"hidden"}}>
+        {(visited.config&&isOwner)&&<div style={{display:safeTab==="config"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
           <ConfigScreen empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} plano={assInfo?.plano||empresa?.plano||"trial"} onUpgrade={()=>setTab("config")} onUpdate={name=>{setEmpresa(e=>({...e,nome_fantasia:name}));showToast("✅ "+name+" atualizado!");}}/>
         </div>}
       </div>
