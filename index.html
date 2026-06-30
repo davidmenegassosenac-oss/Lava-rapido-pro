@@ -4673,21 +4673,23 @@ function App(){
   // Load profile + assinatura after session
   useEffect(()=>{
     if(!session)return;
-    // Fix 1 — garante initializing=true enquanto profile carrega,
-    // mesmo que venha de um login onde initializing já estava false
     setInitializing(true);
     (async()=>{
-      // Busca profile com até 3 tentativas (RLS pode demorar após signup)
+      // select('*') garante que nenhuma coluna de controle fique de fora,
+      // independente de migrações futuras na tabela profiles
       let prof=null;
+      let lastError=null;
       let fetchFailed=false;
       for(let i=0;i<3;i++){
         const{data,error}=await sb.from('profiles')
-          .select('id,name,email,role,empresa_id,ativo,cargo')
+          .select('*')
           .eq('id',session.user.id).single();
         if(data){prof=data;break;}
-        // Erro de "nenhuma linha" (PGRST116) = profile ainda não existe (novo cadastro)
+        lastError=error;
+        console.error(`[profiles fetch tentativa ${i+1}]`,error?.code,error?.message);
+        // PGRST116 = nenhuma linha (usuário novo) — não precisa tentar de novo
         if(error?.code==='PGRST116')break;
-        // Qualquer outro erro = oscilação de rede, tentar novamente
+        // Qualquer outro erro = oscilação de rede, aguarda e tenta novamente
         await new Promise(r=>setTimeout(r,700));
         if(i===2)fetchFailed=true;
       }
@@ -4696,6 +4698,7 @@ function App(){
       // sobrescreve o real e joga o usuário na tela de cadastro de empresa.
       // Em falha genuína, mostra erro e mantém initializing=true para bloquear a UI.
       if(fetchFailed&&!prof){
+        console.error('[profiles init] falha após 3 tentativas',lastError);
         setProfile({_fetchError:true,id:session.user.id,
           name:session.user.email?.split('@')[0]||'Usuário',
           role:'owner',empresa_id:null});
