@@ -948,7 +948,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   },[empresaId]);
 
   useEffect(()=>{
-    sb.from('empresas').select('id,nome_fantasia,telefone,horario_funcionamento,ignorar_limites_hoje,plano,criado_em').eq('id',empresaId).single()
+    sb.from('empresas').select('*').eq('id',empresaId).single()
       .then(({data,error})=>{
         if(error||!data)return;
         setEmpresa(data);
@@ -4242,13 +4242,14 @@ function RelatoriosScreen({empresaId,embedded}){
       .then(({data})=>setHistAll(data||[]));
   },[empresaId]);
 
-  // G5 — useMemo: evita recalcular iterações sobre hist+movs em cada re-render
-  const {entradas,saidas,saldo,totalAtend}=useMemo(()=>({
-    entradas: hist.filter(h=>h.status_pagamento!=="estornado").reduce((s,h)=>s+(parseFloat(h.value)||0),0),
-    saidas:   movs.filter(m=>m.tipo==="saida").reduce((s,m)=>s+(parseFloat(m.valor)||0),0),
-    get saldo(){return this.entradas-this.saidas;},
-    totalAtend: hist.length,
-  }),[hist,movs]);
+  // G5 — useMemo com null safety: dados históricos antigos podem ter campos nulos
+  const {entradas,saidas,saldo,totalAtend}=useMemo(()=>{
+    const e=(hist||[]).filter(h=>h?.status_pagamento!=="estornado")
+      .reduce((s,h)=>s+(parseFloat(h?.value)||0),0);
+    const sa=(movs||[]).filter(m=>m?.tipo==="saida")
+      .reduce((s,m)=>s+(parseFloat(m?.valor)||0),0);
+    return{entradas:e,saidas:sa,saldo:e-sa,totalAtend:(hist||[]).length};
+  },[hist,movs]);
 
   // ── Métricas avançadas via useMemo ─────────────────────────────────────
 
@@ -4772,12 +4773,19 @@ function App(){
 
       setProfile(prof||null);
       if(prof?.empresa_id){
-        const[{data:ass},{data:emp}]=await Promise.all([
-          sb.rpc('fn_assinatura_valida',{p_empresa_id:prof.empresa_id}),
-          sb.from('empresas').select('id,nome_fantasia,telefone').eq('id',prof.empresa_id).single(),
-        ]);
-        setAssInfo(ass);
-        setEmpresa(emp);
+        try{
+          const[{data:ass,error:eAss},{data:emp,error:eEmp}]=await Promise.all([
+            sb.rpc('fn_assinatura_valida',{p_empresa_id:prof.empresa_id}),
+            sb.from('empresas').select('*').eq('id',prof.empresa_id).single(),
+          ]);
+          if(eAss)console.error('ERRO CRÍTICO - fn_assinatura_valida:',eAss);
+          if(eEmp)console.error('ERRO CRÍTICO - empresas fetch:',eEmp);
+          setAssInfo(ass||null);
+          setEmpresa(emp||null);
+        }catch(critErr){
+          console.error('ERRO CRÍTICO DE LOGIN - empresa/assinatura:',critErr);
+          // Não bloqueia: app abre mesmo sem assInfo/empresa para que o dono possa operar
+        }
       }
       setInitializing(false); // tudo resolvido — libera renderização final
     })();
