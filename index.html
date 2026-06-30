@@ -409,6 +409,10 @@ function StatusBadge({status}){
 }
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
+// today() como função — sempre retorna a data corrente, nunca fica stale
+// se o app ficar aberto durante a virada da meia-noite
+function getToday(){return new Date();}
+// Mantido como compatibilidade para daysSince que já usa (today - date)
 const today=new Date();
 function daysSince(ds){return Math.floor((today-new Date(ds))/86400000);}
 function fmtDate(ds){return new Date(ds).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"});}
@@ -2689,6 +2693,24 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
   const [paymentFilter,setPaymentFilter]=useState("todos");
   const [filtrarHoje,setFiltrarHoje]=useState(true);
   const [dataFiltro,setDataFiltro]=useState(toLocalDateStr(new Date()));
+
+  // Reatividade na virada da meia-noite local:
+  // quando o dia muda, atualiza dataFiltro para o novo dia e reseta o filtro.
+  // Agenda o próximo tick para exatamente 1s após a meia-noite local.
+  useEffect(()=>{
+    function agendarVirada(){
+      const agora=new Date();
+      const amanha=new Date(agora.getFullYear(),agora.getMonth(),agora.getDate()+1,0,0,1);
+      const msAteVirada=amanha-agora;
+      return setTimeout(()=>{
+        setDataFiltro(toLocalDateStr(new Date()));
+        setFiltrarHoje(true); // reseta o filtro para o novo dia
+        agendarVirada(); // agenda a próxima virada
+      },msAteVirada);
+    }
+    const t=agendarVirada();
+    return()=>clearTimeout(t);
+  },[]);
   const [editando,setEditando]=useState(null);     // id do registro em edição
   const [editForm,setEditForm]=useState({});        // {forma_pagamento, status_pagamento, lavado_por}
   const [salvandoEdit,setSalvandoEdit]=useState(false);
@@ -2803,16 +2825,17 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
   },[hist]);
 
   // P3 — total e tod em useMemo para não recalcular a cada re-render
+  // dataFiltro como dep extra: muda à meia-noite pelo efeito de virada,
+  // forçando o recálculo de tod para o novo dia (zera automaticamente)
   const {total,tod}=useMemo(()=>{
-    const hoje=toLocalDateStr(new Date()); // P4 — data local, não UTC
+    const hoje=toLocalDateStr(new Date()); // sempre data local corrente
     const semEstorno=hist.filter(h=>h.status_pagamento!=="estornado");
     return{
       total: semEstorno.reduce((s,h)=>s+(parseFloat(h.value)||0),0),
-      // P4 — compara data local do registro com data local de hoje
       tod:   semEstorno.filter(h=>toLocalDateStr(h.completed_at)===hoje)
                .reduce((s,h)=>s+(parseFloat(h.value)||0),0),
     };
-  },[hist]);
+  },[hist,dataFiltro]);
 
   // Totalizador do período filtrado
   const totalFiltrado=useMemo(()=>
