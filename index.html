@@ -4698,7 +4698,36 @@ function App(){
     if(!session)return;
     setInitializing(true);
     (async()=>{
-      // select('*') garante que nenhuma coluna de controle fique de fora,
+      // ── BLOCO DE DIAGNÓSTICO (remover após depuração) ──────────────────
+      console.group('🔍 DIAGNÓSTICO DE LOGIN');
+      console.log('1. session.user.id:', session.user.id);
+      console.log('2. session.user.email:', session.user.email);
+
+      // Query RAW — mostra o retorno exato do Supabase sem filtros extras
+      const diagRaw=await sb.from('profiles').select('*').eq('id',session.user.id);
+      console.log('3. profiles RAW (data):', diagRaw.data);
+      console.log('3. profiles RAW (error):', diagRaw.error);
+      console.log('3. profiles RAW (status):', diagRaw.status, diagRaw.statusText);
+
+      // Verifica se empresa_id existe no profile
+      if(diagRaw.data?.length>0){
+        const p=diagRaw.data[0];
+        console.log('4. empresa_id no profile:', p.empresa_id);
+        if(p.empresa_id){
+          const diagEmp=await sb.from('empresas').select('id,nome_fantasia').eq('id',p.empresa_id).single();
+          console.log('5. empresa encontrada:', diagEmp.data);
+          console.log('5. empresa error (RLS?):', diagEmp.error);
+        }else{
+          console.warn('4. ⚠️  empresa_id está NULL no profile!');
+        }
+      }else{
+        console.error('3. ❌ Nenhum profile encontrado para esse user.id');
+        // Verifica se existe com query mais permissiva (debug de RLS)
+        const diagAll=await sb.from('profiles').select('id,email,empresa_id').limit(5);
+        console.log('6. profiles visíveis para esse token (RLS):', diagAll.data, diagAll.error);
+      }
+      console.groupEnd();
+      // ── FIM DO BLOCO DE DIAGNÓSTICO ────────────────────────────────────
       // independente de migrações futuras na tabela profiles
       let prof=null;
       let lastError=null;
