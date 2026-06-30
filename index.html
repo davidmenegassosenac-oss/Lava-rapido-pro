@@ -715,7 +715,7 @@ function CadastroEmpresaScreen({user,onComplete,onBack}){
 /* ══════════════════════════════════════════════════════════════════════════
    LOGIN
 ══════════════════════════════════════════════════════════════════════════ */
-function LoginScreen({onLogin}){
+function LoginScreen({onLoginStart,onLoginError}){
   const [email,setEmail]=useState("");
   const [pwd,setPwd]=useState("");
   const [show,setShow]=useState(false);
@@ -727,13 +727,14 @@ function LoginScreen({onLogin}){
 
   const submit=async()=>{
     if(!email.trim()||!pwd.trim()){setErr("Preencha e-mail e senha.");return;}
-    // O aceite dos termos só é obrigatório no cadastro — quem já tem conta
-    // já aceitou no momento em que se cadastrou.
     if(mode==="register"&&!aceitouTermos){
       setErr("Você precisa aceitar os Termos de Uso e Política de Privacidade para criar sua conta.");
       return;
     }
     setLoading(true);setErr("");
+    // Sinaliza ao App que login está em andamento ANTES de chamar o Supabase
+    // — isso bloqueia o SIGNED_OUT temporário de acionar initializing=false
+    onLoginStart();
     try{
       if(mode==="register"){
         const {data,error}=await sb.auth.signUp({
@@ -741,11 +742,6 @@ function LoginScreen({onLogin}){
           password:pwd,
           options:{data:{
             name:email.split("@")[0],role:"owner",
-            // Registro de auditoria do aceite — booleano + timestamp exato,
-            // salvo nos metadados do usuário no momento do cadastro. Isso
-            // fica disponível tanto em auth.users.raw_user_meta_data quanto
-            // pode ser replicado para profiles via trigger, se necessário
-            // para consulta mais simples no futuro.
             aceitou_termos:true,
             aceitou_termos_em:new Date().toISOString(),
           }}
@@ -753,20 +749,23 @@ function LoginScreen({onLogin}){
         if(error)throw error;
         if(data.user&&!data.session){
           setErr("Verifique seu e-mail para confirmar o cadastro.");
+          onLoginError();
           setLoading(false);return;
         }
-        onLogin(data.session);
+        // Sucesso: onAuthStateChange (SIGNED_IN) assume o controle — não chamar setSession aqui
       }else{
         const {data,error}=await sb.auth.signInWithPassword({
           email:email.trim().toLowerCase(),password:pwd
         });
         if(error)throw error;
-        onLogin(data.session);
+        // Sucesso: onAuthStateChange (SIGNED_IN) assume o controle — não chamar setSession aqui
       }
     }catch(e){
+      onLoginError(); // reverte initializing para permitir nova tentativa
       setErr(e.message==="Invalid login credentials"?"E-mail ou senha incorretos.":e.message);
+      setLoading(false);
     }
-    setLoading(false);
+    // Não chama setLoading(false) em sucesso — o spinner do App substitui o do LoginScreen
   };
 
 
@@ -4657,15 +4656,39 @@ function App(){
     }
   },[weekWeather,profile]);
 
-  // Auth listener — inicializa sessão; initializing permanece true até profile ser resolvido
+  // Ref que sinaliza "login em andamento" — bloqueia o SIGNED_OUT temporário
+  // do Supabase de acionar setInitializing(false) no meio do fluxo de login
+  const isLoggingIn=useRef(false);
+
+  // Auth listener — ÚNICA fonte de verdade para a sessão
   useEffect(()=>{
+    // Verifica sessão existente (refresh de página)
     sb.auth.getSession().then(({data:{session:s}})=>{
-      setSession(s);
-      if(!s) setInitializing(false); // sem sessão: nada a carregar, libera imediatamente
+      if(s){
+        setSession(s); // useEffect([session]) vai buscar o profile
+      }else{
+        setInitializing(false); // sem sessão: mostra login imediatamente
+      }
     });
-    const{data:{subscription}}=sb.auth.onAuthStateChange((_,s)=>{
-      setSession(s);
-      if(!s){setProfile(null);setAssInfo(null);setInitializing(false);}
+
+    const{data:{subscription}}=sb.auth.onAuthStateChange((event,s)=>{
+      if(s){
+        // SIGNED_IN: sessão real chegou — reseta estados antigos e inicia fetch
+        isLoggingIn.current=false;
+        setVisited({home:true});
+        setProfile(null);setEmpresa(null);setAssInfo(null);
+        setSession(s);
+      }else{
+        // SIGNED_OUT: genuíno ou temporário durante login
+        if(isLoggingIn.current){
+          // Temporário (Supabase invalida sessão anterior antes de criar nova) — ignorar
+          return;
+        }
+        // Logout real
+        setProfile(null);setAssInfo(null);setEmpresa(null);
+        setSession(null);
+        setInitializing(false);
+      }
     });
     return()=>subscription.unsubscribe();
   },[]);
@@ -4752,17 +4775,11 @@ function App(){
     );
   }
 
-  if(!session) return <LoginScreen onLogin={s=>{
-    // Fix 1 — seta initializing ANTES da sessão para não piscar LoginScreen durante o fetch do profile
-    setInitializing(true);
-    // Fix 3 — reseta abas visitadas para não herdar estado de sessão anterior
-    setVisited({home:true});
-    setProfile(null);setEmpresa(null);setAssInfo(null);
-    setSession(s);
-  }}/>;
-
-  // Após initializing=false, profile deve existir se há sessão
-  if(!profile) return <LoginScreen onLogin={s=>{setInitializing(true);setVisited({home:true});setProfile(null);setEmpresa(null);setAssInfo(null);setSession(s);}}/>;
+  // Sem sessão → login. onLoginStart/onLoginError controlam isLoggingIn ref
+  if(!session) return <LoginScreen
+    onLoginStart={()=>{isLoggingIn.current=true;setInitializing(true);}}
+    onLoginError={()=>{isLoggingIn.current=false;setInitializing(false);}}
+  />;
 
   // Master → painel da plataforma
   if(profile.role==="master"){
