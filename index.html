@@ -3444,7 +3444,8 @@ function AdminScreen({empresaId,currentUser,embedded}){
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
 
   const fetchUsers=useCallback(async()=>{
-    const{data}=await sb.from('profiles').select('id,name,email,role,ativo,cargo,tipo_pagamento,valor_diaria,percentual_comissao,created_at').eq('empresa_id',empresaId).order('created_at');
+    const{data,error}=await sb.from('profiles').select('*').eq('empresa_id',empresaId).order('created_at');
+    if(error){console.error('ERRO ao carregar equipe:',error);alert('Erro ao carregar equipe: '+error.message);}
     setUsers(data||[]);setLoading(false);
   },[empresaId]);
 
