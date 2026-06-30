@@ -1052,11 +1052,23 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
 
   const saveHorarios=async()=>{
     setSavingHorarios(true);
-    const{error}=await sb.from("empresas")
-      .update({horario_funcionamento:horarios})
-      .eq("id",empresaId);
-    setSavingHorarios(false);
-    if(!error){setHorariosSalvos(true);setTimeout(()=>setHorariosSalvos(false),3000);}
+    try{
+      const{error}=await sb.from("empresas")
+        .update({horario_funcionamento:horarios})
+        .eq("id",empresaId);
+      if(error){
+        console.error("ERRO ao salvar horários:",error);
+        alert("Erro ao salvar horários: "+error.message+"\n\nCódigo: "+error.code);
+      }else{
+        setHorariosSalvos(true);
+        setTimeout(()=>setHorariosSalvos(false),3000);
+      }
+    }catch(e){
+      console.error("ERRO crítico saveHorarios:",e);
+      alert("Erro crítico ao salvar horários: "+e.message);
+    }finally{
+      setSavingHorarios(false);
+    }
   };
 
   const setDiaHorario=(dia,campo,valor)=>{
