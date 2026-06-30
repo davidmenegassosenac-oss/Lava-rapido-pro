@@ -2726,7 +2726,7 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
 
   const fetchHistorico=useCallback(()=>{
     sb.from('historico').select('*, criador:profiles!criado_por(name), lavador:profiles!lavado_por(name)')
-      .eq('empresa_id',empresaId).order('completed_at',{ascending:false}).limit(200)
+      .eq('empresa_id',empresaId).order('completed_at',{ascending:false}).limit(500)
       .then(({data})=>{setHist(data||[]);setLoading(false);});
   },[empresaId]);
 
@@ -2802,22 +2802,32 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
     })
   ,[hist,search,paymentFilter,filtrarHoje,dataFiltro]);
 
-  // P2 — recuperadosSet rastreia o ID do registro específico que marcou o retorno
-  // (não a placa para sempre). Badge aparece APENAS na lavagem do retorno, não nas futuras.
+  // recuperadosSet: fallback para registros antigos sem a flag do banco.
+  // Detecta gaps de 30+ dias entre visitas consecutivas da mesma placa.
+  // Só é necessário para histórico anterior à implementação da flag (Jun/2026).
+  // Para novos registros, h.cliente_recuperado===true é a fonte primária.
   const recuperadosSet=useMemo(()=>{
-    const set=new Set(); // Set de h.id, não de placas
+    const set=new Set();
+    // Só processa registros que NÃO têm a flag do banco (evita trabalho desnecessário)
+    const semFlag=hist.filter(h=>!h.cliente_recuperado);
     const byPlaca={};
-    hist.forEach(r=>{
+    semFlag.forEach(r=>{
+      const k=(r.plate||'').toUpperCase();
+      if(!k||!r.id)return;
+      if(!byPlaca[k])byPlaca[k]=[];
+      byPlaca[k].push({id:r.id,ts:new Date(r.completed_at).getTime()});
+    });
+    // Inclui TODOS os registros com flag true para calcular gaps completos
+    hist.filter(h=>h.cliente_recuperado).forEach(r=>{
       const k=(r.plate||'').toUpperCase();
       if(!k||!r.id)return;
       if(!byPlaca[k])byPlaca[k]=[];
       byPlaca[k].push({id:r.id,ts:new Date(r.completed_at).getTime()});
     });
     Object.values(byPlaca).forEach(registros=>{
-      const sorted=registros.sort((a,b)=>a.ts-b.ts); // crescente: mais antigo → mais recente
+      const sorted=registros.sort((a,b)=>a.ts-b.ts);
       for(let i=1;i<sorted.length;i++){
         const gap=(sorted[i].ts-sorted[i-1].ts)/86400000;
-        // Só o registro IMEDIATAMENTE após o gap de 30+ dias recebe o badge
         if(gap>=30)set.add(sorted[i].id);
       }
     });
@@ -2992,10 +3002,12 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
             const stPgto=STATUS_PGTO[h.status_pagamento||"pago"]||STATUS_PGTO.pago;
             const isEstornado=h.status_pagamento==="estornado";
             const estaEditando=editando===h.id;
-            // P2 — verifica o ID do registro específico (não a placa para sempre)
+            // Fonte primária: flag do banco (setada pela RPC fn_verificar_cliente_recuperado
+            // no momento do cadastro na fila). Fallback: análise local de gaps para
+            // registros antigos que não tinham a flag quando foram criados.
             const isRecuperado=!isEstornado&&(
-              h.cliente_recuperado===true||
-              recuperadosSet.has(h.id)
+              h.cliente_recuperado===true||   // flag direta do banco — fonte definitiva
+              recuperadosSet.has(h.id)        // fallback para registros históricos antigos
             );
             return(
             <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`,
