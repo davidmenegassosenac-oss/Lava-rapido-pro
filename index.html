@@ -3002,13 +3002,13 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
             const stPgto=STATUS_PGTO[h.status_pagamento||"pago"]||STATUS_PGTO.pago;
             const isEstornado=h.status_pagamento==="estornado";
             const estaEditando=editando===h.id;
-            // Fonte primária: flag do banco (setada pela RPC fn_verificar_cliente_recuperado
-            // no momento do cadastro na fila). Fallback: análise local de gaps para
-            // registros antigos que não tinham a flag quando foram criados.
-            const isRecuperado=!isEstornado&&(
-              h.cliente_recuperado===true||   // flag direta do banco — fonte definitiva
-              recuperadosSet.has(h.id)        // fallback para registros históricos antigos
-            );
+
+            // Tipagem defensiva: aceita true (boolean), "true" (string), 1 (number)
+            const flagBanco=!!h.cliente_recuperado&&h.cliente_recuperado!=="false"&&h.cliente_recuperado!==0;
+            const noSet=recuperadosSet.has(h.id);
+            const isRecuperado=!isEstornado&&(flagBanco||noSet);
+            // DEBUG VISUAL — visível no card enquanto diagnosticamos (remover depois)
+            const _dbg=`cr=${JSON.stringify(h.cliente_recuperado)} set=${noSet} ok=${isRecuperado}`;
             return(
             <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`,
               opacity:isEstornado?.6:1,
@@ -3016,6 +3016,10 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
               border:isRecuperado?"1.5px solid rgba(251,191,36,.3)":isEstornado?"1px solid rgba(148,163,184,.2)":undefined,
               boxShadow:isRecuperado?"0 4px 16px rgba(251,191,36,.1)":undefined}}>
               <div style={{padding:14}}>
+                {/* DEBUG BADGE — remover após diagnóstico */}
+                <div style={{fontSize:9,color:"rgba(255,255,0,.7)",fontFamily:"monospace",marginBottom:4,wordBreak:"break-all"}}>
+                  {_dbg}
+                </div>
                 {/* Badge reconquistado */}
                 {isRecuperado&&(
                   <div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:8,
