@@ -2252,7 +2252,47 @@ function HomeScreen({empresaId}){
     if(count===0){
       setErrorMsg("Este veículo já foi atualizado por outro usuário. A fila foi recarregada.");
       setTimeout(()=>setErrorMsg(""),5000);
+      fetchQueue();
+      return;
     }
+
+    // Transição final para "Pago" → move explicitamente para o histórico.
+    // Não depende mais de trigger do banco: garante que o faturamento nunca
+    // seja perdido silenciosamente.
+    if(nextStatus==="Pago"){
+      try{
+        const{data:ordem,error:eFetch}=await sb.from('ordens_servico')
+          .select('*').eq('id',id).single();
+        if(eFetch||!ordem)throw eFetch||new Error("Ordem não encontrada após update.");
+
+        const{error:eInsert}=await sb.from('historico').insert({
+          empresa_id:ordem.empresa_id,
+          plate:ordem.plate,
+          model:ordem.model,
+          client:ordem.client,
+          phone:ordem.phone,
+          type:ordem.type,
+          value:ordem.value,
+          color:ordem.color,
+          forma_pagamento:ordem.forma_pagamento,
+          status_pagamento:"pago",
+          criado_por:ordem.criado_por,
+          lavado_por:ordem.lavado_por,
+          cliente_recuperado:ordem.cliente_recuperado||false,
+          completed_at:new Date().toISOString(),
+        });
+        if(eInsert)throw eInsert;
+
+        // Só remove da fila ativa após confirmar que o histórico foi salvo
+        const{error:eDelete}=await sb.from('ordens_servico').delete().eq('id',id);
+        if(eDelete)throw eDelete;
+
+      }catch(histErr){
+        console.error("ERRO CRÍTICO AO SALVAR HISTÓRICO:",histErr);
+        alert("Atenção: o veículo foi marcado como pago, mas houve um erro ao salvar no histórico. Avise o suporte e anote os dados do veículo (placa "+(id||"")+") para lançamento manual.\n\nErro: "+(histErr?.message||histErr));
+      }
+    }
+
     fetchQueue();
   };
 
@@ -2633,7 +2673,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
 /* ══════════════════════════════════════════════════════════════════════════
    HISTORY SCREEN — histórico de lavagens + lançamentos manuais de caixa
 ══════════════════════════════════════════════════════════════════════════ */
-function HistoryScreen({empresaId,embedded,isOwner}){
+function HistoryScreen({empresaId,embedded,isOwner,active}){
   const [subTab,setSubTab]=useState("historico");
   const [hist,setHist]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -2654,10 +2694,14 @@ function HistoryScreen({empresaId,embedded,isOwner}){
   const [saving,setSaving]=useState(false);
   const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
 
-  useEffect(()=>{
+  const fetchHistorico=useCallback(()=>{
     sb.from('historico').select('*, criador:profiles!criado_por(name), lavador:profiles!lavado_por(name)')
       .eq('empresa_id',empresaId).order('completed_at',{ascending:false}).limit(200)
       .then(({data})=>{setHist(data||[]);setLoading(false);});
+  },[empresaId]);
+
+  useEffect(()=>{
+    fetchHistorico();
     sb.from('profiles').select('id,name').eq('empresa_id',empresaId).eq('ativo',true)
       .then(({data})=>setFuncionarios(data||[]));
 
@@ -2665,10 +2709,17 @@ function HistoryScreen({empresaId,embedded,isOwner}){
     const ch=sb.channel('hist-'+empresaId)
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'historico',
         filter:`empresa_id=eq.${empresaId}`},
-        ({new:novo})=>setHist(prev=>[novo,...prev]))
+        ({new:novo})=>setHist(prev=>prev.some(h=>h.id===novo.id)?prev:[novo,...prev]))
       .subscribe();
     return()=>sb.removeChannel(ch);
-  },[empresaId]);
+  },[empresaId,fetchHistorico]);
+
+  // Gatilho G1-fix: como a tela permanece montada (lazy-mount), o clique na
+  // aba não desmonta/remonta o componente. Sem isso, dados ficam "congelados"
+  // até um F5. Refaz o fetch toda vez que a aba volta a ficar ativa.
+  useEffect(()=>{
+    if(active)fetchHistorico();
+  },[active,fetchHistorico]);
 
   const fetchMovs=useCallback(async()=>{
     const{data}=await sb.from('caixa_movimentos').select('id,tipo,categoria,descricao,valor,data').eq('empresa_id',empresaId)
@@ -4978,7 +5029,7 @@ function App(){
           <CRMScreen empresaId={profile.empresa_id} onBadgeUpdate={()=>setCrmBadge(0)}/>
         </div>}
         {(visited.history)&&<div style={{display:safeTab==="history"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
-          <HistoryScreen empresaId={profile.empresa_id} isOwner={isOwner}/>
+          <HistoryScreen empresaId={profile.empresa_id} isOwner={isOwner} active={safeTab==="history"}/>
         </div>}
         {(visited.config&&isOwner)&&<div style={{display:safeTab==="config"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
           <ConfigScreen empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} plano={assInfo?.plano||empresa?.plano||"trial"} onUpgrade={()=>setTab("config")} onUpdate={name=>{setEmpresa(e=>({...e,nome_fantasia:name}));showToast("✅ "+name+" atualizado!");}}/>
