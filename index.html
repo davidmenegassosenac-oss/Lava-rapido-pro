@@ -430,6 +430,17 @@ function toLocalDateStr(ds){
 // Calcula lista de sumidos — fonte única usada pelo CRMScreen e pelo badge do App
 // Evita duplicidade e garante sincronismo entre os dois
 function calcSumidos(hist,filaAtiva,histHoje,min){
+  // Set de telefones/placas que já foram marcados como recuperados em qualquer visita
+  // Isso evita que um registro mais recente sem a flag sobrescreva a detecção anterior
+  const recuperadosPhone=new Set();
+  const recuperadosPlate=new Set();
+  hist.forEach(r=>{
+    if(r.cliente_recuperado===true){
+      if(r.phone)recuperadosPhone.add(String(r.phone).replace(/\D/g,''));
+      if(r.plate)recuperadosPlate.add(String(r.plate).toUpperCase());
+    }
+  });
+
   const map={};
   hist.forEach(r=>{
     if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))
@@ -440,6 +451,11 @@ function calcSumidos(hist,filaAtiva,histHoje,min){
     .filter(r=>{
       if(r.dias<min)return false;
       if(r.cliente_recuperado===true)return false;
+      // Exclui se placa ou telefone já foram marcados como recuperados em qualquer visita
+      const fone=String(r.phone||'').replace(/\D/g,'');
+      const placa=String(r.plate||'').toUpperCase();
+      if(fone&&recuperadosPhone.has(fone))return false;
+      if(placa&&recuperadosPlate.has(placa))return false;
       if(clienteEstaAtivoHoje(r.phone,r.plate,filaAtiva,histHoje))return false;
       return true;
     })
@@ -3005,10 +3021,7 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
 
             // Tipagem defensiva: aceita true (boolean), "true" (string), 1 (number)
             const flagBanco=!!h.cliente_recuperado&&h.cliente_recuperado!=="false"&&h.cliente_recuperado!==0;
-            const noSet=recuperadosSet.has(h.id);
-            const isRecuperado=!isEstornado&&(flagBanco||noSet);
-            // DEBUG VISUAL — visível no card enquanto diagnosticamos (remover depois)
-            const _dbg=`cr=${JSON.stringify(h.cliente_recuperado)} set=${noSet} ok=${isRecuperado}`;
+            const isRecuperado=!isEstornado&&(flagBanco||recuperadosSet.has(h.id));
             return(
             <div key={h.id} className="glass-card car-enter" style={{marginBottom:10,animationDelay:`${i*.04}s`,
               opacity:isEstornado?.6:1,
@@ -3016,10 +3029,6 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
               border:isRecuperado?"1.5px solid rgba(251,191,36,.3)":isEstornado?"1px solid rgba(148,163,184,.2)":undefined,
               boxShadow:isRecuperado?"0 4px 16px rgba(251,191,36,.1)":undefined}}>
               <div style={{padding:14}}>
-                {/* DEBUG BADGE — remover após diagnóstico */}
-                <div style={{fontSize:9,color:"rgba(255,255,0,.7)",fontFamily:"monospace",marginBottom:4,wordBreak:"break-all"}}>
-                  {_dbg}
-                </div>
                 {/* Badge reconquistado */}
                 {isRecuperado&&(
                   <div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:8,
