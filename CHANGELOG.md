@@ -1,5 +1,29 @@
 # Changelog — Lava Rápido Pro
 
+## [01/07/2026] — Resiliência Offline, UI Otimista e Blindagem Final do Mobile
+
+### 🟢 Adicionado — Arquitetura Offline-First
+
+- **Fila offline via IndexedDB (`filaOffline`):** wrapper global com `init/add/getAll/remove/count`, todos com `try/catch` que degrada graciosamente se o IndexedDB estiver indisponível. Enfileira localmente qualquer transição de status que falhe por perda de rede, sem depender de bibliotecas externas.
+- **UI Otimista para transições operacionais:** ao avançar o status de uma lavagem (Aguardando → Lavando → Concluído), a tela atualiza **imediatamente**, antes da resposta do Supabase. Padrão aplicado:
+  1. Snapshot do card para rollback
+  2. Atualização otimista do estado local
+  3. Tentativa de persistência no banco
+  4. Sucesso → nada a fazer; Conflito (outro operador já mudou) → recarrega a fila; Erro de rede → enfileira offline e mantém a tela otimista (sem rollback)
+- **Sincronização em background:** `useEffect` global no `App()` com listener `online` + retry a cada 30s + tentativa no mount. Percorre a fila do IndexedDB e reenvia cada ação pendente ao Supabase, removendo da fila local após confirmação.
+- **Feedback visual de sincronização:** banner amarelo discreto no topo da Fila ("N alterações aguardando sincronização") com mini-spinner, visível apenas quando há pendências reais.
+
+### 🔒 Decisão arquitetural — Consistência financeira preservada
+
+A transição para **"Pago"** foi deliberadamente **excluída** do padrão otimista/offline. Continua 100% síncrona: o operador aguarda a confirmação do servidor antes de ver a UI mudar, e o fluxo `UPDATE` → `INSERT` em `historico` → `DELETE` da fila permanece sequencial e sem enfileiramento local. Motivo: dinheiro exige garantia de consistência acima de velocidade percebida — uma duplicação ou perda de registro de faturamento é um problema mais grave do que meio segundo de espera.
+
+### 🔴 Corrigido — Herdado da sessão anterior (30/06), confirmado estável hoje
+
+- **Tela preta ao voltar do background no mobile:** o Supabase reemite `SIGNED_IN` (não apenas `TOKEN_REFRESHED`) ao revalidar sessão após o navegador congelar a aba. Sem proteção, isso destruía `profile`/`empresa`/`assInfo` como se fosse um login novo. Corrigido com `profileRef` — uma ref que espelha o profile atual e permite ao listener de auth distinguir revalidação (mesmo `user.id`) de login genuíno, preservando o estado no primeiro caso.
+- **`ErrorBoundary` global:** qualquer erro de runtime não capturado nas camadas anteriores agora resulta em tela de erro com botão "Recarregar", nunca mais em tela preta silenciosa.
+
+---
+
 ## [30/06/2026] — Estabilização crítica: Auth Mobile, UX Defensiva e Correções de Regressão
 
 ### 🔴 Corrigido — Crítico (Produção)
