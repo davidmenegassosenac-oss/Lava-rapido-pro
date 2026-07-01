@@ -4886,17 +4886,46 @@ function App(){
   // para refazer o fetch silenciosamente, sem acoplamento direto aos filhos.
   const [refreshToken,setRefreshToken]=useState(0);
   useEffect(()=>{
-    const onVisible=()=>{
-      if(document.visibilityState==="visible"){
-        console.log("🔄 App voltou ao foreground, forçando refetch geral...");
-        // Força reconexão do canal Realtime — mata conexões zombie antes do refetch
-        try{if(sb?.realtime)sb.realtime.connect();}catch(_){}
-        // 800ms: aguarda SO reativar Wi-Fi/4G e WebSocket estabilizar
-        setTimeout(()=>setRefreshToken(t=>t+1),800);
-      }
+    let lastRefresh=Date.now();
+
+    const forcarResync=()=>{
+      const agora=Date.now();
+      // Evita refetch duplo se dois eventos dispararem em menos de 2s
+      if(agora-lastRefresh<2000)return;
+      lastRefresh=agora;
+      console.log("🔄 App voltou ao foreground, forçando refetch geral...");
+      // Força reconexão do canal Realtime — mata conexões zombie
+      try{
+        if(sb?.realtime){
+          sb.realtime.disconnect();
+          setTimeout(()=>sb.realtime.connect(),200);
+        }
+      }catch(_){}
+      // 800ms: aguarda SO reativar rede antes do refetch
+      setTimeout(()=>setRefreshToken(t=>t+1),800);
     };
+
+    // visibilitychange — Android Chrome, desktop
+    const onVisible=()=>{
+      if(document.visibilityState==="visible")forcarResync();
+    };
+
+    // pageshow com persisted=true — iOS Safari BFCache (página restaurada do cache)
+    const onPageShow=e=>{
+      if(e.persisted)forcarResync();
+    };
+
+    // focus na window — fallback para troca de aba em navegadores desktop/Android
+    const onFocus=()=>forcarResync();
+
     document.addEventListener("visibilitychange",onVisible);
-    return()=>document.removeEventListener("visibilitychange",onVisible);
+    window.addEventListener("pageshow",onPageShow);
+    window.addEventListener("focus",onFocus);
+    return()=>{
+      document.removeEventListener("visibilitychange",onVisible);
+      window.removeEventListener("pageshow",onPageShow);
+      window.removeEventListener("focus",onFocus);
+    };
   },[]);
 
   // Load profile + assinatura after session
