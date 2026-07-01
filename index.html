@@ -91,6 +91,65 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 <script type="text/babel">
 const { useState, useCallback, useEffect, useRef, useMemo } = React;
 
+/* ── Fila Offline (IndexedDB) ──────────────────────────────────────────────
+   Enfileira transições de status NÃO-financeiras quando a rede falha.
+   Transições "Pago" NUNCA entram aqui (mantêm fluxo síncrono garantido). */
+const filaOffline = {
+  db: null,
+  async init(){
+    if(this.db) return this.db;
+    return new Promise((res, rej)=>{
+      try{
+        const req = indexedDB.open("lavarapido_sync", 1);
+        req.onupgradeneeded = e=>{
+          const db = e.target.result;
+          if(!db.objectStoreNames.contains("acoes"))
+            db.createObjectStore("acoes", {keyPath:"localId", autoIncrement:true});
+        };
+        req.onsuccess = e=>{ this.db = e.target.result; res(this.db); };
+        req.onerror = ()=>rej(req.error);
+      }catch(err){ rej(err); }
+    });
+  },
+  async add(acao){
+    try{
+      const db = await this.init();
+      return new Promise((res, rej)=>{
+        const tx = db.transaction("acoes","readwrite");
+        tx.objectStore("acoes").add(acao);
+        tx.oncomplete = ()=>res(true);
+        tx.onerror = ()=>rej(tx.error);
+      });
+    }catch(err){ console.error("filaOffline.add erro:",err); return false; }
+  },
+  async getAll(){
+    try{
+      const db = await this.init();
+      return new Promise((res, rej)=>{
+        const tx = db.transaction("acoes","readonly");
+        const req = tx.objectStore("acoes").getAll();
+        req.onsuccess = ()=>res(req.result||[]);
+        req.onerror = ()=>rej(req.error);
+      });
+    }catch(err){ console.error("filaOffline.getAll erro:",err); return []; }
+  },
+  async remove(localId){
+    try{
+      const db = await this.init();
+      return new Promise((res, rej)=>{
+        const tx = db.transaction("acoes","readwrite");
+        tx.objectStore("acoes").delete(localId);
+        tx.oncomplete = ()=>res(true);
+        tx.onerror = ()=>rej(tx.error);
+      });
+    }catch(err){ console.error("filaOffline.remove erro:",err); return false; }
+  },
+  async count(){
+    const all = await this.getAll();
+    return all.length;
+  },
+};
+
 /* ── Icons ──────────────────────────────────────────────────────────────── */
 function Icon({name,size=16,color="currentColor",style={}}){
   const P={
@@ -2245,6 +2304,10 @@ function HomeScreen({empresaId,refreshToken=0}){
   const [queue,setQueue]=useState([]);
   const [loading,setLoading]=useState(true);
   const [errorMsg,setErrorMsg]=useState("");
+  const [pendingSync,setPendingSync]=useState(0);
+
+  // Ao montar, verifica quantas ações offline estão pendentes
+  useEffect(()=>{filaOffline.count().then(setPendingSync);},[]);
   const [funcionarios,setFuncionarios]=useState([]);
 
   const fetchQueue=useCallback(async()=>{
@@ -2278,66 +2341,87 @@ function HomeScreen({empresaId,refreshToken=0}){
   // Resync ao retornar de background — token incrementado pelo App via visibilitychange
   useEffect(()=>{if(refreshToken>0)fetchQueue();},[refreshToken,fetchQueue]);
 
+  // Atualiza contador de pendências offline quando o token muda (após sincronização)
+  useEffect(()=>{filaOffline.count().then(setPendingSync);},[refreshToken]);
+
   const advance=async(id,nextStatus,currentStatus,formaPagamento,lavadoPor)=>{
     setErrorMsg("");
-    const updateData={status:nextStatus,updated_at:new Date().toISOString()};
-    if(nextStatus==="Pago"&&formaPagamento)updateData.forma_pagamento=formaPagamento;
-    if(nextStatus==="Lavando"&&lavadoPor)updateData.lavado_por=lavadoPor;
-    const{error,count}=await sb.from('ordens_servico')
-      .update(updateData,{count:'exact'})
-      .eq('id',id)
-      .eq('status',currentStatus);
-    if(error){
-      setErrorMsg("Falha ao atualizar status. Verifique sua conexão e tente novamente.");
-      setTimeout(()=>setErrorMsg(""),5000);
-      return;
-    }
-    if(count===0){
-      setErrorMsg("Este veículo já foi atualizado por outro usuário. A fila foi recarregada.");
-      setTimeout(()=>setErrorMsg(""),5000);
-      fetchQueue();
-      return;
-    }
 
-    // Transição final para "Pago" → move explicitamente para o histórico.
-    // Não depende mais de trigger do banco: garante que o faturamento nunca
-    // seja perdido silenciosamente.
+    // ── "Pago": transição FINANCEIRA — mantém fluxo síncrono garantido ──
+    // Nunca usa optimistic UI nem fila offline (dinheiro exige confirmação).
     if(nextStatus==="Pago"){
+      const updateData={status:"Pago",updated_at:new Date().toISOString()};
+      if(formaPagamento)updateData.forma_pagamento=formaPagamento;
+      const{error,count}=await sb.from('ordens_servico')
+        .update(updateData,{count:'exact'}).eq('id',id).eq('status',currentStatus);
+      if(error){
+        setErrorMsg("Falha ao finalizar pagamento. Verifique sua conexão e tente novamente.");
+        setTimeout(()=>setErrorMsg(""),5000);
+        return;
+      }
+      if(count===0){
+        setErrorMsg("Este veículo já foi atualizado por outro usuário. A fila foi recarregada.");
+        setTimeout(()=>setErrorMsg(""),5000);
+        fetchQueue();
+        return;
+      }
+      // Move explicitamente para o histórico (não depende de trigger)
       try{
         const{data:ordem,error:eFetch}=await sb.from('ordens_servico')
           .select('*').eq('id',id).single();
         if(eFetch||!ordem)throw eFetch||new Error("Ordem não encontrada após update.");
-
         const{error:eInsert}=await sb.from('historico').insert({
-          empresa_id:ordem.empresa_id,
-          plate:ordem.plate,
-          model:ordem.model,
-          client:ordem.client,
-          phone:ordem.phone,
-          type:ordem.type,
-          value:ordem.value,
-          color:ordem.color,
-          forma_pagamento:ordem.forma_pagamento,
-          status_pagamento:"pago",
-          criado_por:ordem.criado_por,
-          lavado_por:ordem.lavado_por,
+          empresa_id:ordem.empresa_id,plate:ordem.plate,model:ordem.model,
+          client:ordem.client,phone:ordem.phone,type:ordem.type,value:ordem.value,
+          color:ordem.color,forma_pagamento:ordem.forma_pagamento,status_pagamento:"pago",
+          criado_por:ordem.criado_por,lavado_por:ordem.lavado_por,
           cliente_recuperado:ordem.cliente_recuperado||false,
           completed_at:new Date().toISOString(),
         });
         if(eInsert)throw eInsert;
-
-        // Só remove da fila ativa após confirmar que o histórico foi salvo
         const{error:eDelete}=await sb.from('ordens_servico').delete().eq('id',id);
         if(eDelete)throw eDelete;
-
       }catch(histErr){
         console.error("ERRO CRÍTICO AO SALVAR HISTÓRICO:",histErr);
         setErrorMsg("⚠️ Veículo pago mas houve erro ao salvar no histórico. Anote a placa e contate o suporte. Erro: "+(histErr?.message||histErr));
-        // Não limpa automaticamente — erro crítico requer atenção do operador
       }
+      fetchQueue();
+      return;
     }
 
-    fetchQueue();
+    // ── Transições operacionais (Aguardando→Lavando→Concluído): OPTIMISTIC UI ──
+    // Snapshot para rollback caso o servidor rejeite permanentemente
+    const snapshot=queue.find(v=>v.id===id);
+
+    // 1. Atualização otimista IMEDIATA na tela (antes do await)
+    setQueue(q=>q.map(v=>v.id===id
+      ?{...v,status:nextStatus,...(lavadoPor&&{lavado_por:lavadoPor})}
+      :v));
+
+    // 2. Tenta persistir
+    const updateData={status:nextStatus,updated_at:new Date().toISOString()};
+    if(lavadoPor)updateData.lavado_por=lavadoPor;
+    const{error,count}=await sb.from('ordens_servico')
+      .update(updateData,{count:'exact'}).eq('id',id).eq('status',currentStatus);
+
+    // 3a. Sucesso — a tela já está correta, nada a fazer
+    if(!error&&count>0)return;
+
+    // 3b. Conflito (outro operador mudou antes) — recarrega a verdade do banco
+    if(!error&&count===0){fetchQueue();return;}
+
+    // 3c. Erro de rede — enfileira offline e MANTÉM a tela otimista (sem rollback)
+    if(error){
+      const ok=await filaOffline.add({id,nextStatus,currentStatus,lavadoPor:lavadoPor||null,ts:Date.now()});
+      if(ok){
+        setPendingSync(n=>n+1);
+      }else{
+        // IndexedDB indisponível → rollback para não mentir ao operador
+        if(snapshot)setQueue(q=>q.map(v=>v.id===id?snapshot:v));
+        setErrorMsg("Falha ao atualizar status e não foi possível salvar offline. Tente novamente.");
+        setTimeout(()=>setErrorMsg(""),5000);
+      }
+    }
   };
 
   const del=async(id)=>{
@@ -2367,6 +2451,14 @@ function HomeScreen({empresaId,refreshToken=0}){
         background:"radial-gradient(circle,rgba(99,102,241,.12),transparent 70%)",
         filter:"blur(55px)",pointerEvents:"none",zIndex:0}}/>
       <div style={{position:"relative",zIndex:1}}>
+      {pendingSync>0&&(
+        <div style={{background:"rgba(251,191,36,.12)",border:"1px solid rgba(251,191,36,.3)",borderRadius:12,padding:"9px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+          <div className="spinner spin" style={{width:13,height:13,borderWidth:2,borderColor:"rgba(251,191,36,.3)",borderTopColor:"#fbbf24",flexShrink:0}}/>
+          <span style={{color:"#fbbf24",fontSize:12,fontWeight:600,flex:1}}>
+            {pendingSync} {pendingSync===1?"alteração aguardando":"alterações aguardando"} sincronização
+          </span>
+        </div>
+      )}
       {errorMsg&&(
         <div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"flex-start",gap:8}}>
           <Icon name="AlertTriangle" size={14} color="#f87171" style={{marginTop:1,flexShrink:0}}/>
@@ -4909,6 +5001,41 @@ function App(){
     return()=>{
       document.removeEventListener("visibilitychange",onVisible);
       window.removeEventListener("pageshow",onPageShow);
+    };
+  },[]);
+
+  // Sincronização da fila offline — envia ações enfileiradas quando a rede volta.
+  // Só transições operacionais entram na fila (nunca "Pago"/financeiro).
+  useEffect(()=>{
+    let sincronizando=false;
+    const sincronizar=async()=>{
+      if(sincronizando||!navigator.onLine)return;
+      sincronizando=true;
+      try{
+        const pendentes=await filaOffline.getAll();
+        for(const acao of pendentes){
+          const{error}=await sb.from('ordens_servico')
+            .update({status:acao.nextStatus,updated_at:new Date().toISOString(),
+              ...(acao.lavadoPor&&{lavado_por:acao.lavadoPor})})
+            .eq('id',acao.id).eq('status',acao.currentStatus);
+          // Sucesso OU conflito (count=0 já resolvido por outro): remove da fila.
+          // Erro de rede persistente: deixa na fila para a próxima tentativa.
+          if(!error)await filaOffline.remove(acao.localId);
+        }
+        // Atualiza as telas com a verdade do banco após sincronizar
+        if(pendentes.length>0)setRefreshToken(t=>t+1);
+      }catch(e){
+        console.error("Erro na sincronização offline:",e);
+      }finally{
+        sincronizando=false;
+      }
+    };
+    window.addEventListener("online",sincronizar);
+    const interval=setInterval(sincronizar,30000);
+    sincronizar(); // tenta uma vez no mount
+    return()=>{
+      window.removeEventListener("online",sincronizar);
+      clearInterval(interval);
     };
   },[]);
 
