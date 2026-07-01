@@ -4887,58 +4887,28 @@ function App(){
   // para refazer o fetch silenciosamente, sem acoplamento direto aos filhos.
   const [refreshToken,setRefreshToken]=useState(0);
   useEffect(()=>{
-    let lastRefresh=Date.now();
+    let lastRefresh=0;
 
-    const forcarResync=async()=>{
+    const forcarResync=()=>{
       const agora=Date.now();
-      if(agora-lastRefresh<2000)return;
+      if(agora-lastRefresh<5000)return; // mínimo 5s entre resyncs
       lastRefresh=agora;
-      console.log("🔄 App voltou ao foreground — revalidando sessão...");
-
-      // 1. Revalida sessão ANTES de qualquer refetch
-      // getSession() renova o JWT automaticamente se estiver expirado
-      try{
-        const{data:{session:s}}=await sb.auth.getSession();
-        // Falha de rede ou sessão temporariamente indisponível: sai silenciosamente
-        // SEM signOut — não punimos o usuário por instabilidade passageira de rede
-        if(!s){
-          console.warn("⚠️ Sessão não confirmada ao voltar do background — aguardando rede");
-          return;
-        }
-      }catch(e){
-        console.error("Erro ao verificar sessão no foreground:",e);
-        return; // sai silenciosamente, sem deslogar
-      }
-      // 3. Reconecta Realtime e dispara refetch
-      try{
-        if(sb?.realtime){
-          sb.realtime.disconnect();
-          setTimeout(()=>sb.realtime.connect(),200);
-        }
-      }catch(_){}
-      setTimeout(()=>setRefreshToken(t=>t+1),800);
+      console.log("🔄 App voltou ao foreground — disparando refetch");
+      // Não toca no Realtime nem na sessão — o Supabase reconecta sozinho
+      setTimeout(()=>setRefreshToken(t=>t+1),500);
     };
 
-    // visibilitychange — Android Chrome, desktop
-    const onVisible=()=>{
-      if(document.visibilityState==="visible")forcarResync();
-    };
-
-    // pageshow com persisted=true — iOS Safari BFCache (página restaurada do cache)
-    const onPageShow=e=>{
-      if(e.persisted)forcarResync();
-    };
-
-    // focus na window — fallback para troca de aba em navegadores desktop/Android
-    const onFocus=()=>forcarResync();
+    // visibilitychange — Android Chrome + desktop
+    const onVisible=()=>{if(document.visibilityState==="visible")forcarResync();};
+    // pageshow persisted — iOS Safari BFCache
+    const onPageShow=e=>{if(e.persisted)forcarResync();};
+    // NÃO usa window.focus — dispara demais no mobile e causa instabilidade
 
     document.addEventListener("visibilitychange",onVisible);
     window.addEventListener("pageshow",onPageShow);
-    window.addEventListener("focus",onFocus);
     return()=>{
       document.removeEventListener("visibilitychange",onVisible);
       window.removeEventListener("pageshow",onPageShow);
-      window.removeEventListener("focus",onFocus);
     };
   },[]);
 
