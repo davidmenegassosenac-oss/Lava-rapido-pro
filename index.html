@@ -4843,6 +4843,9 @@ function App(){
   // Ref que sinaliza "login em andamento" — bloqueia o SIGNED_OUT temporário
   // do Supabase de acionar setInitializing(false) no meio do fluxo de login
   const isLoggingIn=useRef(false);
+  // profileRef espelha o profile atual — o closure do listener captura o valor
+  // do primeiro render, então precisamos de uma ref para leitura sempre atualizada
+  const profileRef=useRef(null);
 
   // Auth listener — ÚNICA fonte de verdade para a sessão
   useEffect(()=>{
@@ -4862,7 +4865,14 @@ function App(){
         return;
       }
       if(s){
-        // SIGNED_IN genuíno — reseta estados para carregar dados da nova sessão
+        // Wake-up/revalidação: mesmo usuário com profile já carregado.
+        // NÃO destrói o estado — apenas atualiza o token silenciosamente.
+        // Isso evita a tela preta ao voltar do background no mobile.
+        if(profileRef.current&&profileRef.current.id===s.user.id){
+          setSession(s);
+          return;
+        }
+        // SIGNED_IN genuíno (usuário diferente ou primeiro login) — reseta estados
         isLoggingIn.current=false;
         setVisited({home:true});
         setProfile(null);setEmpresa(null);setAssInfo(null);
@@ -4879,73 +4889,21 @@ function App(){
   },[]);
 
   // Ressincronização automática ao retornar de background (mobile)
-  // O Supabase Realtime congela quando o browser joga o app em segundo plano.
-  // Ao voltar, incrementamos o token — cada tela usa isso como dep de useEffect
-  // para refazer o fetch silenciosamente, sem acoplamento direto aos filhos.
   const [refreshToken,setRefreshToken]=useState(0);
 
-  // ── CAIXA PRETA DE DEBUG (remover após diagnóstico) ─────────────────────
-  const [dbgLogs,setDbgLogs]=useState(["▶ Debug iniciado"]);
-  const dbgLog=msg=>{
-    const ts=new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-    setDbgLogs(prev=>[`[${ts}] ${msg}`,...prev].slice(0,12));
-  };
+  // Mantém profileRef sincronizado com o profile atual para leitura no listener
+  useEffect(()=>{profileRef.current=profile;},[profile]);
 
-  useEffect(()=>{
-    // Captura erros de runtime globais
-    window.onerror=(msg,src,line,col,err)=>{
-      dbgLog(`❌ ERRO: ${msg} (L${line})`);
-      return false;
-    };
-    window.onunhandledrejection=e=>{
-      dbgLog(`❌ PROMISE: ${e.reason?.message||e.reason}`);
-    };
-
-    // Monitora visibilitychange
-    const onVis=()=>{
-      dbgLog(`👁 visibilidade: ${document.visibilityState}`);
-    };
-    document.addEventListener("visibilitychange",onVis);
-
-    // Monitora status do Realtime a cada 3s
-    const rtInterval=setInterval(()=>{
-      try{
-        const estado=sb?.realtime?.connectionState?.()
-          ||sb?.realtime?.conn?.transport?.ws?.readyState;
-        const mapa={0:"CONNECTING",1:"OPEN",2:"CLOSING",3:"CLOSED"};
-        dbgLog(`🔌 Realtime: ${mapa[estado]||estado||"n/a"}`);
-      }catch(e){dbgLog(`🔌 Realtime: erro ao ler (${e.message})`);}
-    },3000);
-
-    return()=>{
-      document.removeEventListener("visibilitychange",onVis);
-      clearInterval(rtInterval);
-      window.onerror=null;
-      window.onunhandledrejection=null;
-    };
-  },[]);
   useEffect(()=>{
     let lastRefresh=0;
-
     const forcarResync=()=>{
       const agora=Date.now();
       if(agora-lastRefresh<5000)return;
       lastRefresh=agora;
-      console.log("🔄 App voltou ao foreground — disparando refetch");
-      dbgLog("🔄 foreground detectado");
-      // Loga estado da sessão no momento do retorno
-      sb.auth.getSession().then(({data:{session:s}})=>{
-        dbgLog(`🔑 User no retorno: ${s?.user?.id?.slice(0,8)||"null"}`);
-      }).catch(e=>dbgLog(`🔑 getSession erro: ${e.message}`));
       setTimeout(()=>setRefreshToken(t=>t+1),500);
     };
-
-    // visibilitychange — Android Chrome + desktop
     const onVisible=()=>{if(document.visibilityState==="visible")forcarResync();};
-    // pageshow persisted — iOS Safari BFCache
     const onPageShow=e=>{if(e.persisted)forcarResync();};
-    // NÃO usa window.focus — dispara demais no mobile e causa instabilidade
-
     document.addEventListener("visibilitychange",onVisible);
     window.addEventListener("pageshow",onPageShow);
     return()=>{
@@ -4957,6 +4915,11 @@ function App(){
   // Load profile + assinatura after session
   useEffect(()=>{
     if(!session)return;
+    // Wake-up: já temos profile válido do mesmo usuário → não reinicializa.
+    // Evita o spinner de loading e o refetch desnecessário ao voltar do background.
+    if(profileRef.current&&profileRef.current.id===session.user.id&&profileRef.current.empresa_id){
+      return;
+    }
     setInitializing(true);
     (async()=>{
       try{
@@ -5313,7 +5276,38 @@ function App(){
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+// ErrorBoundary — rede de segurança: se algo quebrar em runtime (ex: wake-up),
+// mostra o erro na tela em vez de deixar a tela preta, com botão de recarregar.
+class ErrorBoundary extends React.Component{
+  constructor(props){super(props);this.state={erro:null};}
+  static getDerivedStateFromError(erro){return{erro};}
+  componentDidCatch(erro,info){console.error("ErrorBoundary capturou:",erro,info);}
+  render(){
+    if(this.state.erro){
+      return(
+        <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:24,background:"#080f1e",color:"#e0f2fe"}}>
+          <div style={{textAlign:"center",maxWidth:340}}>
+            <div style={{fontSize:40,marginBottom:12}}>⚠️</div>
+            <div style={{fontWeight:800,fontSize:18,marginBottom:8}}>Algo deu errado</div>
+            <div style={{fontSize:13,color:"rgba(186,230,253,.5)",lineHeight:1.5,marginBottom:20}}>
+              O aplicativo encontrou um erro inesperado. Toque abaixo para recarregar.
+            </div>
+            <div style={{fontSize:11,color:"rgba(248,113,113,.6)",fontFamily:"monospace",marginBottom:20,wordBreak:"break-word"}}>
+              {String(this.state.erro?.message||this.state.erro)}
+            </div>
+            <button onClick={()=>window.location.reload()}
+              style={{padding:"12px 28px",borderRadius:14,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",border:"none",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer"}}>
+              Recarregar
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<ErrorBoundary><App/></ErrorBoundary>);
 if("serviceWorker"in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}
 </script>
 </body>
