@@ -2505,6 +2505,36 @@ function NewWashScreen({empresaId,userId,onSuccess}){
     setErrors(e);return Object.keys(e).length===0;
   };
 
+  // Máscara de placa: uppercase + hífen automático (padrão antigo ABC-1234)
+  // Camada puramente visual — o ref continua retornando o valor do input normalmente
+  const maskPlate=e=>{
+    let v=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if(v.length>3&&/^[A-Z]{3}\d/.test(v)){
+      // Padrão antigo: insere hífen após as 3 letras
+      v=v.slice(0,3)+"-"+v.slice(3,7);
+    }else{
+      // Mercosul ou inválido: sem hífen, limita a 7 caracteres
+      v=v.slice(0,7);
+    }
+    e.target.value=v.slice(0,8);
+  };
+
+  // Máscara de telefone: formata progressivamente como (49) 99999-9999
+  // Camada puramente visual — getVal("phone").replace(/\D/g,"") extrai só os dígitos
+  const maskPhone=e=>{
+    let v=e.target.value.replace(/\D/g,"").slice(0,11);
+    if(v.length>10){
+      v=v.replace(/(\d{2})(\d{5})(\d{4})/,"($1) $2-$3");
+    }else if(v.length>6){
+      v=v.replace(/(\d{2})(\d{4,5})(\d{0,4})/,"($1) $2-$3").replace(/-$/,"");
+    }else if(v.length>2){
+      v=v.replace(/(\d{2})(\d+)/,"($1) $2");
+    }else if(v.length>0){
+      v="("+v;
+    }
+    e.target.value=v;
+  };
+
   const submit=async()=>{
     // PROBLEMA 4 — invalida qualquer verificação pendente antes de submeter
     verificarRef.current=Number.MAX_SAFE_INTEGER;
