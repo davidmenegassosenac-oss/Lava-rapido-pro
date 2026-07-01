@@ -70,6 +70,7 @@ input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif;font-size
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .fade-in{animation:fadeIn .4s ease forwards}
 </style>
+<script src="https://js.sentry-cdn.com/bbd3d32f511dcd29e2a7b9f274bd5da5.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -86,6 +87,16 @@ input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif;font-size
 const SUPABASE_URL  = 'https://ikahodmuchwitxfvlaop.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrYWhvZG11Y2h3aXR4ZnZsYW9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NDkzMTcsImV4cCI6MjA5NjUyNTMxN30.qRBN7lFQAGeN1phNneqY368dhAMllnAtQgVCb-piDds';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ── Sentry — observabilidade e captura de erros em produção ───────────────
+if(typeof Sentry!=="undefined"&&Sentry.onLoad){
+  Sentry.onLoad(function(){
+    Sentry.init({
+      dsn: "https://bbd3d32f511dcd29e2a7b9f274bd5da5@o4511660768886784.ingest.us.sentry.io/4511660835143680",
+      tracesSampleRate: 1.0
+    });
+  });
+}
 </script>
 
 <script type="text/babel">
@@ -5408,23 +5419,29 @@ function App(){
 class ErrorBoundary extends React.Component{
   constructor(props){super(props);this.state={erro:null};}
   static getDerivedStateFromError(erro){return{erro};}
-  componentDidCatch(erro,info){console.error("ErrorBoundary capturou:",erro,info);}
+  componentDidCatch(erro,info){
+    console.error("ErrorBoundary capturou:",erro,info);
+    // Envia o erro ao Sentry para monitoramento silencioso em produção
+    if(typeof Sentry!=="undefined"&&Sentry.captureException){
+      try{Sentry.captureException(erro,{extra:info});}catch(_){}
+    }
+  }
   render(){
     if(this.state.erro){
       return(
         <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:24,background:"#080f1e",color:"#e0f2fe"}}>
-          <div style={{textAlign:"center",maxWidth:340}}>
-            <div style={{fontSize:40,marginBottom:12}}>⚠️</div>
-            <div style={{fontWeight:800,fontSize:18,marginBottom:8}}>Algo deu errado</div>
-            <div style={{fontSize:13,color:"rgba(186,230,253,.5)",lineHeight:1.5,marginBottom:20}}>
-              O aplicativo encontrou um erro inesperado. Toque abaixo para recarregar.
+          <div style={{textAlign:"center",maxWidth:360}}>
+            <div style={{fontSize:44,marginBottom:14}}>⚠️</div>
+            <div style={{fontWeight:800,fontSize:18,marginBottom:10}}>Ocorreu um erro inesperado</div>
+            <div style={{fontSize:14,color:"rgba(186,230,253,.55)",lineHeight:1.6,marginBottom:24}}>
+              Ocorreu um erro inesperado na interface. O suporte já foi notificado automaticamente. Por favor, tente recarregar a página.
             </div>
-            <div style={{fontSize:11,color:"rgba(248,113,113,.6)",fontFamily:"monospace",marginBottom:20,wordBreak:"break-word"}}>
+            <div style={{fontSize:11,color:"rgba(248,113,113,.55)",fontFamily:"monospace",marginBottom:22,wordBreak:"break-word"}}>
               {String(this.state.erro?.message||this.state.erro)}
             </div>
             <button onClick={()=>window.location.reload()}
-              style={{padding:"12px 28px",borderRadius:14,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",border:"none",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer"}}>
-              Recarregar
+              style={{padding:"13px 30px",borderRadius:14,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",border:"none",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",boxShadow:"0 6px 20px rgba(14,165,233,.35)"}}>
+              Recarregar página
             </button>
           </div>
         </div>
