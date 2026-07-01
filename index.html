@@ -4888,8 +4888,11 @@ function App(){
   useEffect(()=>{
     const onVisible=()=>{
       if(document.visibilityState==="visible"){
-        // 300ms: aguarda WebSocket do Supabase reconectar antes de refetchar
-        setTimeout(()=>setRefreshToken(t=>t+1),300);
+        console.log("🔄 App voltou ao foreground, forçando refetch geral...");
+        // Força reconexão do canal Realtime — mata conexões zombie antes do refetch
+        try{if(sb?.realtime)sb.realtime.connect();}catch(_){}
+        // 800ms: aguarda SO reativar Wi-Fi/4G e WebSocket estabilizar
+        setTimeout(()=>setRefreshToken(t=>t+1),800);
       }
     };
     document.addEventListener("visibilitychange",onVisible);
