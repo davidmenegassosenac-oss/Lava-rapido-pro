@@ -3845,9 +3845,6 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
     return()=>sb.removeChannel(ch);
   },[fetchTudo]);
 
-  // Resync ao retornar de background
-  useEffect(()=>{if(refreshToken>0)carregar();},[refreshToken]);
-
   // Faturamento por semana — todas as pílulas usam a mesma lógica agora
   useEffect(()=>{
     const semanaCorrente=getSemanaAtual();
@@ -5312,15 +5309,6 @@ function App(){
           </div>
         </div>
       )}
-    {/* ── CAIXA PRETA DE DEBUG — remover após diagnóstico ── */}
-    <div style={{position:"fixed",top:0,left:0,right:0,zIndex:99999,
-      background:"rgba(0,0,0,.88)",borderBottom:"1px solid #0f0",
-      padding:"4px 8px",maxHeight:140,overflowY:"auto",pointerEvents:"none"}}>
-      {dbgLogs.map((l,i)=>(
-        <div key={i} style={{fontSize:9,fontFamily:"monospace",color:"#0f0",lineHeight:1.4,
-          opacity:Math.max(0.2,1-i*0.08)}}>{l}</div>
-      ))}
-    </div>
     </div>
   );
 }
