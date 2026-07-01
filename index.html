@@ -2241,7 +2241,7 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
     </div>
   );
 }
-function HomeScreen({empresaId}){
+function HomeScreen({empresaId,refreshToken=0}){
   const [queue,setQueue]=useState([]);
   const [loading,setLoading]=useState(true);
   const [errorMsg,setErrorMsg]=useState("");
@@ -2274,6 +2274,9 @@ function HomeScreen({empresaId}){
       .subscribe();
     return()=>sb.removeChannel(ch);
   },[fetchQueue,empresaId]);
+
+  // Resync ao retornar de background — token incrementado pelo App via visibilitychange
+  useEffect(()=>{if(refreshToken>0)fetchQueue();},[refreshToken,fetchQueue]);
 
   const advance=async(id,nextStatus,currentStatus,formaPagamento,lavadoPor)=>{
     setErrorMsg("");
@@ -2753,7 +2756,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
 /* ══════════════════════════════════════════════════════════════════════════
    HISTORY SCREEN — histórico de lavagens + lançamentos manuais de caixa
 ══════════════════════════════════════════════════════════════════════════ */
-function HistoryScreen({empresaId,embedded,isOwner,active}){
+function HistoryScreen({empresaId,embedded,isOwner,active,refreshToken=0}){
   const [subTab,setSubTab]=useState("historico");
   const [hist,setHist]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -2816,8 +2819,8 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
   // aba não desmonta/remonta o componente. Sem isso, dados ficam "congelados"
   // até um F5. Refaz o fetch toda vez que a aba volta a ficar ativa.
   useEffect(()=>{
-    if(active)fetchHistorico();
-  },[active,fetchHistorico]);
+    if(active||refreshToken>0)fetchHistorico();
+  },[active,fetchHistorico,refreshToken]);
 
   const fetchMovs=useCallback(async()=>{
     const{data}=await sb.from('caixa_movimentos').select('id,tipo,categoria,descricao,valor,data').eq('empresa_id',empresaId)
@@ -3341,7 +3344,7 @@ function HistoryScreen({empresaId,embedded,isOwner,active}){
 /* ══════════════════════════════════════════════════════════════════════════
    CRM SCREEN
 ══════════════════════════════════════════════════════════════════════════ */
-function CRMScreen({empresaId,onBadgeUpdate}){
+function CRMScreen({empresaId,onBadgeUpdate,refreshToken=0}){
   const [min,setMin]=useState(30);
   const [hist,setHist]=useState([]);
   const [filaAtiva,setFilaAtiva]=useState([]);
@@ -3841,6 +3844,9 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
 
     return()=>sb.removeChannel(ch);
   },[fetchTudo]);
+
+  // Resync ao retornar de background
+  useEffect(()=>{if(refreshToken>0)carregar();},[refreshToken]);
 
   // Faturamento por semana — todas as pílulas usam a mesma lógica agora
   useEffect(()=>{
@@ -4874,6 +4880,22 @@ function App(){
     return()=>subscription.unsubscribe();
   },[]);
 
+  // Ressincronização automática ao retornar de background (mobile)
+  // O Supabase Realtime congela quando o browser joga o app em segundo plano.
+  // Ao voltar, incrementamos o token — cada tela usa isso como dep de useEffect
+  // para refazer o fetch silenciosamente, sem acoplamento direto aos filhos.
+  const [refreshToken,setRefreshToken]=useState(0);
+  useEffect(()=>{
+    const onVisible=()=>{
+      if(document.visibilityState==="visible"){
+        // 300ms: aguarda WebSocket do Supabase reconectar antes de refetchar
+        setTimeout(()=>setRefreshToken(t=>t+1),300);
+      }
+    };
+    document.addEventListener("visibilitychange",onVisible);
+    return()=>document.removeEventListener("visibilitychange",onVisible);
+  },[]);
+
   // Load profile + assinatura after session
   useEffect(()=>{
     if(!session)return;
@@ -5149,16 +5171,16 @@ function App(){
           Isso elimina ~160 queries desnecessárias por dia de operação. */}
       <div style={{flex:"1 1 auto",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column",position:"relative",zIndex:5}}>
         {(visited.home)&&<div style={{display:safeTab==="home"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
-          <HomeScreen empresaId={profile.empresa_id}/>
+          <HomeScreen empresaId={profile.empresa_id} refreshToken={refreshToken}/>
         </div>}
         {(visited.new)&&<div style={{display:safeTab==="new"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
           <NewWashScreen empresaId={profile.empresa_id} userId={profile.id} onSuccess={()=>{setTab("home");showToast("✅ Veículo adicionado à fila!");}}/>
         </div>}
         {(visited.crm&&isOwner)&&<div style={{display:safeTab==="crm"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
-          <CRMScreen empresaId={profile.empresa_id} onBadgeUpdate={()=>setCrmBadge(0)}/>
+          <CRMScreen empresaId={profile.empresa_id} onBadgeUpdate={()=>setCrmBadge(0)} refreshToken={refreshToken}/>
         </div>}
         {(visited.history)&&<div style={{display:safeTab==="history"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
-          <HistoryScreen empresaId={profile.empresa_id} isOwner={isOwner} active={safeTab==="history"}/>
+          <HistoryScreen empresaId={profile.empresa_id} isOwner={isOwner} active={safeTab==="history"} refreshToken={refreshToken}/>
         </div>}
         {(visited.config&&isOwner)&&<div style={{display:safeTab==="config"?"flex":"none",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden"}}>
           <ConfigScreen empresaId={profile.empresa_id} currentUser={profile} isOwner={isOwner} plano={assInfo?.plano||empresa?.plano||"trial"} onUpgrade={()=>setTab("config")} onUpdate={name=>{setEmpresa(e=>({...e,nome_fantasia:name}));showToast("✅ "+name+" atualizado!");}}/>
