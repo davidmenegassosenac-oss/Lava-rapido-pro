@@ -4886,15 +4886,60 @@ function App(){
   // Ao voltar, incrementamos o token — cada tela usa isso como dep de useEffect
   // para refazer o fetch silenciosamente, sem acoplamento direto aos filhos.
   const [refreshToken,setRefreshToken]=useState(0);
+
+  // ── CAIXA PRETA DE DEBUG (remover após diagnóstico) ─────────────────────
+  const [dbgLogs,setDbgLogs]=useState(["▶ Debug iniciado"]);
+  const dbgLog=msg=>{
+    const ts=new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    setDbgLogs(prev=>[`[${ts}] ${msg}`,...prev].slice(0,12));
+  };
+
+  useEffect(()=>{
+    // Captura erros de runtime globais
+    window.onerror=(msg,src,line,col,err)=>{
+      dbgLog(`❌ ERRO: ${msg} (L${line})`);
+      return false;
+    };
+    window.onunhandledrejection=e=>{
+      dbgLog(`❌ PROMISE: ${e.reason?.message||e.reason}`);
+    };
+
+    // Monitora visibilitychange
+    const onVis=()=>{
+      dbgLog(`👁 visibilidade: ${document.visibilityState}`);
+    };
+    document.addEventListener("visibilitychange",onVis);
+
+    // Monitora status do Realtime a cada 3s
+    const rtInterval=setInterval(()=>{
+      try{
+        const estado=sb?.realtime?.connectionState?.()
+          ||sb?.realtime?.conn?.transport?.ws?.readyState;
+        const mapa={0:"CONNECTING",1:"OPEN",2:"CLOSING",3:"CLOSED"};
+        dbgLog(`🔌 Realtime: ${mapa[estado]||estado||"n/a"}`);
+      }catch(e){dbgLog(`🔌 Realtime: erro ao ler (${e.message})`);}
+    },3000);
+
+    return()=>{
+      document.removeEventListener("visibilitychange",onVis);
+      clearInterval(rtInterval);
+      window.onerror=null;
+      window.onunhandledrejection=null;
+    };
+  },[]);
   useEffect(()=>{
     let lastRefresh=0;
 
     const forcarResync=()=>{
       const agora=Date.now();
-      if(agora-lastRefresh<5000)return; // mínimo 5s entre resyncs
+      if(agora-lastRefresh<5000)return;
       lastRefresh=agora;
       console.log("🔄 App voltou ao foreground — disparando refetch");
-      // Não toca no Realtime nem na sessão — o Supabase reconecta sozinho
+      dbgLog("🔄 foreground detectado");
+      // Loga estado da sessão no momento do retorno
+      sb.auth.getSession().then(({data:{session:s}})=>{
+        dbgLog(`🔑 User no retorno: ${s?.user?.id?.slice(0,8)||"null"}`);
+      }).catch(e=>dbgLog(`🔑 getSession erro: ${e.message}`));
       setTimeout(()=>setRefreshToken(t=>t+1),500);
     };
 
@@ -5267,6 +5312,15 @@ function App(){
           </div>
         </div>
       )}
+    {/* ── CAIXA PRETA DE DEBUG — remover após diagnóstico ── */}
+    <div style={{position:"fixed",top:0,left:0,right:0,zIndex:99999,
+      background:"rgba(0,0,0,.88)",borderBottom:"1px solid #0f0",
+      padding:"4px 8px",maxHeight:140,overflowY:"auto",pointerEvents:"none"}}>
+      {dbgLogs.map((l,i)=>(
+        <div key={i} style={{fontSize:9,fontFamily:"monospace",color:"#0f0",lineHeight:1.4,
+          opacity:Math.max(0.2,1-i*0.08)}}>{l}</div>
+      ))}
+    </div>
     </div>
   );
 }
