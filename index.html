@@ -4888,20 +4888,38 @@ function App(){
   useEffect(()=>{
     let lastRefresh=Date.now();
 
-    const forcarResync=()=>{
+    const forcarResync=async()=>{
       const agora=Date.now();
-      // Evita refetch duplo se dois eventos dispararem em menos de 2s
       if(agora-lastRefresh<2000)return;
       lastRefresh=agora;
-      console.log("🔄 App voltou ao foreground, forçando refetch geral...");
-      // Força reconexão do canal Realtime — mata conexões zombie
+      console.log("🔄 App voltou ao foreground — revalidando sessão...");
+
+      // 1. Revalida sessão ANTES de qualquer refetch
+      // getSession() renova o JWT automaticamente se estiver expirado
+      let sessaoAtiva=null;
+      try{
+        const{data:{session:s}}=await sb.auth.getSession();
+        sessaoAtiva=s;
+      }catch(e){
+        console.error("Erro ao revalidar sessão no foreground:",e);
+      }
+
+      // 2. Sem sessão ativa → força re-login (token caiu durante o freeze)
+      if(!sessaoAtiva){
+        console.warn("⚠️ Sessão expirada no background — deslogando para relogin");
+        await sb.auth.signOut();
+        // onAuthStateChange já vai capturar e mostrar a tela de login
+        return;
+      }
+
+      console.log("✅ Sessão válida — disparando refetch geral");
+      // 3. Reconecta Realtime e dispara refetch
       try{
         if(sb?.realtime){
           sb.realtime.disconnect();
           setTimeout(()=>sb.realtime.connect(),200);
         }
       }catch(_){}
-      // 800ms: aguarda SO reativar rede antes do refetch
       setTimeout(()=>setRefreshToken(t=>t+1),800);
     };
 
