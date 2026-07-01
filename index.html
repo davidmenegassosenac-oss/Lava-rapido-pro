@@ -2329,7 +2329,8 @@ function HomeScreen({empresaId}){
 
       }catch(histErr){
         console.error("ERRO CRÍTICO AO SALVAR HISTÓRICO:",histErr);
-        alert("Atenção: o veículo foi marcado como pago, mas houve um erro ao salvar no histórico. Avise o suporte e anote os dados do veículo (placa "+(id||"")+") para lançamento manual.\n\nErro: "+(histErr?.message||histErr));
+        setErrorMsg("⚠️ Veículo pago mas houve erro ao salvar no histórico. Anote a placa e contate o suporte. Erro: "+(histErr?.message||histErr));
+        // Não limpa automaticamente — erro crítico requer atenção do operador
       }
     }
 
@@ -2384,11 +2385,11 @@ function HomeScreen({empresaId}){
       {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>
       :queue.length===0?(
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 0",textAlign:"center"}}>
-          <div style={{width:68,height:68,borderRadius:22,background:"rgba(14,165,233,.1)",border:"1px solid rgba(14,165,233,.2)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
-            <Icon name="Droplets" size={30} color="rgba(56,189,248,.5)"/>
+          <div style={{width:68,height:68,borderRadius:22,background:"rgba(14,165,233,.08)",border:"1px solid rgba(14,165,233,.15)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16,boxShadow:"0 0 32px rgba(14,165,233,.08)"}}>
+            <Icon name="Car" size={30} color="rgba(56,189,248,.4)"/>
           </div>
-          <div style={{color:"rgba(186,230,253,.7)",fontWeight:700,fontSize:16}}>Fila vazia</div>
-          <div style={{color:"rgba(186,230,253,.4)",fontSize:13,marginTop:6}}>Adicione um veículo na aba Nova Lavagem</div>
+          <div style={{color:"rgba(186,230,253,.7)",fontWeight:700,fontSize:16,marginBottom:6}}>Fila vazia</div>
+          <div style={{color:"rgba(186,230,253,.35)",fontSize:13,lineHeight:1.5}}>Nenhum veículo aguardando no momento.<br/>Adicione um na aba <span style={{color:"#38bdf8",fontWeight:700}}>Nova Lavagem</span>.</div>
         </div>
       ):(queue.map((v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} onUpdate={(id,patch)=>setQueue(q=>q.map(x=>x.id===id?{...x,...patch}:x))} funcionarios={funcionarios} selecionarLavador={false} idx={i}/>))}
       </div>
@@ -2489,10 +2490,17 @@ function NewWashScreen({empresaId,userId,onSuccess}){
 
   const validate=()=>{
     const e={};
-    if(!getVal("plate").trim())e.plate="Obrigatório";
+    const plateVal=getVal("plate").trim().replace(/[^A-Z0-9]/gi,"").toUpperCase();
+    if(!plateVal){
+      e.plate="Obrigatório";
+    }else{
+      // Padrão antigo: ABC1234 | Mercosul: ABC1D23
+      const valida=/^[A-Z]{3}\d{4}$/.test(plateVal)||/^[A-Z]{3}\d[A-Z]\d{2}$/.test(plateVal);
+      if(!valida)e.plate="Placa inválida (ex: ABC1234 ou ABC1D23)";
+    }
     if(!getVal("model").trim())e.model="Obrigatório";
     if(!getVal("client").trim())e.client="Obrigatório";
-    if(!getVal("phone").trim())e.phone="Obrigatório";
+    if(getVal("phone").replace(/\D/g,"").length<8)e.phone="Informe um telefone válido";
     if(selectedSvcs.length===0)e.svc="Selecione pelo menos um serviço";
     setErrors(e);return Object.keys(e).length===0;
   };
@@ -2544,9 +2552,10 @@ function NewWashScreen({empresaId,userId,onSuccess}){
       <div style={{marginBottom:14}}>
         <label className="lbl">Placa</label>
         <input ref={refs.plate} className="glass-input" type="text" defaultValue="" placeholder="ABC-1234"
-          onBlur={verificarClienteRecuperado}
-          style={{borderColor:errors.plate?"rgba(239,68,68,.5)":undefined}}
-          autoCapitalize="characters"/>
+          onChange={maskPlate}
+          onBlur={e=>{maskPlate(e);verificarClienteRecuperado();}}
+          style={{borderColor:errors.plate?"rgba(239,68,68,.5)":undefined,textTransform:"uppercase"}}
+          autoCapitalize="characters" autoCorrect="off" spellCheck="false"/>
         {errors.plate&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.plate}</div>}
       </div>
       {/* Modelo */}
@@ -2566,8 +2575,9 @@ function NewWashScreen({empresaId,userId,onSuccess}){
       {/* Telefone */}
       <div style={{marginBottom:14}}>
         <label className="lbl">Telefone (com DDD)</label>
-        <input ref={refs.phone} className="glass-input" type="tel" defaultValue="" placeholder="5549991234567"
-          onBlur={verificarClienteRecuperado}
+        <input ref={refs.phone} className="glass-input" type="tel" defaultValue="" placeholder="(49) 99999-9999"
+          onChange={maskPhone}
+          onBlur={e=>{maskPhone(e);verificarClienteRecuperado();}}
           style={{borderColor:errors.phone?"rgba(239,68,68,.5)":undefined}}/>
         {errors.phone&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.phone}</div>}
       </div>
