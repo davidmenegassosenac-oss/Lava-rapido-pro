@@ -77,6 +77,7 @@ input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif;font-size
 
 <!-- Supabase CDN -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <!-- React -->
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -172,6 +173,7 @@ function Icon({name,size=16,color="currentColor",style={}}){
     Home:`<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`,
     CheckCircle:`<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>`,
     Droplets:`<path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/>`,
+    Camera:`<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>`,
     MessageCircle:`<path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/>`,
     Search:`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
     ChevronDown:`<polyline points="6 9 12 15 18 9"/>`,
@@ -2506,6 +2508,163 @@ function HomeScreen({empresaId,refreshToken=0}){
 /* ══════════════════════════════════════════════════════════════════════════
    NEW WASH SCREEN
 ══════════════════════════════════════════════════════════════════════════ */
+/* ── PlateScanner — OCR de placas via câmera (Tesseract.js) ────────────────
+   Modal fullscreen com câmera traseira. Captura frames em intervalo throttled
+   (não rAF: cada recognize leva 1-3s; rAF empilharia centenas de jobs).
+   Ao detectar placa válida (Antigo ABC1234 ou Mercosul ABC1D23), chama
+   onDetect(placa) e encerra o stream. Limpeza garantida no unmount. */
+function PlateScanner({onDetect,onClose}){
+  const videoRef=useRef(null);
+  const canvasRef=useRef(null);
+  const streamRef=useRef(null);
+  const scanningRef=useRef(false);   // evita recognize concorrente
+  const ativoRef=useRef(true);       // false após unmount/close
+  const [status,setStatus]=useState("iniciando"); // iniciando|escaneando|erro
+  const [erroMsg,setErroMsg]=useState("");
+
+  // Regex: padrão antigo (ABC1234) e Mercosul (ABC1D23)
+  const PLACA_RE=/([A-Z]{3})\s*-?\s*(\d{4})(?!\w)|([A-Z]{3})\s*(\d)([A-Z])(\d{2})(?!\w)/;
+
+  const encerrarStream=()=>{
+    if(streamRef.current){
+      streamRef.current.getTracks().forEach(t=>t.stop());
+      streamRef.current=null;
+    }
+  };
+
+  const fechar=()=>{
+    ativoRef.current=false;
+    encerrarStream();
+    onClose();
+  };
+
+  useEffect(()=>{
+    let intervalo=null;
+
+    (async()=>{
+      // 1. Abre a câmera traseira
+      try{
+        const stream=await navigator.mediaDevices.getUserMedia({
+          video:{facingMode:"environment",width:{ideal:1280},height:{ideal:720}},
+          audio:false,
+        });
+        if(!ativoRef.current){stream.getTracks().forEach(t=>t.stop());return;}
+        streamRef.current=stream;
+        if(videoRef.current){
+          videoRef.current.srcObject=stream;
+          await videoRef.current.play();
+        }
+        setStatus("escaneando");
+      }catch(e){
+        console.error("Erro ao abrir câmera:",e);
+        setErroMsg(e.name==="NotAllowedError"
+          ?"Permissão de câmera negada. Habilite nas configurações do navegador."
+          :"Não foi possível acessar a câmera deste dispositivo.");
+        setStatus("erro");
+        return;
+      }
+
+      // 2. Loop de captura throttled — um frame a cada 1,2s
+      intervalo=setInterval(async()=>{
+        if(scanningRef.current||!ativoRef.current)return;
+        const video=videoRef.current,canvas=canvasRef.current;
+        if(!video||!canvas||video.readyState<2)return;
+
+        scanningRef.current=true;
+        try{
+          // Recorta apenas a região central (faixa da máscara) — menos ruído, mais rápido
+          const vw=video.videoWidth,vh=video.videoHeight;
+          const cw=Math.floor(vw*0.85),ch=Math.floor(vh*0.28);
+          const cx=Math.floor((vw-cw)/2),cy=Math.floor((vh-ch)/2);
+          canvas.width=cw;canvas.height=ch;
+          canvas.getContext("2d").drawImage(video,cx,cy,cw,ch,0,0,cw,ch);
+
+          const{data}=await Tesseract.recognize(canvas,"eng",{
+            tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",
+          });
+          if(!ativoRef.current)return;
+
+          const texto=(data?.text||"").toUpperCase().replace(/[^A-Z0-9\s-]/g,"");
+          const m=texto.match(PLACA_RE);
+          if(m){
+            // Normaliza para o formato do input (antigo com hífen, Mercosul sem)
+            const placa=m[1]?`${m[1]}-${m[2]}`:`${m[3]}${m[4]}${m[5]}${m[6]}`;
+            ativoRef.current=false;
+            encerrarStream();
+            onDetect(placa);
+            onClose();
+          }
+        }catch(e){
+          console.error("Erro no OCR:",e);
+        }finally{
+          scanningRef.current=false;
+        }
+      },1200);
+    })();
+
+    // Limpeza garantida: para o stream e o intervalo no unmount
+    return()=>{
+      ativoRef.current=false;
+      if(intervalo)clearInterval(intervalo);
+      encerrarStream();
+    };
+  },[]);
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:50,background:"rgba(2,6,17,.96)",
+      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+
+      {/* Vídeo da câmera */}
+      <div style={{position:"relative",width:"100%",maxWidth:480,aspectRatio:"3/4",overflow:"hidden"}}>
+        <video ref={videoRef} playsInline muted
+          style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+
+        {/* Máscara com recorte central — borda amarela para centralização */}
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+          <div style={{width:"85%",height:"28%",border:"3px solid #fbbf24",borderRadius:14,
+            boxShadow:"0 0 0 9999px rgba(2,6,17,.55)",position:"relative"}}>
+            <div style={{position:"absolute",top:-28,left:0,right:0,textAlign:"center",
+              color:"#fbbf24",fontSize:13,fontWeight:700}}>
+              Centralize a placa na moldura
+            </div>
+          </div>
+        </div>
+
+        {/* Status de escaneamento */}
+        {status==="escaneando"&&(
+          <div style={{position:"absolute",bottom:16,left:0,right:0,display:"flex",justifyContent:"center",pointerEvents:"none"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(0,0,0,.6)",
+              padding:"8px 16px",borderRadius:99,backdropFilter:"blur(8px)"}}>
+              <div className="spinner spin" style={{width:12,height:12,borderWidth:2,
+                borderColor:"rgba(251,191,36,.3)",borderTopColor:"#fbbf24"}}/>
+              <span style={{color:"#fde68a",fontSize:12,fontWeight:600}}>Escaneando...</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Canvas oculto para captura de frames */}
+      <canvas ref={canvasRef} style={{display:"none"}}/>
+
+      {/* Erro de câmera */}
+      {status==="erro"&&(
+        <div style={{marginTop:20,padding:"14px 20px",maxWidth:320,textAlign:"center",
+          background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",borderRadius:14}}>
+          <span style={{color:"#f87171",fontSize:13,fontWeight:600,lineHeight:1.5}}>{erroMsg}</span>
+        </div>
+      )}
+
+      {/* Botão fechar */}
+      <button onClick={fechar}
+        style={{marginTop:24,padding:"13px 34px",borderRadius:14,cursor:"pointer",
+          background:"rgba(255,255,255,.08)",border:"1px solid rgba(186,230,253,.2)",
+          color:"#bae6fd",fontWeight:700,fontSize:15}}>
+        Cancelar
+      </button>
+    </div>
+  );
+}
+
 function NewWashScreen({empresaId,userId,onSuccess}){
   const refs={
     plate:useRef(null),model:useRef(null),
@@ -2523,6 +2682,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   const [limiteAtingido,setLimiteAtingido]=useState([]);
   const [clienteRecuperado,setClienteRecuperado]=useState(false);
   const [checkingRecuperado,setCheckingRecuperado]=useState(false);
+  const [showScanner,setShowScanner]=useState(false);
   const verificarRef=useRef(0); // controla race condition: só aplica o resultado da chamada mais recente
 
   // Verifica cliente recuperado ao preencher placa ou telefone
@@ -2687,13 +2847,35 @@ function NewWashScreen({empresaId,userId,onSuccess}){
       {/* Placa */}
       <div style={{marginBottom:14}}>
         <label className="lbl">Placa</label>
-        <input ref={refs.plate} className="glass-input" type="text" defaultValue="" placeholder="ABC-1234"
-          onChange={maskPlate}
-          onBlur={e=>{maskPlate(e);verificarClienteRecuperado();}}
-          style={{borderColor:errors.plate?"rgba(239,68,68,.5)":undefined,textTransform:"uppercase"}}
-          autoCapitalize="characters" autoCorrect="off" spellCheck="false"/>
+        <div style={{position:"relative"}}>
+          <input ref={refs.plate} className="glass-input" type="text" defaultValue="" placeholder="ABC-1234"
+            onChange={maskPlate}
+            onBlur={e=>{maskPlate(e);verificarClienteRecuperado();}}
+            style={{borderColor:errors.plate?"rgba(239,68,68,.5)":undefined,textTransform:"uppercase",paddingRight:46}}
+            autoCapitalize="characters" autoCorrect="off" spellCheck="false"/>
+          <button type="button" onClick={()=>setShowScanner(true)}
+            title="Escanear placa com a câmera"
+            style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",
+              width:36,height:36,borderRadius:10,cursor:"pointer",
+              background:"rgba(251,191,36,.12)",border:"1px solid rgba(251,191,36,.25)",
+              display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Icon name="Camera" size={17} color="#fbbf24"/>
+          </button>
+        </div>
         {errors.plate&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.plate}</div>}
       </div>
+      {showScanner&&(
+        <PlateScanner
+          onDetect={placa=>{
+            // Preenche o input via ref (padrão uncontrolled do formulário)
+            if(refs.plate.current){
+              refs.plate.current.value=placa;
+              // Dispara a verificação de cliente recuperado como se fosse onBlur
+              verificarClienteRecuperado();
+            }
+          }}
+          onClose={()=>setShowScanner(false)}/>
+      )}
       {/* Modelo */}
       <div style={{marginBottom:14}}>
         <label className="lbl">Modelo / Marca</label>
