@@ -4698,7 +4698,7 @@ function RelatoriosScreen({empresaId,embedded}){
     const desdeISO=inicioLocal.toISOString();      // ISO para comparação em historico
     Promise.all([
       sb.from('caixa_movimentos').select('tipo,categoria,valor,data').eq('empresa_id',empresaId).gte('data',desde).order('data'),
-      sb.from('historico').select('type,value,completed_at,forma_pagamento').eq('empresa_id',empresaId).gte('completed_at',desdeISO).order('completed_at'),
+      sb.from('historico').select('type,value,completed_at,forma_pagamento,lavador:profiles!lavado_por(name)').eq('empresa_id',empresaId).gte('completed_at',desdeISO).order('completed_at'),
       sb.from('folha_pagamentos').select('valor').eq('empresa_id',empresaId).gte('data_pgto',desde),
     ]).then(([{data:m},{data:h},{data:f}])=>{
       setMovs(m||[]);
@@ -4818,6 +4818,81 @@ function RelatoriosScreen({empresaId,embedded}){
   hist.forEach(h=>{svcMap[h.type]=(svcMap[h.type]||0)+1;});
   const svcs=Object.entries(svcMap).sort((a,b)=>b[1]-a[1]);
 
+  // ── Dados analíticos para o Relatório PDF ───────────────────────────────
+
+  // Comparativo de faturamento — últimas 4 semanas completas (independe do
+  // período selecionado na tela; sempre usa histAll para uma visão fixa).
+  const semanas4=useMemo(()=>{
+    const out=[];
+    for(let w=3;w>=0;w--){
+      const fim=new Date(hojeLocal.getFullYear(),hojeLocal.getMonth(),hojeLocal.getDate()-w*7);
+      const inicio=new Date(fim.getFullYear(),fim.getMonth(),fim.getDate()-6);
+      const inicioKey=toLocalDateStr(inicio),fimKey=toLocalDateStr(fim);
+      const v=histAll.filter(h=>{const k=toLocalDateStr(h.completed_at);return k>=inicioKey&&k<=fimKey;})
+        .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
+      out.push({l:`${inicio.getDate()}/${inicio.getMonth()+1} – ${fim.getDate()}/${fim.getMonth()+1}`,v});
+    }
+    return out;
+  },[histAll]);
+
+  // Comparativo mês atual x mês anterior — faturamento por dia do mês (1..31)
+  const comparativoMensal=useMemo(()=>{
+    const anoM=hojeLocal.getFullYear(),mesM=hojeLocal.getMonth();
+    const mesAnt=mesM===0?11:mesM-1, anoAnt=mesM===0?anoM-1:anoM;
+    const diasNoMesAtual=hojeLocal.getDate(); // só até hoje, mês atual incompleto
+    const diasNoMesAnterior=new Date(anoAnt,mesAnt+1,0).getDate();
+    const porDia=(ano,mes)=>{
+      const mapa={};
+      histAll.forEach(h=>{
+        if(!h.completed_at)return;
+        const d=new Date(h.completed_at);
+        if(d.getFullYear()===ano&&d.getMonth()===mes)
+          mapa[d.getDate()]=(mapa[d.getDate()]||0)+(parseFloat(h.value)||0);
+      });
+      return mapa;
+    };
+    const mapaAtual=porDia(anoM,mesM), mapaAnterior=porDia(anoAnt,mesAnt);
+    const maxDias=Math.max(diasNoMesAtual,diasNoMesAnterior);
+    const atual=[],anterior=[];
+    for(let d=1;d<=maxDias;d++){
+      atual.push(d<=diasNoMesAtual?(mapaAtual[d]||0):null);
+      anterior.push(d<=diasNoMesAnterior?(mapaAnterior[d]||0):null);
+    }
+    return{atual,anterior,nomeAtual:NOMES_MESES[mesM],nomeAnterior:NOMES_MESES[mesAnt],dias:maxDias};
+  },[histAll]);
+
+  // Faturamento por serviço (valor, não só contagem) — período selecionado
+  const svcValorBreakdown=useMemo(()=>{
+    const mapa={};
+    hist.forEach(h=>{
+      const k=h.type||"Não especificado";
+      if(!mapa[k])mapa[k]={qtd:0,valor:0};
+      mapa[k].qtd++;
+      mapa[k].valor+=(parseFloat(h.value)||0);
+    });
+    return Object.entries(mapa).map(([nome,d])=>({nome,...d})).sort((a,b)=>b.valor-a.valor);
+  },[hist]);
+
+  // Desempenho por lavador/funcionário — período selecionado
+  const lavadorBreakdown=useMemo(()=>{
+    const mapa={};
+    hist.forEach(h=>{
+      const nome=h.lavador?.name||"Não atribuído";
+      if(!mapa[nome])mapa[nome]={qtd:0,valor:0};
+      mapa[nome].qtd++;
+      mapa[nome].valor+=(parseFloat(h.value)||0);
+    });
+    return Object.entries(mapa).map(([nome,d])=>({nome,...d})).sort((a,b)=>b.valor-a.valor);
+  },[hist]);
+
+  // ── Preview do Relatório antes do download ──────────────────────────────
+  const [previewUrl,setPreviewUrl]=useState(null);
+  const [previewFilename,setPreviewFilename]=useState("");
+  const previewBlobRef=useRef(null);
+
+  // Libera a URL do blob ao trocar de relatório ou desmontar — evita vazamento de memória
+  useEffect(()=>()=>{if(previewUrl)URL.revokeObjectURL(previewUrl);},[previewUrl]);
+
   // ── Geração de Relatório PDF (jsPDF + autoTable) ────────────────────────
   // Reaproveita todos os dados já buscados/calculados nesta tela (hist, KPIs,
   // chartData, pgtoBreakdown) — nenhuma query nova é feita, apenas formatação.
@@ -4906,6 +4981,90 @@ function RelatoriosScreen({empresaId,embedded}){
         y+=chartH+10;
       }
 
+      // ── Análise Comparativa ────────────────────────────────────────────
+      if(y>240){doc.addPage();y=18;}
+      doc.setFontSize(12);
+      doc.setFont(undefined,"bold");
+      doc.setTextColor(14,116,144);
+      doc.text("Análise Comparativa",margin,y);
+      doc.setFont(undefined,"normal");
+      y+=7;
+
+      // Gráfico de barras: faturamento das últimas 4 semanas (fixo, independe do período selecionado)
+      if(semanas4.length>0){
+        doc.setFontSize(9.5);
+        doc.setFont(undefined,"bold");
+        doc.setTextColor(30,30,30);
+        doc.text("Faturamento — Últimas 4 Semanas",margin,y);
+        doc.setFont(undefined,"normal");
+        y+=5;
+        const chH=30,chW=pageW-margin*2;
+        const maxV4=Math.max(...semanas4.map(c=>c.v),1);
+        const gap=4,bw=(chW-gap*(semanas4.length-1))/semanas4.length;
+        semanas4.forEach((c,i)=>{
+          const h=maxV4>0?(c.v/maxV4)*chH:0;
+          const x=margin+i*(bw+gap);
+          doc.setFillColor(99,102,241);
+          doc.rect(x,y+chH-h,bw,h,"F");
+          doc.setFontSize(7);
+          doc.setTextColor(30,30,30);
+          doc.text(fmtBRL(c.v),x+bw/2,y+chH-h-2,{align:"center"});
+          doc.setFontSize(6.5);
+          doc.setTextColor(100,100,100);
+          doc.text(c.l,x+bw/2,y+chH+4,{align:"center",maxWidth:bw+6});
+        });
+        y+=chH+12;
+      }
+
+      // Gráfico de linhas: mês atual x mês anterior
+      if(y>230){doc.addPage();y=18;}
+      doc.setFontSize(9.5);
+      doc.setFont(undefined,"bold");
+      doc.setTextColor(30,30,30);
+      doc.text(`Comparativo: ${comparativoMensal.nomeAtual} x ${comparativoMensal.nomeAnterior}`,margin,y);
+      doc.setFont(undefined,"normal");
+      y+=6;
+      {
+        const lH=34,lW=pageW-margin*2;
+        const todosValores=[...comparativoMensal.atual,...comparativoMensal.anterior].filter(v=>v!==null);
+        const maxL=Math.max(...todosValores,1);
+        const stepX=lW/Math.max(comparativoMensal.dias-1,1);
+        const linhaY=v=>y+lH-((v||0)/maxL)*lH;
+
+        // Eixo base
+        doc.setDrawColor(220,220,220);
+        doc.line(margin,y+lH,margin+lW,y+lH);
+
+        // Linha do mês anterior (cinza)
+        doc.setDrawColor(180,180,180);
+        doc.setLineWidth(0.5);
+        for(let i=0;i<comparativoMensal.anterior.length-1;i++){
+          const v1=comparativoMensal.anterior[i],v2=comparativoMensal.anterior[i+1];
+          if(v1===null||v2===null)continue;
+          doc.line(margin+i*stepX,linhaY(v1),margin+(i+1)*stepX,linhaY(v2));
+        }
+        // Linha do mês atual (azul, destaque)
+        doc.setDrawColor(14,165,233);
+        doc.setLineWidth(0.8);
+        for(let i=0;i<comparativoMensal.atual.length-1;i++){
+          const v1=comparativoMensal.atual[i],v2=comparativoMensal.atual[i+1];
+          if(v1===null||v2===null)continue;
+          doc.line(margin+i*stepX,linhaY(v1),margin+(i+1)*stepX,linhaY(v2));
+        }
+        doc.setLineWidth(0.2);
+
+        // Legenda
+        doc.setFontSize(7.5);
+        doc.setFillColor(14,165,233);
+        doc.rect(margin,y+lH+7,4,4,"F");
+        doc.setTextColor(60,60,60);
+        doc.text(comparativoMensal.nomeAtual,margin+6,y+lH+10.5);
+        doc.setFillColor(180,180,180);
+        doc.rect(margin+40,y+lH+7,4,4,"F");
+        doc.text(comparativoMensal.nomeAnterior,margin+46,y+lH+10.5);
+        y+=lH+18;
+      }
+
       // Quebra por forma de pagamento
       if(pgtoBreakdown.length>0){
         doc.setFontSize(10);
@@ -4920,6 +5079,46 @@ function RelatoriosScreen({empresaId,embedded}){
           body:pgtoBreakdown.map(g=>[g.label,fmtBRL(g.valor),`${g.pct}%`]),
           theme:"striped",
           headStyles:{fillColor:[14,165,233],fontSize:8.5},
+          styles:{fontSize:8.5,cellPadding:2.5},
+        });
+        y=doc.lastAutoTable.finalY+8;
+      }
+
+      // Tabela analítica: faturamento por tipo de serviço
+      if(svcValorBreakdown.length>0){
+        if(y>250){doc.addPage();y=18;}
+        doc.setFontSize(10);
+        doc.setFont(undefined,"bold");
+        doc.setTextColor(30,30,30);
+        doc.text("Faturamento por Tipo de Serviço",margin,y);
+        y+=3;
+        doc.autoTable({
+          startY:y,
+          margin:{left:margin,right:margin},
+          head:[["Serviço","Qtd.","Faturamento"]],
+          body:svcValorBreakdown.map(s=>[s.nome,String(s.qtd),fmtBRL(s.valor)]),
+          theme:"striped",
+          headStyles:{fillColor:[99,102,241],fontSize:8.5},
+          styles:{fontSize:8.5,cellPadding:2.5},
+        });
+        y=doc.lastAutoTable.finalY+8;
+      }
+
+      // Tabela analítica: desempenho por lavador/funcionário
+      if(lavadorBreakdown.length>0){
+        if(y>250){doc.addPage();y=18;}
+        doc.setFontSize(10);
+        doc.setFont(undefined,"bold");
+        doc.setTextColor(30,30,30);
+        doc.text("Desempenho por Lavador",margin,y);
+        y+=3;
+        doc.autoTable({
+          startY:y,
+          margin:{left:margin,right:margin},
+          head:[["Lavador","Lavagens","Faturamento Gerado"]],
+          body:lavadorBreakdown.map(l=>[l.nome,String(l.qtd),fmtBRL(l.valor)]),
+          theme:"striped",
+          headStyles:{fillColor:[99,102,241],fontSize:8.5},
           styles:{fontSize:8.5,cellPadding:2.5},
         });
         y=doc.lastAutoTable.finalY+8;
@@ -4961,13 +5160,38 @@ function RelatoriosScreen({empresaId,embedded}){
       });
 
       const nomeArquivo=`Relatorio_${(empresaNome||"lavarapido").replace(/[^a-zA-Z0-9]/g,"_")}_${periodo}_${toLocalDateStr(agora)}.pdf`;
-      doc.save(nomeArquivo);
+
+      // Gera blob e abre pré-visualização em vez de baixar direto — o operador
+      // confirma o conteúdo antes do download real acontecer.
+      const blob=doc.output("blob");
+      previewBlobRef.current=blob;
+      if(previewUrl)URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(blob));
+      setPreviewFilename(nomeArquivo);
     }catch(e){
       console.error("Erro ao gerar relatório PDF:",e);
       alert("Não foi possível gerar o relatório. Tente novamente.");
     }finally{
       setGerandoRelatorio(false);
     }
+  };
+
+  // Dispara o download real do PDF já pré-visualizado (mesmo blob, sem gerar de novo)
+  const baixarPdfPreview=()=>{
+    if(!previewBlobRef.current)return;
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(previewBlobRef.current);
+    a.download=previewFilename||"relatorio.pdf";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  };
+
+  const fecharPreview=()=>{
+    if(previewUrl)URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    previewBlobRef.current=null;
   };
 
   return(
@@ -4982,7 +5206,7 @@ function RelatoriosScreen({empresaId,embedded}){
         ))}
       </div>
 
-      {/* Baixar Relatório — gera PDF compartilhável do período selecionado */}
+      {/* Gerar Relatório — cria o PDF analítico e abre pré-visualização antes do download */}
       <button onClick={gerarRelatorioPDF} disabled={gerandoRelatorio||loading}
         style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,
           padding:"11px 0",borderRadius:12,marginBottom:16,cursor:gerandoRelatorio?"default":"pointer",
@@ -4990,11 +5214,46 @@ function RelatoriosScreen({empresaId,embedded}){
           border:"1px solid rgba(56,189,248,.3)",color:"#7dd3fc",fontWeight:700,fontSize:13,
           opacity:gerandoRelatorio||loading?.6:1}}>
         {gerandoRelatorio?(
-          <><div className="spinner spin" style={{width:14,height:14,borderWidth:2}}/>Gerando PDF...</>
+          <><div className="spinner spin" style={{width:14,height:14,borderWidth:2}}/>Gerando relatório...</>
         ):(
-          <><Icon name="Download" size={15} color="#7dd3fc"/>Baixar Relatório (PDF)</>
+          <><Icon name="Download" size={15} color="#7dd3fc"/>Gerar Relatório PDF</>
         )}
       </button>
+
+      {/* Modal de pré-visualização — mostra o PDF renderizado antes de confirmar o download */}
+      {previewUrl&&(
+        <div style={{position:"fixed",inset:0,zIndex:60,background:"rgba(2,6,17,.92)",
+          display:"flex",flexDirection:"column",padding:"16px 12px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <div style={{color:"#e0f2fe",fontWeight:800,fontSize:15}}>Pré-visualização do Relatório</div>
+            <button onClick={fecharPreview}
+              style={{width:32,height:32,borderRadius:10,background:"rgba(255,255,255,.08)",
+                border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+              <Icon name="XCircle" size={16} color="#bae6fd"/>
+            </button>
+          </div>
+          <div style={{flex:1,minHeight:0,borderRadius:12,overflow:"hidden",background:"#fff"}}>
+            <iframe src={previewUrl} title="Pré-visualização do relatório"
+              style={{width:"100%",height:"100%",border:"none"}}/>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:12}}>
+            <button onClick={fecharPreview}
+              style={{flex:1,padding:"12px 0",borderRadius:12,cursor:"pointer",
+                background:"rgba(255,255,255,.06)",border:"1px solid rgba(186,230,253,.15)",
+                color:"rgba(186,230,253,.7)",fontWeight:700,fontSize:13}}>
+              Cancelar
+            </button>
+            <button onClick={baixarPdfPreview}
+              style={{flex:2,display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                padding:"12px 0",borderRadius:12,cursor:"pointer",
+                background:"linear-gradient(135deg,#0ea5e9,#6366f1)",border:"none",
+                color:"#fff",fontWeight:800,fontSize:13,boxShadow:"0 4px 16px rgba(14,165,233,.3)"}}>
+              <Icon name="Download" size={15} color="#fff"/>Baixar PDF
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>:(
         <>
