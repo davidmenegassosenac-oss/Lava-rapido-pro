@@ -1,7 +1,7 @@
 # Arquitetura — Lava Rápido Pro
 
-**Última atualização:** 30 de junho de 2026
-**Escopo:** `index.html` (painel administrativo)
+**Última atualização:** 02 de julho de 2026
+**Escopo:** `index.html` (painel administrativo) + Edge Functions (Supabase)
 
 Este documento registra decisões arquiteturais críticas que **não podem ser revertidas ou contornadas** sem análise cuidadosa. Cada regra abaixo existe porque uma violação anterior já causou um bug real em produção. O objetivo é que qualquer pessoa (humana ou IA) trabalhando neste código consulte este arquivo antes de mexer nas áreas listadas.
 
@@ -155,6 +155,55 @@ Antes de restringir qualquer `select('*')` para colunas explícitas, rode `grep 
 
 ---
 
+## 🔒 Infraestrutura de Backup (Edge Function + pg_cron)
+
+Implementado e validado em produção em 02/07/2026.
+
+### Componentes
+
+| Peça | Localização | Função |
+|---|---|---|
+| Edge Function | `functions/backup-tenant-data/index.ts` | Gera dump JSON por empresa e faz upload ao Storage |
+| Migration | `031_backup_automatizado.sql` | Cria bucket `backups` + agenda o cron job |
+| Secret | `BACKUP_CRON_SECRET` (Edge Functions → Secrets) | Autentica a chamada do cron à função |
+| Bucket | `backups` (Storage, privado) | Armazena `backups/{empresa_id}/backup_{timestamp}.json` |
+| Cron job | `backup-diario-tenants` (pg_cron) | Dispara a função todo dia às 06:00 UTC (03:00 Brasília) |
+
+### Tabelas incluídas no dump
+
+`ordens_servico`, `caixa_movimentos`, `historico` — configurável no array `TABELAS_BACKUP` no topo da função. `historico` foi incluída deliberadamente além do pedido original, por concentrar todo o faturamento consolidado do negócio.
+
+### Regras específicas desta infraestrutura
+
+1. **Processamento atômico por tenant:** o loop de empresas tem `try/catch` individual. Uma falha isolada **nunca** deve interromper o processamento das demais. Não remover esse isolamento ao editar a função.
+2. **Paginação obrigatória:** toda leitura de tabela usa `.range()` em lotes de 1000 registros (`LOTE` no código). Nunca substituir por um `select('*')` sem paginação — o volume de dados só cresce.
+3. **"Verify JWT with legacy secret" deve permanecer desligado** para esta função (ver Regra #5 em `REGRAS_ARQUITETURA.md`). Confirme após qualquer redeploy — o toggle pode voltar a ligar sozinho (bug conhecido do painel Supabase).
+4. **Nenhuma política de RLS foi alterada.** A função usa `SUPABASE_SERVICE_ROLE_KEY`, que não está sujeita a RLS por definição — o RLS do client (usuários normais do app) continua intacto e é o mecanismo de segurança real para o resto do sistema.
+5. **Fuso horário do cron:** `pg_cron` no Supabase roda em UTC. O job está agendado para `0 6 * * *` (06:00 UTC = 03:00 Brasília). Se o horário de disparo precisar mudar, ajustar considerando essa conversão.
+
+### Diagnóstico rápido se o backup parar de funcionar
+
+```sql
+-- Ver últimas execuções do cron e se falharam
+SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
+
+-- Testar a função manualmente (fora do horário agendado)
+SELECT net.http_post(
+  url     := 'https://ikahodmuchwitxfvlaop.supabase.co/functions/v1/backup-tenant-data',
+  headers := jsonb_build_object(
+    'Content-Type',  'application/json',
+    'Authorization', 'Bearer <BACKUP_CRON_SECRET>'
+  ),
+  body    := '{}'::jsonb
+);
+-- Ver a resposta do teste acima:
+SELECT status_code, content::text FROM net._http_response ORDER BY id DESC LIMIT 1;
+```
+
+`401` → verificar o toggle "Verify JWT" e se o secret bate exatamente. `404` → nome da função errado ou não deployada. `200` com `falhas: []` → tudo certo.
+
+---
+
 ## Checklist antes de mexer em Auth, Realtime ou Lazy-Mount
 
 - [ ] Testei o fluxo de login normal (email+senha)?
@@ -163,3 +212,4 @@ Antes de restringir qualquer `select('*')` para colunas explícitas, rode `grep 
 - [ ] Confirmei que `profile`, `empresa` e `assInfo` permanecem populados após o wake-up?
 - [ ] Se adicionei uma função nova a uma tela, confirmei com `grep` que ela está declarada no escopo correto?
 - [ ] Se toquei em qualquer `select()` do Supabase, confirmei os nomes reais de coluna com `grep` cruzado?
+- [ ] Se redeployei a Edge Function de backup, confirmei que "Verify JWT" continua desligado?

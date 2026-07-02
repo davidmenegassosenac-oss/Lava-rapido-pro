@@ -1,6 +1,6 @@
 # Regras da Casa — Arquitetura Lava Rápido Pro
 
-**Última atualização:** 01 de julho de 2026
+**Última atualização:** 02 de julho de 2026
 
 Este arquivo lista as **decisões técnicas irreversíveis** do projeto. Cada regra existe porque uma violação já causou um bug real em produção. Antes de alterar qualquer área abaixo, leia a regra correspondente.
 
@@ -34,6 +34,12 @@ O app usa lazy-mount: telas montam uma vez e alternam visibilidade via `display:
 
 **Regra prática:** antes de adicionar qualquer referência a função em um componente de tela, rodar `grep -n "nomeDaFuncao"` no arquivo inteiro e confirmar que ela está declarada **dentro do mesmo componente** ou é **verdadeiramente global** (fora de qualquer função de componente). O mesmo vale para props — só existem se declaradas na assinatura da função **e** passadas explicitamente no local de renderização.
 
+## 5. Edge Functions com autenticação própria: sempre confira o toggle "Verify JWT" após qualquer redeploy
+
+A Edge Function `backup-tenant-data` (e qualquer outra que valide seu próprio secret via header `Authorization`, em vez de depender de um JWT de usuário do Supabase) precisa do toggle **"Verify JWT with legacy secret" desligado** no painel. Se esse toggle estiver ligado, o gateway do Supabase rejeita a chamada com `401` **antes mesmo do código da função rodar** — o erro não aparece nos logs da função porque ela nunca chega a ser invocada.
+
+**Armadilha conhecida:** esse toggle pode voltar a ligar sozinho a cada novo deploy/atualização da função (bug documentado publicamente na comunidade Supabase, não é erro de configuração nossa). **Sempre confira manualmente esse toggle depois de qualquer redeploy** de uma função com autenticação própria — um cron job de backup pode passar dias falhando silenciosamente com `401` sem nenhum alerta visível até alguém checar `cron.job_run_details`.
+
 ---
 
 ## Checklist rápido antes de qualquer PR que toque em Auth, Realtime, Lazy-Mount ou fluxo financeiro
@@ -45,3 +51,4 @@ O app usa lazy-mount: telas montam uma vez e alternam visibilidade via `display:
 - [ ] Testei desligar o Wi-Fi, mudar um status, religar o Wi-Fi — a ação sincronizou?
 - [ ] Confirmei que nenhuma transição financeira foi tratada como otimista/offline?
 - [ ] Se adicionei função nova a uma tela, confirmei com `grep` que está no escopo correto?
+- [ ] Se redeployei uma Edge Function com secret próprio, confirmei que "Verify JWT" continua desligado?

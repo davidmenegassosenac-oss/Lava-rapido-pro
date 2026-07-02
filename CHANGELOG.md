@@ -1,5 +1,38 @@
 # Changelog — Lava Rápido Pro
 
+## [02/07/2026] — Observabilidade (Sentry), Cadastro por OCR e Backup Automatizado por Tenant
+
+### 🟢 Adicionado — Observabilidade em Produção (Sentry)
+
+- **SDK do Sentry integrado** via CDN (`js.sentry-cdn.com`), inicializado com `Sentry.onLoad` no bloco de script principal do `index.html`.
+- **`ErrorBoundary` aprimorado:** `componentDidCatch` agora envia automaticamente qualquer erro de runtime não tratado para o Sentry via `Sentry.captureException`, além de logar no console. Fallback visual atualizado para uma mensagem que informa ao operador que o suporte já foi notificado.
+- Guards defensivos (`typeof Sentry!=="undefined"`) garantem que o app continue funcionando normalmente mesmo se o CDN do Sentry falhar ao carregar (rede bloqueada, adblocker).
+
+### 🟢 Adicionado — Cadastro de Placa por OCR (`PlateScanner`)
+
+- Novo componente `PlateScanner`, modal fullscreen que acessa a câmera traseira do dispositivo (`facingMode:"environment"`) e usa **Tesseract.js** (via CDN) para ler a placa do veículo em tempo real.
+- Captura throttled a cada 1,2s (em vez de `requestAnimationFrame` puro) com guard contra execuções concorrentes — evita empilhar reconhecimentos e travar o celular do operador, já que cada OCR leva 1–3s.
+- Recorte da imagem limitado à região da máscara visual (borda amarela, 85%×28% central) e whitelist de caracteres, para acelerar e melhorar a precisão da leitura.
+- Regex cobre os dois padrões de placa brasileira (antigo `ABC-1234` e Mercosul `ABC1D23`); ao detectar uma correspondência válida, preenche o campo `plate`, dispara a verificação de cliente recuperado e encerra a câmera automaticamente.
+- Gatilho: ícone de câmera dentro do input de Placa na tela de Nova Lavagem, no estilo glassmorphism âmbar do restante do app.
+- Limpeza de hardware garantida em todos os caminhos de saída (detecção, cancelamento manual, unmount do componente) — sem vazamento de acesso à câmera.
+- 100% client-side: nenhuma imagem trafega para o Supabase. RLS e demais políticas de segurança permanecem inalterados.
+
+### 🟢 Adicionado — Backup Automatizado, Isolado por Tenant
+
+- **Edge Function `backup-tenant-data`:** percorre todas as empresas cadastradas e gera, para cada uma, um dump JSON isolado contendo `ordens_servico`, `caixa_movimentos` e `historico`, salvo no Storage em `backups/{empresa_id}/backup_{timestamp}.json`.
+- **Processamento atômico por tenant:** falha no backup de uma empresa é registrada e reportada (Sentry), mas **não interrompe** o processamento das demais. Resposta HTTP `207` sinaliza sucesso parcial quando aplicável.
+- **Paginação em lotes de 1000 registros** por tabela, evitando estouro de memória à medida que o volume de dados cresce.
+- **Autenticação do endpoint:** requer header `Authorization: Bearer <BACKUP_CRON_SECRET>` — protegido contra chamadas não autorizadas.
+- **Agendamento via `pg_cron` + `pg_net`:** job diário às 03:00 (horário de Brasília / 06:00 UTC), definido na migration `031_backup_automatizado.sql`, que também cria o bucket privado `backups` no Storage (sem acesso público — apenas `service_role`).
+- **Validado em produção em 02/07/2026:** primeira execução manual retornou `200`, com as 11 empresas ativas da plataforma processadas com sucesso e zero falhas.
+
+### 📝 Nota de operação — bug conhecido do painel Supabase
+
+O toggle **"Verify JWT with legacy secret"** de uma Edge Function pode ligar-se sozinho a cada novo deploy/atualização da função (bug documentado publicamente pela comunidade Supabase). Como o `backup-tenant-data` faz sua própria validação via `BACKUP_CRON_SECRET`, esse toggle **precisa permanecer desligado** — confira manualmente sempre que a função for redeployada, ou o cron passará a falhar silenciosamente com `401`.
+
+---
+
 ## [01/07/2026] — Resiliência Offline, UI Otimista e Blindagem Final do Mobile
 
 ### 🟢 Adicionado — Arquitetura Offline-First
