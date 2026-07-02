@@ -78,6 +78,8 @@ input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif;font-size
 <!-- Supabase CDN -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <!-- React -->
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -174,6 +176,7 @@ function Icon({name,size=16,color="currentColor",style={}}){
     CheckCircle:`<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>`,
     Droplets:`<path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/>`,
     Camera:`<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>`,
+    Download:`<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>`,
     MessageCircle:`<path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/>`,
     Search:`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
     ChevronDown:`<polyline points="6 9 12 15 18 9"/>`,
@@ -4675,6 +4678,14 @@ function RelatoriosScreen({empresaId,embedded}){
   const [histAll,setHistAll]=useState([]); // histórico completo para comparativo mensal
   const [folhaTotal,setFolhaTotal]=useState(0);
   const [loading,setLoading]=useState(true);
+  const [empresaNome,setEmpresaNome]=useState("");
+  const [gerandoRelatorio,setGerandoRelatorio]=useState(false);
+
+  // Nome da empresa para o cabeçalho do PDF — busca uma única vez
+  useEffect(()=>{
+    sb.from('empresas').select('nome_fantasia').eq('id',empresaId).single()
+      .then(({data})=>setEmpresaNome(data?.nome_fantasia||"Lava Rápido"));
+  },[empresaId]);
 
   useEffect(()=>{
     setLoading(true);
@@ -4807,10 +4818,162 @@ function RelatoriosScreen({empresaId,embedded}){
   hist.forEach(h=>{svcMap[h.type]=(svcMap[h.type]||0)+1;});
   const svcs=Object.entries(svcMap).sort((a,b)=>b[1]-a[1]);
 
+  // ── Geração de Relatório PDF (jsPDF + autoTable) ────────────────────────
+  // Reaproveita todos os dados já buscados/calculados nesta tela (hist, KPIs,
+  // chartData, pgtoBreakdown) — nenhuma query nova é feita, apenas formatação.
+  const gerarRelatorioPDF=()=>{
+    if(!window.jspdf||!window.jspdf.jsPDF){
+      alert("A biblioteca de PDF ainda está carregando. Tente novamente em alguns segundos.");
+      return;
+    }
+    setGerandoRelatorio(true);
+    try{
+      const{jsPDF}=window.jspdf;
+      const doc=new jsPDF({unit:"mm",format:"a4"});
+      const pageW=doc.internal.pageSize.getWidth();
+      const margin=14;
+      let y=18;
+
+      const labelPeriodo=periodo==="dia"?"Hoje":periodo==="semana"?"Últimos 7 dias":"Últimos 30 dias";
+      const agora=new Date();
+      const emissao=agora.toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"});
+
+      // Cabeçalho
+      doc.setFillColor(14,165,233);
+      doc.rect(0,0,pageW,26,"F");
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(17);
+      doc.setFont(undefined,"bold");
+      doc.text(empresaNome||"Lava Rápido",margin,14);
+      doc.setFontSize(10);
+      doc.setFont(undefined,"normal");
+      doc.text(`Relatório de faturamento — ${labelPeriodo}`,margin,21);
+      doc.setFontSize(8);
+      doc.text(`Emitido em ${emissao}`,pageW-margin,21,{align:"right"});
+
+      y=36;
+      doc.setTextColor(30,30,30);
+
+      // Cards de KPI (grid 2x2 + ticket médio)
+      const kpis=[
+        {l:"Receita",v:fmtBRL(entradas),c:[74,222,128]},
+        {l:"Despesas",v:fmtBRL(saidas),c:[248,113,113]},
+        {l:"Saldo",v:fmtBRL(saldo),c:saldo>=0?[56,189,248]:[248,113,113]},
+        {l:"Atendimentos",v:String(totalAtend),c:[167,139,250]},
+      ];
+      const cardW=(pageW-margin*2-9)/4;
+      kpis.forEach((k,i)=>{
+        const x=margin+i*(cardW+3);
+        doc.setDrawColor(220,220,220);
+        doc.setFillColor(248,250,252);
+        doc.roundedRect(x,y,cardW,20,2,2,"FD");
+        doc.setTextColor(120,120,120);
+        doc.setFontSize(7.5);
+        doc.text(k.l,x+3,y+6);
+        doc.setTextColor(k.c[0],k.c[1],k.c[2]);
+        doc.setFontSize(11);
+        doc.setFont(undefined,"bold");
+        doc.text(k.v,x+3,y+14.5);
+        doc.setFont(undefined,"normal");
+      });
+      y+=27;
+
+      doc.setTextColor(30,30,30);
+      doc.setFontSize(9.5);
+      doc.text(`Ticket médio: ${fmtBRL(ticketMedio)}`,margin,y);
+      y+=8;
+
+      // Gráfico de barras simples (desenho manual — sem lib de gráfico)
+      if(chartData&&chartData.length>0){
+        doc.setFontSize(10);
+        doc.setFont(undefined,"bold");
+        doc.text("Faturamento no período",margin,y);
+        doc.setFont(undefined,"normal");
+        y+=5;
+        const chartH=32,chartW=pageW-margin*2;
+        const maxV=Math.max(...chartData.map(c=>c.v),1);
+        const barGap=2;
+        const barW=(chartW-barGap*(chartData.length-1))/chartData.length;
+        chartData.forEach((c,i)=>{
+          const h=maxV>0?(c.v/maxV)*chartH:0;
+          const x=margin+i*(barW+barGap);
+          doc.setFillColor(56,189,248);
+          doc.rect(x,y+chartH-h,barW,h,"F");
+          doc.setFontSize(6);
+          doc.setTextColor(100,100,100);
+          doc.text(c.l,x+barW/2,y+chartH+4,{align:"center",maxWidth:barW+4});
+        });
+        y+=chartH+10;
+      }
+
+      // Quebra por forma de pagamento
+      if(pgtoBreakdown.length>0){
+        doc.setFontSize(10);
+        doc.setFont(undefined,"bold");
+        doc.setTextColor(30,30,30);
+        doc.text("Faturamento por forma de pagamento",margin,y);
+        y+=3;
+        doc.autoTable({
+          startY:y,
+          margin:{left:margin,right:margin},
+          head:[["Forma","Valor","% do total"]],
+          body:pgtoBreakdown.map(g=>[g.label,fmtBRL(g.valor),`${g.pct}%`]),
+          theme:"striped",
+          headStyles:{fillColor:[14,165,233],fontSize:8.5},
+          styles:{fontSize:8.5,cellPadding:2.5},
+        });
+        y=doc.lastAutoTable.finalY+8;
+      }
+
+      // Tabela detalhada de atendimentos
+      if(y>250){doc.addPage();y=18;}
+      doc.setFontSize(10);
+      doc.setFont(undefined,"bold");
+      doc.setTextColor(30,30,30);
+      doc.text("Atendimentos do período",margin,y);
+      y+=3;
+      const linhasHist=hist
+        .slice()
+        .sort((a,b)=>new Date(b.completed_at)-new Date(a.completed_at))
+        .map(h=>[
+          toLocalDateStr(h.completed_at).split("-").reverse().join("/"),
+          h.type||"—",
+          h.forma_pagamento?h.forma_pagamento.charAt(0).toUpperCase()+h.forma_pagamento.slice(1):"—",
+          fmtBRL(h.value),
+        ]);
+      doc.autoTable({
+        startY:y,
+        margin:{left:margin,right:margin},
+        head:[["Data","Serviço","Pagamento","Valor"]],
+        body:linhasHist.length>0?linhasHist:[["—","Nenhum atendimento no período","—","—"]],
+        theme:"striped",
+        headStyles:{fillColor:[14,165,233],fontSize:8.5},
+        styles:{fontSize:8,cellPadding:2},
+        didDrawPage:()=>{
+          const pageCount=doc.internal.getNumberOfPages();
+          doc.setFontSize(7.5);
+          doc.setTextColor(150,150,150);
+          doc.text(
+            `Lava Rápido Pro — Relatório gerado automaticamente · Página ${doc.internal.getCurrentPageInfo().pageNumber}/${pageCount}`,
+            pageW/2,doc.internal.pageSize.getHeight()-8,{align:"center"}
+          );
+        },
+      });
+
+      const nomeArquivo=`Relatorio_${(empresaNome||"lavarapido").replace(/[^a-zA-Z0-9]/g,"_")}_${periodo}_${toLocalDateStr(agora)}.pdf`;
+      doc.save(nomeArquivo);
+    }catch(e){
+      console.error("Erro ao gerar relatório PDF:",e);
+      alert("Não foi possível gerar o relatório. Tente novamente.");
+    }finally{
+      setGerandoRelatorio(false);
+    }
+  };
+
   return(
     <div className={embedded?"":"scroll screen-enter"}>
       {/* Período */}
-      <div style={{display:"flex",gap:8,marginBottom:16}}>
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
         {[["dia","Hoje"],["semana","7 dias"],["mes","30 dias"]].map(([k,l])=>(
           <button key={k} onClick={()=>setPeriodo(k)}
             style={{flex:1,padding:"9px 0",borderRadius:12,border:`1.5px solid ${periodo===k?"rgba(14,165,233,.6)":"rgba(125,211,252,.15)"}`,background:periodo===k?"rgba(14,165,233,.2)":"rgba(255,255,255,.04)",color:periodo===k?"#38bdf8":"rgba(186,230,253,.5)",fontWeight:700,fontSize:12,cursor:"pointer",transition:"all .15s"}}>
@@ -4818,6 +4981,20 @@ function RelatoriosScreen({empresaId,embedded}){
           </button>
         ))}
       </div>
+
+      {/* Baixar Relatório — gera PDF compartilhável do período selecionado */}
+      <button onClick={gerarRelatorioPDF} disabled={gerandoRelatorio||loading}
+        style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+          padding:"11px 0",borderRadius:12,marginBottom:16,cursor:gerandoRelatorio?"default":"pointer",
+          background:"linear-gradient(135deg,rgba(14,165,233,.18),rgba(99,102,241,.14))",
+          border:"1px solid rgba(56,189,248,.3)",color:"#7dd3fc",fontWeight:700,fontSize:13,
+          opacity:gerandoRelatorio||loading?.6:1}}>
+        {gerandoRelatorio?(
+          <><div className="spinner spin" style={{width:14,height:14,borderWidth:2}}/>Gerando PDF...</>
+        ):(
+          <><Icon name="Download" size={15} color="#7dd3fc"/>Baixar Relatório (PDF)</>
+        )}
+      </button>
 
       {loading?<div style={{display:"flex",justifyContent:"center",padding:40}}><div className="spinner spin"/></div>:(
         <>
