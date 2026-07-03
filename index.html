@@ -2094,6 +2094,14 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
 
   const isMensalista=item.tipo_contrato==="mensalista";
 
+  // Prioridade da fila (independente de tipo_contrato) — define borda e badge.
+  // Precedência visual: cliente_recuperado (dourado) > priority_type > status.
+  const PRIORIDADES={
+    mensalista:  {cor:"#38bdf8", label:"Mensalista",  icone:"★"},
+    agendamento: {cor:"#fb923c", label:"Agendamento", icone:"📅"},
+  };
+  const prioridade=PRIORIDADES[item.priority_type]||null;
+
   const onClickAvancar=()=>{
     // Só abre o modal de seleção de lavador se a empresa tiver
     // essa opção habilitada. Quando false, avança direto sem modal.
@@ -2116,12 +2124,18 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
       backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
       border:item.cliente_recuperado
         ?"1.5px solid rgba(251,191,36,.5)"
+        :prioridade
+        ?`1.5px solid ${prioridade.cor}55`
         :"1px solid rgba(125,211,252,.1)",
       borderLeft:item.cliente_recuperado
         ?"3px solid #fbbf24"
+        :prioridade
+        ?`3px solid ${prioridade.cor}`
         :`3px solid ${progColor[item.status]||"rgba(125,211,252,.2)"}`,
       boxShadow:item.cliente_recuperado
         ?"0 4px 24px rgba(0,0,0,.25),0 0 20px rgba(251,191,36,.12)"
+        :prioridade
+        ?`0 4px 24px rgba(0,0,0,.25),0 0 16px ${prioridade.cor}18`
         :"0 4px 24px rgba(0,0,0,.25)"}}>
       <div style={{padding:16,cursor:"pointer"}} onClick={()=>{if(!showPgto&&!showLavador&&!editHora)setOpen(!open);}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
@@ -2152,6 +2166,13 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
                 background:"rgba(167,139,250,.15)",border:"1px solid rgba(167,139,250,.3)",
                 color:"#a78bfa",whiteSpace:"nowrap"}}>
                 Mensalista
+              </span>
+            )}
+            {prioridade&&(
+              <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,
+                background:`${prioridade.cor}22`,border:`1px solid ${prioridade.cor}55`,
+                color:prioridade.cor,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:11}}>{prioridade.icone}</span> {prioridade.label}
               </span>
             )}
             <Icon name={open?"ChevronUp":"ChevronDown"} size={14} color="rgba(186,230,253,.4)"/>
