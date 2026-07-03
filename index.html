@@ -177,6 +177,7 @@ function Icon({name,size=16,color="currentColor",style={}}){
     Droplets:`<path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/>`,
     Camera:`<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>`,
     Download:`<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>`,
+    GripVertical:`<circle cx="9" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="15" cy="18" r="1.4"/>`,
     MessageCircle:`<path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/>`,
     Search:`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
     ChevronDown:`<polyline points="6 9 12 15 18 9"/>`,
@@ -2094,13 +2095,16 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
 
   const isMensalista=item.tipo_contrato==="mensalista";
 
-  // Prioridade da fila (independente de tipo_contrato) — define borda e badge.
-  // Precedência visual: cliente_recuperado (dourado) > priority_type > status.
+  // Prioridade visual da fila — define borda e badge únicos.
+  // Mensalista vem de tipo_contrato (cliente com contrato mensal) OU de
+  // priority_type; ambos apontam para o MESMO badge azul, sem duplicar.
+  // Precedência: cliente_recuperado (dourado) > prioridade > status.
   const PRIORIDADES={
     mensalista:  {cor:"#38bdf8", label:"Mensalista",  icone:"★"},
     agendamento: {cor:"#fb923c", label:"Agendamento", icone:"📅"},
   };
-  const prioridade=PRIORIDADES[item.priority_type]||null;
+  const tipoPrioridade=isMensalista?"mensalista":item.priority_type;
+  const prioridade=PRIORIDADES[tipoPrioridade]||null;
 
   const onClickAvancar=()=>{
     // Só abre o modal de seleção de lavador se a empresa tiver
@@ -2159,13 +2163,6 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
                 background:"rgba(251,191,36,.15)",border:"1px solid rgba(251,191,36,.4)",
                 color:"#fbbf24",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>
                 <span style={{fontSize:11}}>♻️</span> Recuperado
-              </span>
-            )}
-            {isMensalista&&(
-              <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:99,
-                background:"rgba(167,139,250,.15)",border:"1px solid rgba(167,139,250,.3)",
-                color:"#a78bfa",whiteSpace:"nowrap"}}>
-                Mensalista
               </span>
             )}
             {prioridade&&(
@@ -2337,18 +2334,118 @@ function CarCard({item,onAdvance,onDelete,onUpdate,funcionarios,selecionarLavado
     </div>
   );
 }
+/* ── FilaArrastavel — reordenação por arraste com Pointer Events ───────────
+   Sem biblioteca externa (incompatível com o setup single-file). Usa pointer
+   events nativos, que funcionam igual em toque e mouse. O arraste só começa
+   pelo "punho" (handle) para não conflitar com os botões/toques dos cards.
+   Estratégia de performance: durante o gesto, apenas o card arrastado recebe
+   translateY via estado leve; a lista real só é reordenada ao soltar. */
+function FilaArrastavel({queue,onReordenar,onDragState,children}){
+  const [dragIdx,setDragIdx]=useState(null);   // índice do card em arraste
+  const [overIdx,setOverIdx]=useState(null);   // índice de destino atual
+  const [dragY,setDragY]=useState(0);          // deslocamento vertical visual
+  const startYRef=useRef(0);
+  const itemHRef=useRef(0);
+  const containerRef=useRef(null);
+
+  const iniciar=(e,idx)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const card=e.currentTarget.closest("[data-fila-item]");
+    itemHRef.current=card?card.offsetHeight+12:96; // +12 = marginBottom do card
+    startYRef.current=e.clientY;
+    setDragIdx(idx);
+    setOverIdx(idx);
+    setDragY(0);
+    onDragState&&onDragState(true,queue[idx]?.id);
+    // Captura o ponteiro para receber move/up mesmo fora do elemento
+    try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}
+  };
+
+  const mover=(e)=>{
+    if(dragIdx===null)return;
+    const dy=e.clientY-startYRef.current;
+    setDragY(dy);
+    // Calcula sobre qual índice o card está pairando
+    const desloc=Math.round(dy/itemHRef.current);
+    let alvo=dragIdx+desloc;
+    alvo=Math.max(0,Math.min(queue.length-1,alvo));
+    setOverIdx(alvo);
+  };
+
+  const soltar=(e)=>{
+    if(dragIdx===null)return;
+    const de=dragIdx, para=overIdx;
+    try{e.currentTarget.releasePointerCapture(e.pointerId);}catch(_){}
+    setDragIdx(null);setOverIdx(null);setDragY(0);
+    onDragState&&onDragState(false,null);
+    if(de!==para&&para!==null){
+      const nova=queue.slice();
+      const [movido]=nova.splice(de,1);
+      nova.splice(para,0,movido);
+      onReordenar(nova);
+    }
+  };
+
+  return(
+    <div ref={containerRef}>
+      {queue.map((item,i)=>{
+        const arrastando=i===dragIdx;
+        // Deslocamento visual dos outros cards para abrir espaço
+        let shiftY=0;
+        if(dragIdx!==null&&overIdx!==null&&!arrastando){
+          if(dragIdx<overIdx&&i>dragIdx&&i<=overIdx)shiftY=-itemHRef.current;
+          else if(dragIdx>overIdx&&i<dragIdx&&i>=overIdx)shiftY=itemHRef.current;
+        }
+        return(
+          <div key={item.id} data-fila-item
+            style={{
+              position:"relative",
+              transform:arrastando?`translateY(${dragY}px)`:`translateY(${shiftY}px)`,
+              transition:arrastando?"none":"transform .18s ease",
+              zIndex:arrastando?30:1,
+              opacity:arrastando?.92:1,
+              touchAction:dragIdx!==null?"none":"auto",
+            }}>
+            {/* Punho de arraste — na borda esquerda, alinhado verticalmente */}
+            <div
+              onPointerDown={e=>iniciar(e,i)}
+              onPointerMove={mover}
+              onPointerUp={soltar}
+              onPointerCancel={soltar}
+              style={{
+                position:"absolute",top:"50%",left:-2,transform:"translateY(-50%)",zIndex:15,
+                width:26,height:44,borderRadius:8,cursor:"grab",
+                display:"flex",alignItems:"center",justifyContent:"center",
+                background:"rgba(10,20,40,.75)",border:"1px solid rgba(186,230,253,.15)",
+                touchAction:"none",backdropFilter:"blur(4px)",
+              }}
+              title="Arraste para reordenar">
+              <Icon name="GripVertical" size={15} color="rgba(186,230,253,.55)"/>
+            </div>
+            {children(item,i)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function HomeScreen({empresaId,refreshToken=0}){
   const [queue,setQueue]=useState([]);
   const [loading,setLoading]=useState(true);
   const [errorMsg,setErrorMsg]=useState("");
   const [pendingSync,setPendingSync]=useState(0);
+  // DnD: bloqueia reconciliação do Realtime durante um arraste ativo
+  const draggingRef=useRef(false);
+  const [dragId,setDragId]=useState(null); // id do card sendo arrastado (feedback visual)
 
   // Ao montar, verifica quantas ações offline estão pendentes
   useEffect(()=>{filaOffline.count().then(setPendingSync);},[]);
   const [funcionarios,setFuncionarios]=useState([]);
 
   const fetchQueue=useCallback(async()=>{
-    const{data,error}=await sb.from('ordens_servico').select('*, criador:profiles!criado_por(name), lavador:profiles!lavado_por(name)').eq('empresa_id',empresaId).order('created_at',{ascending:true});
+    const{data,error}=await sb.from('ordens_servico').select('*, criador:profiles!criado_por(name), lavador:profiles!lavado_por(name)').eq('empresa_id',empresaId).order('queue_position',{ascending:true,nullsFirst:false}).order('created_at',{ascending:true});
     if(error){setErrorMsg("Não foi possível carregar a fila. Verifique sua conexão.");}
     setQueue(data||[]);setLoading(false);
   },[empresaId]);
@@ -2364,6 +2461,9 @@ function HomeScreen({empresaId,refreshToken=0}){
           // G2 — usa o payload direto sem re-fetch; join de profiles não crítico no insert
           setQueue(prev=>prev.some(v=>v.id===payload.new.id)?prev:[...prev,payload.new]);
         }else if(payload.eventType==='UPDATE'&&payload.new){
+          // Durante um arraste ativo, ignora UPDATEs de posição de OUTROS operadores
+          // para o card não "pular" no meio do gesto. Atualiza os demais dados normalmente.
+          if(draggingRef.current)return;
           setQueue(prev=>prev.map(v=>v.id===payload.new.id?{...payload.new,criador:v.criador,lavador:v.lavador}:v));
         }else if(payload.eventType==='DELETE'&&payload.old){
           setQueue(prev=>prev.filter(v=>v.id!==payload.old.id));
@@ -2472,6 +2572,26 @@ function HomeScreen({empresaId,refreshToken=0}){
     setQueue(q=>q.filter(v=>v.id!==id));
   };
 
+  // DnD — persiste a nova ordem após soltar um card.
+  // Recebe o array já reordenado, recalcula queue_position (espaçamento 10)
+  // e dispara update em lote via RPC (que revalida empresa_id no servidor).
+  const persistirOrdem=async(novaOrdem)=>{
+    const snapshot=queue;
+    // Optimistic: aplica a nova ordem na tela imediatamente
+    const comPos=novaOrdem.map((v,i)=>({...v,queue_position:(i+1)*10}));
+    setQueue(comPos);
+    const payload=comPos.map(v=>({id:v.id,pos:v.queue_position}));
+    try{
+      const{error}=await sb.rpc('fn_reordenar_fila',{p_empresa_id:empresaId,p_ordem:payload});
+      if(error)throw error;
+    }catch(e){
+      console.error("Erro ao reordenar fila:",e);
+      setQueue(snapshot); // rollback
+      setErrorMsg("Não foi possível salvar a nova ordem. Tente novamente.");
+      setTimeout(()=>setErrorMsg(""),5000);
+    }
+  };
+
   const pills=[
     {label:"Aguardando",count:queue.filter(v=>v.status==="Aguardando").length,color:"#fbbf24",pct:queue.length?queue.filter(v=>v.status==="Aguardando").length/queue.length*100:0},
     {label:"Lavando",   count:queue.filter(v=>v.status==="Lavando").length,   color:"#38bdf8",pct:queue.length?queue.filter(v=>v.status==="Lavando").length/queue.length*100:0},
@@ -2523,7 +2643,14 @@ function HomeScreen({empresaId,refreshToken=0}){
           <div style={{color:"rgba(186,230,253,.7)",fontWeight:700,fontSize:16,marginBottom:6}}>Fila vazia</div>
           <div style={{color:"rgba(186,230,253,.35)",fontSize:13,lineHeight:1.5}}>Nenhum veículo aguardando no momento.<br/>Adicione um na aba <span style={{color:"#38bdf8",fontWeight:700}}>Nova Lavagem</span>.</div>
         </div>
-      ):(queue.map((v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} onUpdate={(id,patch)=>setQueue(q=>q.map(x=>x.id===id?{...x,...patch}:x))} funcionarios={funcionarios} selecionarLavador={false} idx={i}/>))}
+      ):(
+        <FilaArrastavel
+          queue={queue}
+          onReordenar={persistirOrdem}
+          onDragState={(ativo,id)=>{draggingRef.current=ativo;setDragId(ativo?id:null);}}>
+          {(v,i)=><CarCard key={v.id} item={v} onAdvance={advance} onDelete={del} onUpdate={(id,patch)=>setQueue(q=>q.map(x=>x.id===id?{...x,...patch}:x))} funcionarios={funcionarios} selecionarLavador={false} idx={i}/>}
+        </FilaArrastavel>
+      )}
       </div>
     </div>
   );
