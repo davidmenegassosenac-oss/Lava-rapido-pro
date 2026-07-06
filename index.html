@@ -5006,7 +5006,19 @@ function RelatoriosScreen({empresaId,embedded}){
       atual.push(d<=diasNoMesAtual?(mapaAtual[d]||0):null);
       anterior.push(d<=diasNoMesAnterior?(mapaAnterior[d]||0):null);
     }
-    return{atual,anterior,nomeAtual:NOMES_MESES[mesM],nomeAnterior:NOMES_MESES[mesAnt],dias:maxDias};
+    // Totais e comparação
+    const totalAtual=Object.values(mapaAtual).reduce((s,v)=>s+v,0);
+    const totalAnterior=Object.values(mapaAnterior).reduce((s,v)=>s+v,0);
+    // Compara o mesmo intervalo de dias (1..hoje) para ser justo — mês atual incompleto
+    let anteriorAteHoje=0;
+    for(let d=1;d<=diasNoMesAtual;d++)anteriorAteHoje+=(mapaAnterior[d]||0);
+    const variacao=anteriorAteHoje>0?((totalAtual-anteriorAteHoje)/anteriorAteHoje)*100:null;
+    // Projeção simples de fechamento do mês atual (média diária × dias do mês)
+    const mediaDiaria=diasNoMesAtual>0?totalAtual/diasNoMesAtual:0;
+    const diasDoMesAtualTotal=new Date(anoM,mesM+1,0).getDate();
+    const projecao=mediaDiaria*diasDoMesAtualTotal;
+    return{atual,anterior,nomeAtual:NOMES_MESES[mesM],nomeAnterior:NOMES_MESES[mesAnt],dias:maxDias,
+      totalAtual,totalAnterior,anteriorAteHoje,variacao,projecao,diasCorridos:diasNoMesAtual};
   },[histAll]);
 
   // Faturamento por serviço (valor, não só contagem) — período selecionado
@@ -5070,12 +5082,43 @@ function RelatoriosScreen({empresaId,embedded}){
       doc.text(empresaNome||"Lava Rápido",margin,14);
       doc.setFontSize(10);
       doc.setFont(undefined,"normal");
-      doc.text(`Relatório de faturamento — ${labelPeriodo}`,margin,21);
+      doc.text(`Relatório analítico de faturamento — ${labelPeriodo}`,margin,21);
       doc.setFontSize(8);
       doc.text(`Emitido em ${emissao}`,pageW-margin,21,{align:"right"});
 
       y=36;
       doc.setTextColor(30,30,30);
+
+      // ── Resumo em linguagem clara (bloco comunicativo) ─────────────────
+      // Monta uma frase explicativa sobre o desempenho, com percentuais.
+      const svcTop=svcValorBreakdown[0];
+      const pctTop=svcTop&&entradas>0?Math.round((svcTop.valor/entradas)*100):0;
+      const frases=[];
+      frases.push(`No período (${labelPeriodo.toLowerCase()}), a lavação faturou ${fmtBRL(entradas)} em ${totalAtend} ${totalAtend===1?"atendimento":"atendimentos"}, com ticket médio de ${fmtBRL(ticketMedio)}.`);
+      if(svcTop)frases.push(`O serviço que mais gerou receita foi "${svcTop.nome}", responsável por ${pctTop}% do faturamento.`);
+      if(saldo>=0)frases.push(`O saldo do período foi positivo em ${fmtBRL(saldo)} (receitas menos despesas).`);
+      else frases.push(`O período fechou com saldo negativo de ${fmtBRL(Math.abs(saldo))} — as despesas superaram as receitas.`);
+      if(comparativoMensal.variacao!==null){
+        const v=comparativoMensal.variacao;
+        const dir=v>=0?"acima":"abaixo";
+        frases.push(`Comparando ${comparativoMensal.diasCorridos} ${comparativoMensal.diasCorridos===1?"dia":"dias"} de ${comparativoMensal.nomeAtual} com o mesmo intervalo de ${comparativoMensal.nomeAnterior}, o faturamento está ${Math.abs(Math.round(v))}% ${dir}.`);
+      }
+      const resumoTexto=frases.join(" ");
+
+      doc.setFillColor(240,249,255);
+      doc.setDrawColor(186,230,253);
+      const resumoLinhas=doc.splitTextToSize(resumoTexto,pageW-margin*2-8);
+      const resumoH=resumoLinhas.length*4.6+10;
+      doc.roundedRect(margin,y,pageW-margin*2,resumoH,2,2,"FD");
+      doc.setTextColor(15,23,42);
+      doc.setFontSize(9);
+      doc.setFont(undefined,"bold");
+      doc.text("Resumo do período",margin+4,y+6);
+      doc.setFont(undefined,"normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(51,65,85);
+      doc.text(resumoLinhas,margin+4,y+12);
+      y+=resumoH+8;
 
       // Cards de KPI (grid 2x2 + ticket médio)
       const kpis=[
@@ -5106,40 +5149,102 @@ function RelatoriosScreen({empresaId,embedded}){
       doc.text(`Ticket médio: ${fmtBRL(ticketMedio)}`,margin,y);
       y+=8;
 
-      // Gráfico de barras simples (desenho manual — sem lib de gráfico)
+      // Gráfico de barras do período — com valores e % sobre cada barra
       if(chartData&&chartData.length>0){
         doc.setFontSize(10);
         doc.setFont(undefined,"bold");
+        doc.setTextColor(30,30,30);
         doc.text("Faturamento no período",margin,y);
         doc.setFont(undefined,"normal");
-        y+=5;
-        const chartH=32,chartW=pageW-margin*2;
+        y+=6;
+        const chartH=34,chartW=pageW-margin*2;
+        const totalPeriodo=chartData.reduce((s,c)=>s+c.v,0);
         const maxV=Math.max(...chartData.map(c=>c.v),1);
-        const barGap=2;
+        const barGap=chartData.length>15?1:3;
         const barW=(chartW-barGap*(chartData.length-1))/chartData.length;
         chartData.forEach((c,i)=>{
           const h=maxV>0?(c.v/maxV)*chartH:0;
           const x=margin+i*(barW+barGap);
+          // Barra com gradiente simulado (mais escuro embaixo)
           doc.setFillColor(56,189,248);
           doc.rect(x,y+chartH-h,barW,h,"F");
+          // Valor no topo da barra (só se couber e for relevante)
+          if(c.v>0&&barW>8){
+            doc.setFontSize(5.5);
+            doc.setTextColor(30,64,90);
+            const pctBar=totalPeriodo>0?Math.round((c.v/totalPeriodo)*100):0;
+            doc.text(`${pctBar}%`,x+barW/2,y+chartH-h-1.5,{align:"center"});
+          }
           doc.setFontSize(6);
           doc.setTextColor(100,100,100);
           doc.text(c.l,x+barW/2,y+chartH+4,{align:"center",maxWidth:barW+4});
         });
-        y+=chartH+10;
+        y+=chartH+11;
       }
 
       // ── Análise Comparativa ────────────────────────────────────────────
-      if(y>240){doc.addPage();y=18;}
+      if(y>210){doc.addPage();y=18;}
       doc.setFontSize(12);
       doc.setFont(undefined,"bold");
       doc.setTextColor(14,116,144);
-      doc.text("Análise Comparativa",margin,y);
+      doc.text("Análise Comparativa Mensal",margin,y);
       doc.setFont(undefined,"normal");
       y+=7;
 
+      // Caixa de destaque: mês atual x anterior, com variação e projeção
+      {
+        const cm=comparativoMensal;
+        const boxH=38, halfW=(pageW-margin*2-6)/2;
+        // Card mês anterior (referência, cinza)
+        doc.setFillColor(248,250,252);
+        doc.setDrawColor(220,220,220);
+        doc.roundedRect(margin,y,halfW,boxH,2,2,"FD");
+        doc.setFontSize(8);
+        doc.setTextColor(120,120,120);
+        doc.text(`${cm.nomeAnterior} (mês fechado)`,margin+4,y+7);
+        doc.setFontSize(14);
+        doc.setFont(undefined,"bold");
+        doc.setTextColor(90,90,90);
+        doc.text(fmtBRL(cm.totalAnterior),margin+4,y+18);
+        doc.setFont(undefined,"normal");
+        doc.setFontSize(7);
+        doc.setTextColor(140,140,140);
+        doc.text(`Mesmo intervalo (1 a ${cm.diasCorridos}): ${fmtBRL(cm.anteriorAteHoje)}`,margin+4,y+27);
+
+        // Card mês atual (destaque azul)
+        const x2=margin+halfW+6;
+        doc.setFillColor(240,249,255);
+        doc.setDrawColor(56,189,248);
+        doc.roundedRect(x2,y,halfW,boxH,2,2,"FD");
+        doc.setFontSize(8);
+        doc.setTextColor(14,116,144);
+        doc.text(`${cm.nomeAtual} (${cm.diasCorridos} ${cm.diasCorridos===1?"dia":"dias"} corridos)`,x2+4,y+7);
+        doc.setFontSize(14);
+        doc.setFont(undefined,"bold");
+        doc.setTextColor(14,116,144);
+        doc.text(fmtBRL(cm.totalAtual),x2+4,y+18);
+        doc.setFont(undefined,"normal");
+
+        // Variação (seta + %) e projeção
+        if(cm.variacao!==null){
+          const pos=cm.variacao>=0;
+          const cor=pos?[34,197,94]:[239,68,68];
+          const seta=pos?"▲":"▼";
+          doc.setFontSize(9);
+          doc.setTextColor(cor[0],cor[1],cor[2]);
+          doc.setFont(undefined,"bold");
+          doc.text(`${seta} ${Math.abs(Math.round(cm.variacao))}% vs ${cm.nomeAnterior}`,x2+4,y+27);
+          doc.setFont(undefined,"normal");
+        }
+        doc.setFontSize(7);
+        doc.setTextColor(120,120,120);
+        doc.text(`Projeção de fechamento: ${fmtBRL(cm.projecao)}`,x2+4,y+33);
+        y+=boxH+9;
+      }
+
       // Gráfico de barras: faturamento das últimas 4 semanas (fixo, independe do período selecionado)
       if(semanas4.length>0){
+        if(y>235){doc.addPage();y=18;}
         doc.setFontSize(9.5);
         doc.setFont(undefined,"bold");
         doc.setTextColor(30,30,30);
@@ -5240,14 +5345,19 @@ function RelatoriosScreen({empresaId,embedded}){
         doc.setTextColor(30,30,30);
         doc.text("Faturamento por Tipo de Serviço",margin,y);
         y+=3;
+        const totalSvc=svcValorBreakdown.reduce((s,v)=>s+v.valor,0);
         doc.autoTable({
           startY:y,
           margin:{left:margin,right:margin},
-          head:[["Serviço","Qtd.","Faturamento"]],
-          body:svcValorBreakdown.map(s=>[s.nome,String(s.qtd),fmtBRL(s.valor)]),
+          head:[["Serviço","Qtd.","Faturamento","% do total"]],
+          body:svcValorBreakdown.map(s=>[
+            s.nome,String(s.qtd),fmtBRL(s.valor),
+            `${totalSvc>0?Math.round((s.valor/totalSvc)*100):0}%`
+          ]),
           theme:"striped",
           headStyles:{fillColor:[99,102,241],fontSize:8.5},
           styles:{fontSize:8.5,cellPadding:2.5},
+          columnStyles:{3:{halign:"right",fontStyle:"bold"}},
         });
         y=doc.lastAutoTable.finalY+8;
       }
