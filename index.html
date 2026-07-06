@@ -517,10 +517,24 @@ function calcSumidos(hist,filaAtiva,histHoje,min){
     }
   });
 
+  // Chave normalizada e composta: prioriza a PLACA (identificador mais estável
+  // do veículo) e cai para o TELEFONE limpo. Isso garante que todas as visitas
+  // do mesmo cliente/veículo sejam agrupadas juntas, mesmo que o telefone tenha
+  // sido digitado de formas diferentes entre uma visita e outra. Sem isso, a
+  // visita antiga escapava como "cliente separado" e ficava presa no CRM.
+  const chaveCliente=(r)=>{
+    const placa=String(r.plate||'').trim().toUpperCase();
+    if(placa)return 'P:'+placa;
+    const fone=String(r.phone||'').replace(/\D/g,'');
+    if(fone.length>=8)return 'F:'+fone;
+    return 'ID:'+(r.phone||r.plate||Math.random());
+  };
+
   const map={};
   hist.forEach(r=>{
-    if(!map[r.phone]||new Date(r.completed_at)>new Date(map[r.phone].completed_at))
-      map[r.phone]=r;
+    const k=chaveCliente(r);
+    if(!map[k]||new Date(r.completed_at)>new Date(map[k].completed_at))
+      map[k]=r;
   });
   return Object.values(map)
     .map(r=>({...r,dias:daysSince(r.completed_at)}))
