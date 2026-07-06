@@ -1023,7 +1023,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
   const [ass,setAss]=useState(null);
   const [limites,setLimites]=useState(null);
   const [cobrancas,setCobrancas]=useState([]);
-  const [form,setForm]=useState({nome_fantasia:"",telefone:"",razao_social:"",cnpj:""});
+  const [form,setForm]=useState({nome_fantasia:"",telefone:"",razao_social:"",cnpj:"",chave_pix:""});
   const [svcs,setSvcs]=useState([]);
   const [newSvc,setNewSvc]=useState({nome:"",valor:"",limite_diario:""});
   const [saving,setSaving]=useState(false);
@@ -1062,7 +1062,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
       .then(({data,error})=>{
         if(error||!data)return;
         setEmpresa(data);
-        setForm({nome_fantasia:data.nome_fantasia||"",telefone:data.telefone||"",razao_social:data.razao_social||"",cnpj:data.cnpj||""});
+        setForm({nome_fantasia:data.nome_fantasia||"",telefone:data.telefone||"",razao_social:data.razao_social||"",cnpj:data.cnpj||"",chave_pix:data.chave_pix||""});
         setIgnorarLimites(data.ignorar_limites_hoje||false);
         // Merge defensivo: HORARIOS_PADRAO garante todas as chaves mesmo se banco vier parcial
         if(data.horario_funcionamento&&typeof data.horario_funcionamento==="object"){
@@ -1114,6 +1114,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
       telefone:form.telefone.trim()||null,
       razao_social:form.razao_social.trim()||null,
       cnpj:form.cnpj.trim()||null,
+      chave_pix:form.chave_pix.trim()||null,
       updated_at:new Date().toISOString(),
     }).eq('id',empresaId);
 
@@ -1233,7 +1234,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
       {/* Tab Empresa */}
       {tab==="empresa"&&(
         <div>
-          {[["nome_fantasia","Nome do Lava-Jato *","Lava Rápido do João"],["telefone","Telefone","(49) 99999-9999"],["razao_social","Razão Social","Empresa LTDA"],["cnpj","CNPJ","00.000.000/0001-00"]].map(([field,label,ph])=>(
+          {[["nome_fantasia","Nome do Lava-Jato *","Lava Rápido do João"],["telefone","Telefone","(49) 99999-9999"],["razao_social","Razão Social","Empresa LTDA"],["cnpj","CNPJ","00.000.000/0001-00"],["chave_pix","Chave PIX (para cobrança de mensalistas)","CPF, e-mail, telefone ou aleatória"]].map(([field,label,ph])=>(
             <div key={field} style={{marginBottom:14}}>
               <label className="lbl">{label}</label>
               <input className="glass-input" value={form[field]} onChange={e=>setF(field,e.target.value)} placeholder={ph}/>
@@ -4843,11 +4844,18 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
 function CobrancasScreen({empresaId,embedded}){
   const [faturas,setFaturas]=useState([]);
   const [loading,setLoading]=useState(true);
+  const [empresaInfo,setEmpresaInfo]=useState({nome_fantasia:"",chave_pix:""});
   const [mesRef,setMesRef]=useState(()=>{
     const d=new Date();
     return new Date(d.getFullYear(),d.getMonth(),1);
   });
   const [errorMsg,setErrorMsg]=useState("");
+
+  // Dados da empresa (nome + chave PIX) para a mensagem de cobrança
+  useEffect(()=>{
+    sb.from('empresas').select('nome_fantasia,chave_pix').eq('id',empresaId).single()
+      .then(({data})=>{if(data)setEmpresaInfo({nome_fantasia:data.nome_fantasia||"",chave_pix:data.chave_pix||""});});
+  },[empresaId]);
 
   const mesISO=useMemo(()=>toLocalDateStr(mesRef),[mesRef]);
   const nomeMes=useMemo(()=>mesRef.toLocaleDateString("pt-BR",{month:"long",year:"numeric"}),[mesRef]);
@@ -4881,6 +4889,32 @@ function CobrancasScreen({empresaId,embedded}){
 
   const irMes=(delta)=>{
     setMesRef(m=>new Date(m.getFullYear(),m.getMonth()+delta,1));
+  };
+
+  // Gera o link do WhatsApp com resumo da fatura, valor e chave PIX
+  const cobrarWhatsApp=(f)=>{
+    const nomeLavaJato=empresaInfo.nome_fantasia||"nosso lava-jato";
+    const mesNome=mesRef.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+    const linhas=[
+      `Olá ${f.client||""}! 👋`,
+      "",
+      `Segue o resumo da sua mensalidade em *${nomeLavaJato}* referente a ${mesNome}:`,
+      "",
+      `🚗 Veículo: ${f.plate}`,
+      `🧼 Lavagens no mês: ${f.qtd_lavagens}`,
+      `💰 Valor total: *${fmtBRL(f.valor_total)}*`,
+    ];
+    if(f.data_vencimento)linhas.push(`📅 Vencimento: ${fmtDate(f.data_vencimento)}`);
+    if(empresaInfo.chave_pix){
+      linhas.push("");
+      linhas.push(`Para pagar via PIX, use a chave abaixo:`);
+      linhas.push(`🔑 *${empresaInfo.chave_pix}*`);
+    }
+    linhas.push("");
+    linhas.push("Qualquer dúvida, estamos à disposição. Obrigado pela preferência! 🚗✨");
+    const msg=encodeURIComponent(linhas.join("\n"));
+    const fone=String(f.phone||"").replace(/\D/g,"");
+    return`https://api.whatsapp.com/send?phone=${fone}&text=${msg}`;
   };
 
   return(
@@ -4970,6 +5004,23 @@ function CobrancasScreen({empresaId,embedded}){
                 <div style={{textAlign:"right",flexShrink:0}}>
                   <div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>{fmtBRL(f.valor_total)}</div>
                 </div>
+              </div>
+              {/* Ação: cobrar via WhatsApp */}
+              <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid rgba(125,211,252,.08)"}}>
+                {f.phone?(
+                  <a href={cobrarWhatsApp(f)} target="_blank" rel="noopener noreferrer"
+                    style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                      padding:"10px 0",borderRadius:11,textDecoration:"none",
+                      background:"rgba(34,197,94,.14)",border:"1px solid rgba(34,197,94,.3)",
+                      color:"#4ade80",fontWeight:700,fontSize:13}}>
+                    <Icon name="MessageCircle" size={15} color="#4ade80"/>
+                    Cobrar via WhatsApp
+                  </a>
+                ):(
+                  <div style={{textAlign:"center",fontSize:11,color:"rgba(186,230,253,.35)",padding:"8px 0"}}>
+                    Sem telefone cadastrado para cobrança
+                  </div>
+                )}
               </div>
             </div>
           ))}
