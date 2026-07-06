@@ -4917,6 +4917,25 @@ function CobrancasScreen({empresaId,embedded}){
     return`https://api.whatsapp.com/send?phone=${fone}&text=${msg}`;
   };
 
+  const [baixando,setBaixando]=useState(null); // id da fatura em processamento
+
+  const darBaixa=async(f)=>{
+    if(!window.confirm(`Confirmar recebimento de ${fmtBRL(f.valor_total)} de ${f.client||"cliente"} (${f.plate})?\n\nIsso marcará a fatura como paga, atualizará as ${f.qtd_lavagens} lavagens e lançará a entrada no caixa de hoje.`))return;
+    setBaixando(f.id);
+    setErrorMsg("");
+    try{
+      const{data,error}=await sb.rpc('fn_dar_baixa_fatura',{p_empresa_id:empresaId,p_fatura_id:f.id});
+      if(error)throw error;
+      if(data&&data.ok===false)throw new Error(data.erro||"Falha ao dar baixa.");
+      await carregar(); // recarrega para refletir o novo status
+    }catch(e){
+      console.error("Erro ao dar baixa:",e);
+      setErrorMsg(e.message||"Não foi possível dar baixa na fatura. Tente novamente.");
+    }finally{
+      setBaixando(null);
+    }
+  };
+
   return(
     <div className={embedded?"":"scroll screen-enter"}>
       {/* Navegação de mês */}
@@ -5005,22 +5024,35 @@ function CobrancasScreen({empresaId,embedded}){
                   <div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>{fmtBRL(f.valor_total)}</div>
                 </div>
               </div>
-              {/* Ação: cobrar via WhatsApp */}
-              <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid rgba(125,211,252,.08)"}}>
+              {/* Ações: cobrar via WhatsApp + dar baixa */}
+              <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid rgba(125,211,252,.08)",
+                display:"flex",gap:8}}>
                 {f.phone?(
                   <a href={cobrarWhatsApp(f)} target="_blank" rel="noopener noreferrer"
-                    style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                    style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,
                       padding:"10px 0",borderRadius:11,textDecoration:"none",
                       background:"rgba(34,197,94,.14)",border:"1px solid rgba(34,197,94,.3)",
-                      color:"#4ade80",fontWeight:700,fontSize:13}}>
-                    <Icon name="MessageCircle" size={15} color="#4ade80"/>
-                    Cobrar via WhatsApp
+                      color:"#4ade80",fontWeight:700,fontSize:12.5}}>
+                    <Icon name="MessageCircle" size={14} color="#4ade80"/>
+                    Cobrar
                   </a>
                 ):(
-                  <div style={{textAlign:"center",fontSize:11,color:"rgba(186,230,253,.35)",padding:"8px 0"}}>
-                    Sem telefone cadastrado para cobrança
+                  <div style={{flex:1,textAlign:"center",fontSize:10.5,color:"rgba(186,230,253,.35)",
+                    padding:"10px 0",borderRadius:11,background:"rgba(255,255,255,.03)"}}>
+                    Sem telefone
                   </div>
                 )}
+                <button onClick={()=>darBaixa(f)} disabled={baixando===f.id}
+                  style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,
+                    padding:"10px 0",borderRadius:11,cursor:baixando===f.id?"default":"pointer",
+                    background:"rgba(56,189,248,.14)",border:"1px solid rgba(56,189,248,.3)",
+                    color:"#38bdf8",fontWeight:700,fontSize:12.5,opacity:baixando===f.id?.6:1}}>
+                  {baixando===f.id?(
+                    <><div className="spinner spin" style={{width:13,height:13,borderWidth:2}}/>...</>
+                  ):(
+                    <><Icon name="CheckCircle" size={14} color="#38bdf8"/>Dar Baixa</>
+                  )}
+                </button>
               </div>
             </div>
           ))}
