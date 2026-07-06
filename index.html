@@ -1190,10 +1190,11 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
     setSvcs(s=>s.filter(x=>x.id!==id));
   };
 
-  const SEMPRE_LIVRE=new Set(["empresa","assinatura","servicos"]);
+  const SEMPRE_LIVRE=new Set(["empresa","assinatura","servicos","cobrancas"]);
   const planoAtual=(plano&&plano!=="undefined"&&plano!=="null")?plano:"trial";
   const ALL_CONFIG_TABS=[
     ["relatorios","📈 Relatórios",isOwner],
+    ["cobrancas","🧾 Cobranças",isOwner],
     ["folha","💸 Folha",isOwner],
     ["equipe","👥 Equipe",isOwner],
     ["servicos","🔧 Serviços",true],
@@ -1532,6 +1533,7 @@ function ConfigScreen({empresaId,currentUser,onUpdate,isOwner,plano,onUpgrade}){
           principal. Cada uma é renderizada sem o wrapper "scroll
           screen-enter" próprio, porque já estamos dentro de um. */}
       {tab==="relatorios"&&isOwner&&<RelatoriosScreen empresaId={empresaId} embedded/>}
+      {tab==="cobrancas"&&isOwner&&<CobrancasScreen empresaId={empresaId} embedded/>}
       {tab==="equipe"&&isOwner&&<AdminScreen empresaId={empresaId} currentUser={currentUser} embedded/>}
       {tab==="folha"&&isOwner&&<FolhaScreen empresaId={empresaId} embedded faturamentoExterno={faturamentoSemana} onFaturamentoChange={()=>{}}/>}
     </div>
@@ -4832,6 +4834,177 @@ function FolhaScreen({empresaId,embedded,faturamentoExterno,onFaturamentoChange}
   );
 }
 
+
+/* ── CobrancasScreen — Painel de Cobranças de Mensalistas (Fase 2) ─────────
+   Lista as faturas mensais dos clientes mensalistas. Ao abrir, fecha/atualiza
+   as faturas do mês corrente via RPC (agrupa lavagens 'agendado' por placa) e
+   exibe as pendentes. A baixa manual e a cobrança WhatsApp entram nas próximas
+   fases. Isolamento por empresa_id garantido pela RPC e pela RLS da tabela. */
+function CobrancasScreen({empresaId,embedded}){
+  const [faturas,setFaturas]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [mesRef,setMesRef]=useState(()=>{
+    const d=new Date();
+    return new Date(d.getFullYear(),d.getMonth(),1);
+  });
+  const [errorMsg,setErrorMsg]=useState("");
+
+  const mesISO=useMemo(()=>toLocalDateStr(mesRef),[mesRef]);
+  const nomeMes=useMemo(()=>mesRef.toLocaleDateString("pt-BR",{month:"long",year:"numeric"}),[mesRef]);
+
+  const carregar=useCallback(async()=>{
+    setLoading(true);
+    setErrorMsg("");
+    try{
+      // 1. Fecha/atualiza as faturas do mês (idempotente — não mexe em pagas)
+      const{error:eRpc}=await sb.rpc('fn_fechar_faturas_mes',{p_empresa_id:empresaId,p_mes:mesISO});
+      if(eRpc)throw eRpc;
+      // 2. Lê as faturas do mês de referência
+      const{data,error}=await sb.from('faturas_mensalistas')
+        .select('*').eq('empresa_id',empresaId).eq('mes_referencia',mesISO)
+        .order('valor_total',{ascending:false});
+      if(error)throw error;
+      setFaturas(data||[]);
+    }catch(e){
+      console.error("Erro ao carregar cobranças:",e);
+      setErrorMsg("Não foi possível carregar as cobranças. Tente novamente.");
+    }finally{
+      setLoading(false);
+    }
+  },[empresaId,mesISO]);
+
+  useEffect(()=>{carregar();},[carregar]);
+
+  const pendentes=faturas.filter(f=>f.status==="pendente");
+  const pagas=faturas.filter(f=>f.status==="paga");
+  const totalPendente=pendentes.reduce((s,f)=>s+(parseFloat(f.valor_total)||0),0);
+
+  const irMes=(delta)=>{
+    setMesRef(m=>new Date(m.getFullYear(),m.getMonth()+delta,1));
+  };
+
+  return(
+    <div className={embedded?"":"scroll screen-enter"}>
+      {/* Navegação de mês */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <button onClick={()=>irMes(-1)}
+          style={{width:36,height:36,borderRadius:10,cursor:"pointer",
+            background:"rgba(255,255,255,.05)",border:"1px solid rgba(125,211,252,.15)",
+            display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Icon name="ChevronDown" size={16} color="#7dd3fc" style={{transform:"rotate(90deg)"}}/>
+        </button>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:15,fontWeight:800,color:"#e0f2fe",textTransform:"capitalize"}}>{nomeMes}</div>
+          <div style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>Faturas de mensalistas</div>
+        </div>
+        <button onClick={()=>irMes(1)}
+          style={{width:36,height:36,borderRadius:10,cursor:"pointer",
+            background:"rgba(255,255,255,.05)",border:"1px solid rgba(125,211,252,.15)",
+            display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Icon name="ChevronDown" size={16} color="#7dd3fc" style={{transform:"rotate(-90deg)"}}/>
+        </button>
+      </div>
+
+      {errorMsg&&(
+        <div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",
+          borderRadius:12,padding:"10px 14px",marginBottom:14,color:"#f87171",fontSize:12,fontWeight:600}}>
+          {errorMsg}
+        </div>
+      )}
+
+      {/* Resumo do total pendente */}
+      {!loading&&pendentes.length>0&&(
+        <div style={{marginBottom:16,padding:16,borderRadius:16,
+          background:"linear-gradient(135deg,rgba(251,191,36,.12),rgba(251,146,60,.08))",
+          border:"1px solid rgba(251,191,36,.3)"}}>
+          <div style={{fontSize:11,color:"rgba(251,191,36,.8)",fontWeight:700,marginBottom:4,
+            textTransform:"uppercase",letterSpacing:".05em"}}>Total a receber</div>
+          <div style={{fontSize:26,fontWeight:900,color:"#fbbf24"}}>{fmtBRL(totalPendente)}</div>
+          <div style={{fontSize:12,color:"rgba(186,230,253,.5)",marginTop:2}}>
+            {pendentes.length} {pendentes.length===1?"cliente pendente":"clientes pendentes"}
+          </div>
+        </div>
+      )}
+
+      {loading?(
+        <div style={{textAlign:"center",padding:"40px 0"}}>
+          <div className="spinner spin" style={{width:28,height:28,margin:"0 auto"}}/>
+        </div>
+      ):faturas.length===0?(
+        <div style={{textAlign:"center",color:"rgba(186,230,253,.4)",padding:"48px 20px"}}>
+          <div style={{fontSize:40,marginBottom:12}}>🧾</div>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:4,color:"rgba(186,230,253,.6)"}}>
+            Nenhuma fatura neste mês
+          </div>
+          <div style={{fontSize:12,lineHeight:1.5}}>
+            Lavagens de clientes mensalistas aparecem aqui agrupadas por cliente.
+          </div>
+        </div>
+      ):(
+        <>
+          {/* Pendentes */}
+          {pendentes.map(f=>(
+            <div key={f.id} className="glass-card" style={{padding:16,marginBottom:12,
+              borderLeft:"3px solid #fbbf24"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontSize:15,fontWeight:800,color:"#e0f2fe",marginBottom:2}}>
+                    {f.client||"Cliente"}
+                  </div>
+                  <div style={{fontSize:12,color:"rgba(186,230,253,.5)",marginBottom:8}}>
+                    {f.plate}{f.phone?` · ${f.phone}`:""}
+                  </div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
+                      background:"rgba(56,189,248,.12)",border:"1px solid rgba(56,189,248,.25)",color:"#38bdf8"}}>
+                      {f.qtd_lavagens} {f.qtd_lavagens===1?"lavagem":"lavagens"}
+                    </span>
+                    {f.data_vencimento&&(
+                      <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,
+                        background:"rgba(251,191,36,.1)",border:"1px solid rgba(251,191,36,.25)",color:"#fbbf24"}}>
+                        Vence {fmtDate(f.data_vencimento)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>{fmtBRL(f.valor_total)}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Pagas (recolhidas visualmente) */}
+          {pagas.length>0&&(
+            <div style={{marginTop:20}}>
+              <div style={{fontSize:11,color:"rgba(186,230,253,.4)",fontWeight:700,marginBottom:10,
+                textTransform:"uppercase",letterSpacing:".05em"}}>
+                Pagas ({pagas.length})
+              </div>
+              {pagas.map(f=>(
+                <div key={f.id} className="glass-card" style={{padding:14,marginBottom:10,
+                  borderLeft:"3px solid #4ade80",opacity:.7}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:700,color:"#e0f2fe"}}>{f.client||"Cliente"}</div>
+                      <div style={{fontSize:11,color:"rgba(186,230,253,.4)"}}>
+                        {f.plate} · {f.qtd_lavagens} {f.qtd_lavagens===1?"lavagem":"lavagens"}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:15,fontWeight:800,color:"#4ade80"}}>{fmtBRL(f.valor_total)}</span>
+                      <Icon name="CheckCircle" size={16} color="#4ade80"/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 function RelatoriosScreen({empresaId,embedded}){
   const [periodo,setPeriodo]=useState("semana");
