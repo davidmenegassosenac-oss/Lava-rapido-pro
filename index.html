@@ -2890,8 +2890,9 @@ function NewWashScreen({empresaId,userId,onSuccess}){
     const plate=plateRaw.replace(/[\s-]/g,"");           // sem espaço/traço
     const phone=(refs.phone?.current?.value||"").replace(/\D/g,""); // só dígitos
 
-    // Guard AND estrito: ambos precisam estar preenchidos e válidos
-    if(plate.length<7||phone.length<8){setClienteReconhecido(false);return;}
+    // Guard AND estrito: placa preenchida E telefone COMPLETO (11 dígitos BR).
+    // Exigir os 11 dígitos evita disparar buscas a cada tecla durante a digitação.
+    if(plate.length<7||phone.length!==11){setClienteReconhecido(false);return;}
 
     const token=++buscaClienteRef.current;
     try{
@@ -3098,8 +3099,8 @@ function NewWashScreen({empresaId,userId,onSuccess}){
       <div style={{marginBottom:14}}>
         <label className="lbl">Telefone (com DDD)</label>
         <input ref={refs.phone} className="glass-input" type="tel" defaultValue="" placeholder="(49) 99999-9999"
-          onChange={maskPhone}
-          onBlur={e=>{maskPhone(e);verificarClienteRecuperado();buscarClienteExato();}}
+          onChange={e=>{maskPhone(e);buscarClienteExato();}}
+          onBlur={e=>{maskPhone(e);verificarClienteRecuperado();}}
           style={{borderColor:errors.phone?"rgba(239,68,68,.5)":undefined}}/>
         {errors.phone&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.phone}</div>}
       </div>
