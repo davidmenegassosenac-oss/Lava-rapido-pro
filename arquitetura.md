@@ -1,6 +1,6 @@
 # Arquitetura — Lava Rápido Pro
 
-**Última atualização:** 02 de julho de 2026
+**Última atualização:** 06 de julho de 2026
 **Escopo:** `index.html` (painel administrativo) + Edge Functions (Supabase)
 
 Este documento registra decisões arquiteturais críticas que **não podem ser revertidas ou contornadas** sem análise cuidadosa. Cada regra abaixo existe porque uma violação anterior já causou um bug real em produção. O objetivo é que qualquer pessoa (humana ou IA) trabalhando neste código consulte este arquivo antes de mexer nas áreas listadas.
@@ -201,6 +201,57 @@ SELECT status_code, content::text FROM net._http_response ORDER BY id DESC LIMIT
 ```
 
 `401` → verificar o toggle "Verify JWT" e se o secret bate exatamente. `404` → nome da função errado ou não deployada. `200` com `falhas: []` → tudo certo.
+
+---
+
+## 🔒 Fila Inteligente (prioridades + drag-and-drop)
+
+Implementado em 06/07/2026. Migration `032`.
+
+- **Ordenação:** `fetchQueue` ordena por `queue_position` (não mais `created_at`). Novos registros entram no fim via trigger `fn_definir_queue_position`. Espaçamento de 10 entre posições permite inserir entre dois cards sem renumerar a fila toda.
+- **Drag-and-drop:** Pointer Events nativos, sem lib externa (`@dnd-kit`/`@hello-pangea` exigem bundler, incompatíveis com o single-file). Componente `FilaArrastavel` isolado. O arraste só começa pelo punho, para não conflitar com os botões de status do card.
+- **Regra anti-conflito (concorrência):** durante um gesto de arraste, `draggingRef.current = true` faz o handler do Realtime UPDATE ignorar reordenações — senão o card "pula" quando outro operador mexe na fila ao mesmo tempo. Ao soltar, libera. **Nunca remover esse guard.**
+- **Persistência:** ao soltar, optimistic reorder local → `fn_reordenar_fila` (RPC que revalida `empresa_id` por item) → rollback + banner se falhar.
+- **Prioridades:** cor do mensalista é **roxo** (`#a78bfa`), escolhida deliberadamente para não colidir com o azul do status "Lavando". Se for adicionar outra prioridade, escolher cor fora do conjunto de status (amarelo/azul/verde/cinza) e das prioridades existentes (roxo/laranja/dourado).
+
+---
+
+## 🔒 Sistema de Mensalistas (faturamento mensal)
+
+Implementado em 06/07/2026. Migrations `033`–`036`.
+
+### Fluxo de dados (importante entender antes de mexer)
+
+Lavagens de mensalista **não ficam em `ordens_servico`** após finalizadas — vão para `historico` com `status_pagamento = 'agendado'`. Por isso toda a lógica de fatura opera sobre o `historico`, não sobre a fila. Qualquer ajuste que assuma `ordens_servico` para mensalistas está errado.
+
+### Componentes
+
+| Peça | Onde | Função |
+|---|---|---|
+| `faturas_mensalistas` | Tabela (migration 033) | Uma fatura por placa por mês, identificada por placa+telefone (sem tabela de clientes) |
+| `fn_fechar_faturas_mes` | RPC (033) | Agrupa lavagens `agendado` do mês por cliente. Idempotente, não toca em fatura paga |
+| `fn_dar_baixa_fatura` | RPC (035→036) | Baixa atômica: fatura→paga, historico→pago+data_pagamento, entrada única no caixa |
+| `CobrancasScreen` | `index.html` | Aba "🧾 Cobranças" (owner-only). Lista faturas, cobra via WhatsApp, dá baixa |
+| `chave_pix` | Coluna em `empresas` (034) | Chave PIX estática usada na cobrança WhatsApp |
+
+### Regras específicas
+
+1. **A baixa é atômica e idempotente.** `fn_dar_baixa_fatura` roda tudo numa transação (fatura + histórico + caixa). Usa `FOR UPDATE` e só processa fatura `pendente`. Nunca desmembrar isso em chamadas separadas do frontend — a atomicidade é o que impede fatura paga sem lançamento no caixa (ou vice-versa).
+2. **Faturamento conta pela data de pagamento, não pela data da lavagem.** A baixa grava `data_pagamento` no `historico`. **Tanto os Relatórios quanto o Histórico** usam `dataEfetiva(h) = data_pagamento || completed_at` em TODOS os cálculos de faturamento por data (KPIs, gráficos, total do dia, filtro "Limpo hoje"). Nunca voltar a usar `completed_at` puro para somar receita em nenhuma das duas telas, senão elas divergem e o bug do retroativo volta. Cards do Histórico com pagamento retroativo mostram o selo "💰 Pago em DD/MM".
+3. **A query de período do relatório usa `.or(completed_at / data_pagamento)`** para trazer lavagens antigas pagas hoje. Se restringir de volta para só `completed_at`, os mensalistas pagos hoje somem do período atual.
+4. **Duas visões complementares, sem dupla contagem:** receita nos Relatórios vem do `historico`; o extrato do Caixa Manual vem de `caixa_movimentos`. O pagamento do mensalista aparece nos dois de propósito — são telas com finalidades distintas, não o mesmo total somado duas vezes.
+
+---
+
+## 🔒 Auto-fill de cliente na Nova Lavagem
+
+Implementado em 06/07/2026. `buscarClienteExato` no `NewWashScreen`.
+
+- **Match AND estrito:** só preenche Nome+Modelo se placa **E** telefone baterem 100% com um registro do `historico`. Ambos normalizados antes de comparar (placa sem espaço/traço em maiúscula; telefone só dígitos). Se só um bater, não preenche nada — evita puxar dados de dono anterior de uma placa revendida. **Nunca afrouxar esse AND** para "placa OU telefone": é uma regra de segurança de dados, não uma conveniência.
+- **Só escreve em campos vazios** — nunca sobrescreve o que o operador já digitou.
+- **Gatilho:** `onChange` do telefone, com guard `phone.length === 11`. A busca só consulta o banco quando o telefone está completo (11 dígitos BR); antes disso o guard retorna sem custo. Se algum dia precisar aceitar telefone fixo (10 dígitos), ajustar o guard para `>= 10`.
+- **Anti-race-condition:** `buscaClienteRef` (token incremental) garante que só o resultado da busca mais recente é aplicado.
+- Isolamento por `empresa_id` na query do `historico`.
 
 ---
 

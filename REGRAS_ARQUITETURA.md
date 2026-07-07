@@ -1,6 +1,6 @@
 # Regras da Casa — Arquitetura Lava Rápido Pro
 
-**Última atualização:** 02 de julho de 2026
+**Última atualização:** 06 de julho de 2026
 
 Este arquivo lista as **decisões técnicas irreversíveis** do projeto. Cada regra existe porque uma violação já causou um bug real em produção. Antes de alterar qualquer área abaixo, leia a regra correspondente.
 
@@ -40,6 +40,14 @@ A Edge Function `backup-tenant-data` (e qualquer outra que valide seu próprio s
 
 **Armadilha conhecida:** esse toggle pode voltar a ligar sozinho a cada novo deploy/atualização da função (bug documentado publicamente na comunidade Supabase, não é erro de configuração nossa). **Sempre confira manualmente esse toggle depois de qualquer redeploy** de uma função com autenticação própria — um cron job de backup pode passar dias falhando silenciosamente com `401` sem nenhum alerta visível até alguém checar `cron.job_run_details`.
 
+## 6. Faturamento conta pela data efetiva de pagamento, nunca só pela data da lavagem
+
+Receita de mensalista deve ser contabilizada na data em que o pagamento foi recebido (baixa manual), não na data em que os carros foram lavados. Somar faturamento por `completed_at` puro faz o passado ser alterado retroativamente quando uma fatura antiga é paga.
+
+**Regra:** em qualquer cálculo de faturamento por data (nos **Relatórios** e no **Histórico**), usar sempre `dataEfetiva(h) = h.data_pagamento || h.completed_at`. Nunca reintroduzir `completed_at` puro para somar ou agrupar receita em nenhuma das telas — se uma usar e a outra não, elas divergem (foi o bug do "Hoje R$ 590 vs R$ 640"). A query de período deve trazer registros por `completed_at` OU `data_pagamento` (`.or()`), senão lavagens antigas pagas hoje somem do período atual.
+
+Faturamento (Relatórios, via `historico`) e extrato de caixa (Caixa Manual, via `caixa_movimentos`) são visões complementares — o pagamento do mensalista aparece nos dois de propósito, sem dupla contagem num mesmo total.
+
 ---
 
 ## Checklist rápido antes de qualquer PR que toque em Auth, Realtime, Lazy-Mount ou fluxo financeiro
@@ -52,3 +60,4 @@ A Edge Function `backup-tenant-data` (e qualquer outra que valide seu próprio s
 - [ ] Confirmei que nenhuma transição financeira foi tratada como otimista/offline?
 - [ ] Se adicionei função nova a uma tela, confirmei com `grep` que está no escopo correto?
 - [ ] Se redeployei uma Edge Function com secret próprio, confirmei que "Verify JWT" continua desligado?
+- [ ] Se toquei em cálculo de faturamento, usei `dataEfetiva` (data_pagamento || completed_at) em vez de `completed_at` puro?

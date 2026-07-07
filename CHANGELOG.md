@@ -1,5 +1,46 @@
 # Changelog — Lava Rápido Pro
 
+## [06/07/2026] — Fila Inteligente, CRM, Mensalistas, Consistência Financeira e Auto-fill
+
+### 🟢 Adicionado — Fila Inteligente com Prioridades e Arraste
+
+- **Prioridades visuais na fila** (`CarCard`): bordas coloridas e badges diferenciando clientes. Mensalista em roxo (`#a78bfa`, escolhido para não colidir com o azul do status "Lavando"), agendamento em laranja. Precedência visual: cliente recuperado (dourado) > prioridade > status. O badge de mensalista é unificado — deriva de `tipo_contrato` OU `priority_type`, sem duplicação.
+- **Reordenação por arraste (drag-and-drop)** via Pointer Events nativos, sem biblioteca externa (incompatível com o setup single-file). Punho de arraste na borda esquerda de cada card; o card segue o dedo enquanto os outros deslizam para abrir espaço. `touch-action:none` evita conflito com scroll.
+- **Regra de precedência anti-conflito:** durante um arraste ativo, `draggingRef` bloqueia a reconciliação do Realtime para o card não "pular" no meio do gesto. Ao soltar: optimistic reorder local → RPC de reordenação em lote → rollback se falhar.
+- **Migration `032`:** colunas `queue_position` e `priority_type` em `ordens_servico`, trigger que coloca novos registros no fim da fila, e RPC `fn_reordenar_fila` que revalida `empresa_id` no servidor. Espaçamento de 10 entre posições para inserções sem renumerar tudo.
+
+### 🔴 Corrigido — Sincronia CRM x Histórico
+
+- **Clientes reconquistados ficavam presos no CRM como inativos.** A função `calcSumidos` agrupava as visitas usando apenas o telefone cru como chave; quando o telefone era digitado de forma diferente entre duas visitas (máscara, espaços, typo), a visita antiga escapava como "cliente separado" e continuava aparecendo na lista de retenção mesmo após o cliente voltar. Corrigido com uma **chave normalizada e composta** (`chaveCliente`): prioriza a placa (identificador estável do veículo) e cai para o telefone limpo (`\D` removido). Agora todas as visitas do mesmo cliente/veículo são agrupadas corretamente, e a lavagem mais recente sempre vence.
+
+### 🟢 Adicionado — Sistema de Mensalistas (faturamento mensal com aprovação manual)
+
+Recurso completo entregue em 4 fases, com baixa manual de pagamento nesta primeira versão.
+
+- **Fase 1 — Modelagem (migration `033`):** tabela `faturas_mensalistas` (identificação por placa+telefone, sem tabela de clientes), com RLS de isolamento por tenant. RPC `fn_fechar_faturas_mes` agrupa as lavagens `agendado` de mensalistas por cliente/mês, idempotente e sem tocar em faturas já pagas.
+- **Fase 2 — Painel de Cobranças:** nova aba "🧾 Cobranças" (só para donos) que fecha/atualiza as faturas do mês ao abrir e lista pendentes e pagas, com total a receber, navegação entre meses e resumo por cliente.
+- **Fase 3 — Cobrança WhatsApp + PIX (migration `034`):** coluna `chave_pix` em `empresas` + campo no formulário da aba Empresa. Botão "Cobrar via WhatsApp" gera mensagem pré-preenchida com resumo das lavagens do mês, valor total e chave PIX (quando cadastrada).
+- **Fase 4 — Baixa manual atômica (migration `035`):** RPC `fn_dar_baixa_fatura` executa numa transação única: marca a fatura como paga, atualiza as lavagens no histórico (`agendado` → `pago`), e lança uma entrada única em `caixa_movimentos` com a data de hoje. Protegida por `FOR UPDATE`, idempotente, com isolamento de tenant. Botão "Dar Baixa" com confirmação explícita.
+
+### 🔴 Corrigido — Integridade do faturamento na baixa de mensalistas (migration `036`)
+
+- **A receita de mensalistas era contabilizada retroativamente.** Ao dar baixa numa fatura antiga, o faturamento contava pela data em que os carros foram lavados (`completed_at`), alterando meses passados. Corrigido com a coluna `data_pagamento` no `historico` (gravada pela RPC de baixa) e uma **data efetiva de faturamento** nos relatórios: `dataEfetiva = data_pagamento || completed_at`. Todos os cálculos de faturamento por data (KPIs, 3 gráficos de período, comparativo de 4 semanas e comparativo mensal) passaram a usar a data efetiva. A query do período usa `.or(completed_at / data_pagamento)` para trazer lavagens antigas pagas hoje. Mudança aditiva: lavagens avulsas sem `data_pagamento` seguem contando como antes.
+- **Decisão arquitetural:** faturamento (Relatórios, via histórico) e extrato de caixa (Caixa Manual, via `caixa_movimentos`) permanecem como visões complementares — o pagamento do mensalista aparece nos dois, cada um com seu propósito, sem dupla contagem num mesmo total.
+
+### 🔴 Corrigido — Consistência de faturamento entre Histórico e Relatórios
+
+- **Divergência de receita "Hoje" entre as abas.** Após a correção da data efetiva de faturamento (migration 036), os Relatórios passaram a contar mensalistas pela data de pagamento, mas o **Histórico** continuou somando por `completed_at` puro — causando divergência (ex: Histórico R$ 590 vs Relatórios R$ 640, a diferença de um mensalista pago hoje cujo carro foi lavado em data anterior). Corrigido aplicando a mesma `dataEfetiva = data_pagamento || completed_at` no `HistoryScreen`: no total do dia, no filtro "Limpo hoje" (dois pontos) e nas pílulas de forma de pagamento. Agora Histórico e Relatórios mostram o mesmo valor sob o regime de caixa unificado.
+- **Selo de recebimento retroativo:** cards do Histórico com `data_pagamento` diferente da data da lavagem exibem "💰 Pago em DD/MM" em roxo, deixando claro para o dono por que um valor de um carro lavado dias atrás conta no caixa de hoje. Confirmado que não havia bug de fuso horário — a diferença exata correspondia a um mensalista legitimamente pago no dia.
+
+### 🟢 Adicionado — Agilização do cadastro na Nova Lavagem
+
+- **Reordenação dos campos** para digitação mais fluida: Placa → Telefone → Nome → Modelo (antes Placa → Modelo → Nome → Telefone).
+- **Auto-fill duplo restrito de cliente:** ao preencher placa e telefone de um cliente já atendido, os campos Nome e Modelo são preenchidos automaticamente a partir do histórico. Regra de segurança AND estrita — só preenche com match 100% exato de **placa E telefone** (ambos normalizados: placa sem espaço/traço, telefone só dígitos). Se apenas um bater (ex: placa revendida a outro dono), não preenche nada. Só escreve em campos vazios, nunca sobrescreve o que o operador digitou. Anti-race-condition via token incremental.
+- **Gatilho instantâneo:** a busca dispara no `onChange` do telefone e executa no exato momento em que o número completa 11 dígitos (padrão brasileiro). Antes disso, um guard de tamanho impede qualquer consulta ao banco — sem enxurrada de queries durante a digitação, sem impacto na fluidez. Selo verde "Cliente reconhecido" confirma o preenchimento vindo do histórico.
+- Isolamento por `empresa_id` preservado (busca no `historico` já filtrada por tenant); nenhuma migration necessária.
+
+---
+
 ## [02/07/2026] — Observabilidade (Sentry), Cadastro por OCR e Backup Automatizado por Tenant
 
 ### 🟢 Adicionado — Observabilidade em Produção (Sentry)
