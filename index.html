@@ -3210,6 +3210,10 @@ function NewWashScreen({empresaId,userId,onSuccess}){
    HISTORY SCREEN — histórico de lavagens + lançamentos manuais de caixa
 ══════════════════════════════════════════════════════════════════════════ */
 function HistoryScreen({empresaId,embedded,isOwner,active,refreshToken=0}){
+  // Data efetiva de faturamento (mesma regra dos Relatórios): mensalista pago
+  // conta na data do pagamento; lavagem avulsa conta na data da lavagem.
+  // Mantém Histórico e Relatórios consistentes sob o regime de caixa.
+  const dataEfetiva=(h)=>h?.data_pagamento||h?.completed_at;
   const [subTab,setSubTab]=useState("historico");
   const [hist,setHist]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -3321,7 +3325,7 @@ function HistoryScreen({empresaId,embedded,isOwner,active,refreshToken=0}){
         h.plate?.toLowerCase().includes(search.toLowerCase())||
         h.model?.toLowerCase().includes(search.toLowerCase());
       const matchPayment=paymentFilter==="todos"||h.forma_pagamento===paymentFilter;
-      const matchHoje=!filtrarHoje||(h.completed_at&&toLocalDateStr(h.completed_at)===dataFiltro);
+      const matchHoje=!filtrarHoje||(dataEfetiva(h)&&toLocalDateStr(dataEfetiva(h))===dataFiltro);
       return matchSearch&&matchPayment&&matchHoje;
     })
   ,[hist,search,paymentFilter,filtrarHoje,dataFiltro]);
@@ -3366,7 +3370,7 @@ function HistoryScreen({empresaId,embedded,isOwner,active,refreshToken=0}){
     const semEstorno=hist.filter(h=>h.status_pagamento!=="estornado");
     return{
       total: semEstorno.reduce((s,h)=>s+(parseFloat(h.value)||0),0),
-      tod:   semEstorno.filter(h=>toLocalDateStr(h.completed_at)===hoje)
+      tod:   semEstorno.filter(h=>toLocalDateStr(dataEfetiva(h))===hoje)
                .reduce((s,h)=>s+(parseFloat(h.value)||0),0),
     };
   },[hist,dataFiltro]);
@@ -3407,7 +3411,7 @@ function HistoryScreen({empresaId,embedded,isOwner,active,refreshToken=0}){
         h.client?.toLowerCase().includes(search.toLowerCase())||
         h.plate?.toLowerCase().includes(search.toLowerCase())||
         h.model?.toLowerCase().includes(search.toLowerCase());
-      const matchHoje=!filtrarHoje||(h.completed_at&&toLocalDateStr(h.completed_at)===dataFiltro);
+      const matchHoje=!filtrarHoje||(dataEfetiva(h)&&toLocalDateStr(dataEfetiva(h))===dataFiltro);
       return matchSearch&&matchHoje&&h.status_pagamento!=="estornado";
     });
     return{
@@ -3571,6 +3575,13 @@ function HistoryScreen({empresaId,embedded,isOwner,active,refreshToken=0}){
                       color:isEstornado?"rgba(186,230,253,.3)":"#4ade80",
                       textDecoration:isEstornado?"line-through":"none"}}>{fmtBRL(h.value)}</div>
                     <div style={{color:"rgba(186,230,253,.4)",fontSize:11}}>{fmtDate(h.completed_at)}</div>
+                    {h.data_pagamento&&toLocalDateStr(h.data_pagamento)!==toLocalDateStr(h.completed_at)&&(
+                      <div style={{fontSize:10,fontWeight:700,marginTop:2,color:"#a78bfa",
+                        display:"flex",alignItems:"center",gap:3,justifyContent:"flex-end"}}
+                        title="Recebimento retroativo — mensalidade paga nesta data">
+                        💰 Pago em {fmtDate(h.data_pagamento)}
+                      </div>
+                    )}
                     {/* Botão de edição — só para owner */}
                     {isOwner&&(
                       <button onClick={()=>estaEditando?setEditando(null):abrirEdicao(h)}
