@@ -2851,7 +2851,9 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   const [clienteRecuperado,setClienteRecuperado]=useState(false);
   const [checkingRecuperado,setCheckingRecuperado]=useState(false);
   const [showScanner,setShowScanner]=useState(false);
+  const [clienteReconhecido,setClienteReconhecido]=useState(false);
   const verificarRef=useRef(0); // controla race condition: só aplica o resultado da chamada mais recente
+  const buscaClienteRef=useRef(0); // idem para o auto-fill de cliente
 
   // Verifica cliente recuperado ao preencher placa ou telefone
   const verificarClienteRecuperado=async()=>{
@@ -2876,6 +2878,53 @@ function NewWashScreen({empresaId,userId,onSuccess}){
     }finally{
       // PROBLEMA 2 — finally garante que o spinner sempre some, mesmo em erro
       if(token===verificarRef.current)setCheckingRecuperado(false);
+    }
+  };
+
+  // Auto-fill duplo restrito: só preenche Nome+Modelo se Placa E Telefone
+  // baterem EXATAMENTE (AND lógico) num registro do histórico. Normaliza
+  // ambos antes de comparar. Se só um bater, não preenche nada — evita puxar
+  // dados de dono anterior de uma placa que foi revendida.
+  const buscarClienteExato=async()=>{
+    const plateRaw=(refs.plate?.current?.value||"").trim().toUpperCase();
+    const plate=plateRaw.replace(/[\s-]/g,"");           // sem espaço/traço
+    const phone=(refs.phone?.current?.value||"").replace(/\D/g,""); // só dígitos
+
+    // Guard AND estrito: ambos precisam estar preenchidos e válidos
+    if(plate.length<7||phone.length<8){setClienteReconhecido(false);return;}
+
+    const token=++buscaClienteRef.current;
+    try{
+      // Busca no histórico da empresa registros com essa placa (normaliza no cliente)
+      const{data}=await sb.from('historico')
+        .select('client,model,plate,phone,completed_at')
+        .eq('empresa_id',empresaId)
+        .order('completed_at',{ascending:false})
+        .limit(200);
+      if(token!==buscaClienteRef.current)return; // chamada obsoleta
+
+      // Match exato: placa E telefone normalizados iguais
+      const match=(data||[]).find(h=>{
+        const hp=String(h.plate||"").toUpperCase().replace(/[\s-]/g,"");
+        const hf=String(h.phone||"").replace(/\D/g,"");
+        return hp===plate&&hf===phone;
+      });
+
+      if(match){
+        let preencheu=false;
+        // Só preenche campos vazios — não sobrescreve o que o operador já digitou
+        if(refs.client?.current&&!refs.client.current.value.trim()&&match.client){
+          refs.client.current.value=match.client;preencheu=true;
+        }
+        if(refs.model?.current&&!refs.model.current.value.trim()&&match.model){
+          refs.model.current.value=match.model;preencheu=true;
+        }
+        setClienteReconhecido(preencheu);
+      }else{
+        setClienteReconhecido(false);
+      }
+    }catch(_){
+      if(token===buscaClienteRef.current)setClienteReconhecido(false);
     }
   };
 
@@ -3018,7 +3067,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
         <div style={{position:"relative"}}>
           <input ref={refs.plate} className="glass-input" type="text" defaultValue="" placeholder="ABC-1234"
             onChange={maskPlate}
-            onBlur={e=>{maskPlate(e);verificarClienteRecuperado();}}
+            onBlur={e=>{maskPlate(e);verificarClienteRecuperado();buscarClienteExato();}}
             style={{borderColor:errors.plate?"rgba(239,68,68,.5)":undefined,textTransform:"uppercase",paddingRight:46}}
             autoCapitalize="characters" autoCorrect="off" spellCheck="false"/>
           <button type="button" onClick={()=>setShowScanner(true)}
@@ -3040,17 +3089,29 @@ function NewWashScreen({empresaId,userId,onSuccess}){
               refs.plate.current.value=placa;
               // Dispara a verificação de cliente recuperado como se fosse onBlur
               verificarClienteRecuperado();
+              buscarClienteExato();
             }
           }}
           onClose={()=>setShowScanner(false)}/>
       )}
-      {/* Modelo */}
+      {/* Telefone */}
       <div style={{marginBottom:14}}>
-        <label className="lbl">Modelo / Marca</label>
-        <input ref={refs.model} className="glass-input" type="text" defaultValue="" placeholder="Honda Civic"
-          style={{borderColor:errors.model?"rgba(239,68,68,.5)":undefined}}/>
-        {errors.model&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.model}</div>}
+        <label className="lbl">Telefone (com DDD)</label>
+        <input ref={refs.phone} className="glass-input" type="tel" defaultValue="" placeholder="(49) 99999-9999"
+          onChange={maskPhone}
+          onBlur={e=>{maskPhone(e);verificarClienteRecuperado();buscarClienteExato();}}
+          style={{borderColor:errors.phone?"rgba(239,68,68,.5)":undefined}}/>
+        {errors.phone&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.phone}</div>}
       </div>
+      {/* Selo de cliente reconhecido — aparece quando o auto-fill preencheu os dados */}
+      {clienteReconhecido&&(
+        <div style={{marginBottom:14,marginTop:-4,padding:"8px 12px",borderRadius:10,
+          background:"rgba(74,222,128,.1)",border:"1px solid rgba(74,222,128,.25)",
+          fontSize:12,color:"#4ade80",fontWeight:600,display:"flex",alignItems:"center",gap:7}}>
+          <Icon name="CheckCircle" size={14} color="#4ade80"/>
+          Cliente reconhecido — nome e modelo preenchidos do histórico
+        </div>
+      )}
       {/* Cliente */}
       <div style={{marginBottom:14}}>
         <label className="lbl">Nome do Cliente</label>
@@ -3058,14 +3119,12 @@ function NewWashScreen({empresaId,userId,onSuccess}){
           style={{borderColor:errors.client?"rgba(239,68,68,.5)":undefined}}/>
         {errors.client&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.client}</div>}
       </div>
-      {/* Telefone */}
+      {/* Modelo */}
       <div style={{marginBottom:14}}>
-        <label className="lbl">Telefone (com DDD)</label>
-        <input ref={refs.phone} className="glass-input" type="tel" defaultValue="" placeholder="(49) 99999-9999"
-          onChange={maskPhone}
-          onBlur={e=>{maskPhone(e);verificarClienteRecuperado();}}
-          style={{borderColor:errors.phone?"rgba(239,68,68,.5)":undefined}}/>
-        {errors.phone&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.phone}</div>}
+        <label className="lbl">Modelo / Marca</label>
+        <input ref={refs.model} className="glass-input" type="text" defaultValue="" placeholder="Honda Civic"
+          style={{borderColor:errors.model?"rgba(239,68,68,.5)":undefined}}/>
+        {errors.model&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{errors.model}</div>}
       </div>
       {/* Serviços — multi-seleção com total automático */}
       <div style={{marginBottom:14}}>
