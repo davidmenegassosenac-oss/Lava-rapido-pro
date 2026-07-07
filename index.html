@@ -5116,7 +5116,7 @@ function RelatoriosScreen({empresaId,embedded}){
     const desdeISO=inicioLocal.toISOString();      // ISO para comparação em historico
     Promise.all([
       sb.from('caixa_movimentos').select('tipo,categoria,valor,data').eq('empresa_id',empresaId).gte('data',desde).order('data'),
-      sb.from('historico').select('type,value,completed_at,forma_pagamento,lavador:profiles!lavado_por(name)').eq('empresa_id',empresaId).gte('completed_at',desdeISO).order('completed_at'),
+      sb.from('historico').select('type,value,completed_at,data_pagamento,forma_pagamento,status_pagamento,lavador:profiles!lavado_por(name)').eq('empresa_id',empresaId).or(`completed_at.gte.${desdeISO},data_pagamento.gte.${desdeISO}`).order('completed_at'),
       sb.from('folha_pagamentos').select('valor').eq('empresa_id',empresaId).gte('data_pgto',desde),
     ]).then(([{data:m},{data:h},{data:f}])=>{
       setMovs(m||[]);
@@ -5128,11 +5128,17 @@ function RelatoriosScreen({empresaId,embedded}){
 
   // Busca histórico completo (todos os meses) para comparativo — roda uma só vez
   useEffect(()=>{
-    sb.from('historico').select('value,completed_at')
+    sb.from('historico').select('value,completed_at,data_pagamento')
       .eq('empresa_id',empresaId)
       .order('completed_at',{ascending:true})
       .then(({data})=>setHistAll(data||[]));
   },[empresaId]);
+
+  // Data efetiva de faturamento: se a lavagem foi paga como mensalista
+  // (data_pagamento preenchida), conta nessa data; senão, na data da lavagem.
+  // Isso faz o faturamento do mensalista entrar no dia do pagamento, sem
+  // alterar retroativamente os meses em que os carros foram lavados.
+  const dataEfetiva=(h)=>h?.data_pagamento||h?.completed_at;
 
   // G5 — useMemo com null safety: dados históricos antigos podem ter campos nulos
   const {entradas,saidas,saldo,totalAtend}=useMemo(()=>{
@@ -5204,14 +5210,14 @@ function RelatoriosScreen({empresaId,embedded}){
   if(periodo==="dia"){
     // Gráfico "Hoje" usa hist (lavagens) filtradas por data local, não movs
     const key=toLocalDateStr(hojeLocal);
-    const v=hist.filter(h=>toLocalDateStr(h.completed_at)===key)
+    const v=hist.filter(h=>toLocalDateStr(dataEfetiva(h))===key)
       .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
     chartData=[{l:"Hoje",v}];
   }else if(periodo==="semana"){
     chartData=[6,5,4,3,2,1,0].map(d=>{
       const dt=new Date(hojeLocal.getFullYear(),hojeLocal.getMonth(),hojeLocal.getDate()-d);
       const key=toLocalDateStr(dt);
-      const v=hist.filter(h=>toLocalDateStr(h.completed_at)===key)
+      const v=hist.filter(h=>toLocalDateStr(dataEfetiva(h))===key)
         .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
       return{l:["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][dt.getDay()],v};
     });
@@ -5222,7 +5228,7 @@ function RelatoriosScreen({empresaId,embedded}){
       const inicio=new Date(fim.getFullYear(),fim.getMonth(),fim.getDate()-6);
       const inicioKey=toLocalDateStr(inicio);
       const fimKey=toLocalDateStr(fim);
-      const v=hist.filter(h=>{const k=toLocalDateStr(h.completed_at);return k>=inicioKey&&k<=fimKey;})
+      const v=hist.filter(h=>{const k=toLocalDateStr(dataEfetiva(h));return k>=inicioKey&&k<=fimKey;})
         .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
       semanas.push({l:`${inicio.getDate()}/${inicio.getMonth()+1}`,v});
     }
@@ -5246,7 +5252,7 @@ function RelatoriosScreen({empresaId,embedded}){
       const fim=new Date(hojeLocal.getFullYear(),hojeLocal.getMonth(),hojeLocal.getDate()-w*7);
       const inicio=new Date(fim.getFullYear(),fim.getMonth(),fim.getDate()-6);
       const inicioKey=toLocalDateStr(inicio),fimKey=toLocalDateStr(fim);
-      const v=histAll.filter(h=>{const k=toLocalDateStr(h.completed_at);return k>=inicioKey&&k<=fimKey;})
+      const v=histAll.filter(h=>{const k=toLocalDateStr(dataEfetiva(h));return k>=inicioKey&&k<=fimKey;})
         .reduce((s,h)=>s+(parseFloat(h.value)||0),0);
       out.push({l:`${inicio.getDate()}/${inicio.getMonth()+1} – ${fim.getDate()}/${fim.getMonth()+1}`,v});
     }
@@ -5262,8 +5268,9 @@ function RelatoriosScreen({empresaId,embedded}){
     const porDia=(ano,mes)=>{
       const mapa={};
       histAll.forEach(h=>{
-        if(!h.completed_at)return;
-        const d=new Date(h.completed_at);
+        const ef=dataEfetiva(h);
+        if(!ef)return;
+        const d=new Date(ef);
         if(d.getFullYear()===ano&&d.getMonth()===mes)
           mapa[d.getDate()]=(mapa[d.getDate()]||0)+(parseFloat(h.value)||0);
       });
