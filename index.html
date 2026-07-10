@@ -2854,6 +2854,7 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   const [clienteReconhecido,setClienteReconhecido]=useState(false);
   const verificarRef=useRef(0); // controla race condition: só aplica o resultado da chamada mais recente
   const buscaClienteRef=useRef(0); // idem para o auto-fill de cliente
+  const autoFillRef=useRef({client:null,model:null}); // o que o auto-fill escreveu por último
 
   // Verifica cliente recuperado ao preencher placa ou telefone
   const verificarClienteRecuperado=async()=>{
@@ -2885,14 +2886,31 @@ function NewWashScreen({empresaId,userId,onSuccess}){
   // baterem EXATAMENTE (AND lógico) num registro do histórico. Normaliza
   // ambos antes de comparar. Se só um bater, não preenche nada — evita puxar
   // dados de dono anterior de uma placa que foi revendida.
+  // Limpa APENAS o que o auto-fill escreveu e que o operador não alterou.
+  // Digitação manual (cliente novo, ou nome editado após o preenchimento)
+  // nunca é apagada — a comparação com autoFillRef garante isso.
+  const desfazerAutoFill=()=>{
+    if(autoFillRef.current.client!==null&&refs.client?.current
+       &&refs.client.current.value===autoFillRef.current.client){
+      refs.client.current.value="";
+    }
+    if(autoFillRef.current.model!==null&&refs.model?.current
+       &&refs.model.current.value===autoFillRef.current.model){
+      refs.model.current.value="";
+    }
+    autoFillRef.current={client:null,model:null};
+    setClienteReconhecido(false);
+  };
+
   const buscarClienteExato=async()=>{
     const plateRaw=(refs.plate?.current?.value||"").trim().toUpperCase();
     const plate=plateRaw.replace(/[\s-]/g,"");           // sem espaço/traço
     const phone=(refs.phone?.current?.value||"").replace(/\D/g,""); // só dígitos
 
     // Guard AND estrito: placa preenchida E telefone COMPLETO (11 dígitos BR).
-    // Exigir os 11 dígitos evita disparar buscas a cada tecla durante a digitação.
-    if(plate.length<7||phone.length!==11){setClienteReconhecido(false);return;}
+    // FALLBACK: se o operador desfez o match (apagou um dígito/letra),
+    // limpa imediatamente o que o auto-fill tinha preenchido.
+    if(plate.length<7||phone.length!==11){desfazerAutoFill();return;}
 
     const token=++buscaClienteRef.current;
     try{
@@ -2915,14 +2933,20 @@ function NewWashScreen({empresaId,userId,onSuccess}){
         let preencheu=false;
         // Só preenche campos vazios — não sobrescreve o que o operador já digitou
         if(refs.client?.current&&!refs.client.current.value.trim()&&match.client){
-          refs.client.current.value=match.client;preencheu=true;
+          refs.client.current.value=match.client;
+          autoFillRef.current.client=match.client; // registra o que foi escrito
+          preencheu=true;
         }
         if(refs.model?.current&&!refs.model.current.value.trim()&&match.model){
-          refs.model.current.value=match.model;preencheu=true;
+          refs.model.current.value=match.model;
+          autoFillRef.current.model=match.model; // registra o que foi escrito
+          preencheu=true;
         }
-        setClienteReconhecido(preencheu);
+        setClienteReconhecido(preencheu||clienteReconhecido);
       }else{
-        setClienteReconhecido(false);
+        // Combinação válida (11 dígitos) mas SEM match: o preenchimento
+        // anterior não vale mais para esta nova combinação — desfaz.
+        desfazerAutoFill();
       }
     }catch(_){
       if(token===buscaClienteRef.current)setClienteReconhecido(false);
