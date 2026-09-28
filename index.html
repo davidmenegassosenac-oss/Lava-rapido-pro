@@ -89,7 +89,32 @@ input,textarea,button,select{font-family:'Outfit',system-ui,sans-serif;font-size
 // ── Supabase client (global, before React) ────────────────────────────────
 const SUPABASE_URL  = 'https://ikahodmuchwitxfvlaop.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrYWhvZG11Y2h3aXR4ZnZsYW9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NDkzMTcsImV4cCI6MjA5NjUyNTMxN30.qRBN7lFQAGeN1phNneqY368dhAMllnAtQgVCb-piDds';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+// ── Recuperação de senha por link de e-mail (PKCE) ────────────────────────
+// Captura os parâmetros da URL ANTES de o cliente/React mexerem nela: erro do
+// link (expirado/já usado) e presença de ?code=.
+window.__authUrl=(function(){
+  try{
+    var p=new URLSearchParams(window.location.search||"");
+    var h=new URLSearchParams((window.location.hash||"").replace(/^#/,""));
+    var g=function(k){return p.get(k)||h.get(k)||"";};
+    return{hadCode:!!p.get("code"),error:g("error"),errorCode:g("error_code"),errorDesc:g("error_description")};
+  }catch(e){return{hadCode:false,error:"",errorCode:"",errorDesc:""};}
+})();
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {auth:{flowType:'pkce'}});
+// Ouvinte PRECOCE: o PASSWORD_RECOVERY é emitido durante a inicialização do
+// cliente, ANTES de o Babel compilar/montar o React. Sem isto o App perderia o
+// evento e abriria o Dashboard direto com a sessão de recuperação. Este ouvinte
+// só sinaliza (flag + evento); a sessão continua sendo gerida EXCLUSIVAMENTE
+// pelo onAuthStateChange do App.
+window.__recoveryDetected=false;
+try{window.__recoveryDetected=sessionStorage.getItem('lr_recovery')==='1';}catch(_){}
+sb.auth.onAuthStateChange(function(event){
+  if(event==='PASSWORD_RECOVERY'){
+    window.__recoveryDetected=true;
+    try{sessionStorage.setItem('lr_recovery','1');}catch(_){}
+    window.dispatchEvent(new Event('lr-recovery'));
+  }
+});
 
 // ── Sentry — observabilidade e captura de erros em produção ───────────────
 if(typeof Sentry!=="undefined"&&Sentry.onLoad){
@@ -825,7 +850,7 @@ function CadastroEmpresaScreen({user,onComplete,onBack}){
 /* ══════════════════════════════════════════════════════════════════════════
    LOGIN
 ══════════════════════════════════════════════════════════════════════════ */
-function LoginScreen({onLoginStart,onLoginError}){
+function LoginScreen({onLoginStart,onLoginError,aviso}){
   const [email,setEmail]=useState("");
   const [pwd,setPwd]=useState("");
   const [show,setShow]=useState(false);
@@ -834,6 +859,7 @@ function LoginScreen({onLoginStart,onLoginError}){
   const [mode,setMode]=useState("login"); // login | register
   const [aceitouTermos,setAceitouTermos]=useState(false);
   const [showTermos,setShowTermos]=useState(false);
+  const [showRecuperar,setShowRecuperar]=useState(false);
 
   const submit=async()=>{
     if(!email.trim()||!pwd.trim()){setErr("Preencha e-mail e senha.");return;}
@@ -893,6 +919,7 @@ function LoginScreen({onLoginStart,onLoginError}){
         <div className="glass" style={{borderRadius:28,padding:28,boxShadow:"0 24px 64px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.1)"}}>
           <div style={{color:"#e0f2fe",fontWeight:800,fontSize:18,marginBottom:4}}>{mode==="login"?"Bem-vindo 👋":"Criar Conta 🚀"}</div>
           <div style={{color:"rgba(186,230,253,.6)",fontSize:13,marginBottom:22}}>{mode==="login"?"Faça login para continuar":"Cadastre seu lava-jato gratuitamente"}</div>
+          {aviso&&<div style={{background:"rgba(251,191,36,.12)",border:"1px solid rgba(251,191,36,.3)",borderRadius:12,padding:"10px 14px",marginBottom:14,color:"#fbbf24",fontSize:12.5,fontWeight:600,lineHeight:1.45}}>{aviso}</div>}
           <div style={{marginBottom:14}}>
             <label className="lbl">E-mail</label>
             <input className="glass-input" type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="seu@email.com" autoCapitalize="none"/>
@@ -905,6 +932,13 @@ function LoginScreen({onLoginStart,onLoginError}){
                 <Icon name={show?"EyeOff":"Eye"} size={16} color="rgba(186,230,253,.5)"/>
               </button>
             </div>
+            {mode==="login"&&(
+              <div style={{textAlign:"right",marginTop:8}}>
+                <button type="button" onClick={()=>{setShowRecuperar(true);setErr("");}} style={{background:"none",border:"none",padding:"4px 0",color:"#38bdf8",fontWeight:700,fontSize:12.5,cursor:"pointer"}}>
+                  Esqueci minha senha
+                </button>
+              </div>
+            )}
           </div>
           {err&&<div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
             <Icon name="XCircle" size={15} color="#f87171"/>
@@ -940,6 +974,211 @@ function LoginScreen({onLoginStart,onLoginError}){
         </div>
       </div>
       {showTermos&&<TermosModal onClose={()=>setShowTermos(false)} onAceitar={()=>{setAceitouTermos(true);setShowTermos(false);}}/>}
+      {showRecuperar&&<RecuperarSenhaModal emailInicial={email} onClose={()=>setShowRecuperar(false)}/>}
+    </div>
+  );
+}
+
+/* ── RecuperarSenhaModal — solicitação do link de recuperação ──────────────
+   Chama resetPasswordForEmail (fluxo PKCE). A resposta é NEUTRA: o Supabase não
+   revela se o e-mail existe, e a interface também não (anti-enumeração).
+─────────────────────────────────────────────────────────────────────────── */
+function RecuperarSenhaModal({emailInicial,onClose}){
+  const [em,setEm]=useState(emailInicial||"");
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const [enviado,setEnviado]=useState(false);
+  const [cooldown,setCooldown]=useState(0);
+
+  // Contagem regressiva do reenvio (o Supabase limita 1 pedido/min por e-mail)
+  useEffect(()=>{
+    if(cooldown<=0)return;
+    const t=setTimeout(()=>setCooldown(x=>x-1),1000);
+    return()=>clearTimeout(t);
+  },[cooldown]);
+
+  const enviar=async()=>{
+    const email=em.trim().toLowerCase();
+    if(!/^\S+@\S+\.\S+$/.test(email)){setErr("Informe um e-mail válido.");return;}
+    if(cooldown>0)return;
+    setLoading(true);setErr("");
+    try{
+      // O redirectTo precisa estar na lista de Redirect URLs do Supabase
+      const redirectTo=window.location.origin+window.location.pathname;
+      const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo});
+      if(error)throw error;
+      setEnviado(true);setCooldown(60);
+    }catch(e){
+      const m=String(e?.message||"");
+      if(e?.status===429||/rate limit|too many|security purposes|seconds/i.test(m))
+        setErr("Muitas solicitações. Aguarde cerca de 1 minuto e tente novamente.");
+      else if(e?.name==="AuthRetryableFetchError"||/fetch|network/i.test(m))
+        setErr("Sem conexão. Verifique a internet e tente novamente.");
+      else
+        setErr("Não foi possível enviar o e-mail agora. Tente novamente em instantes.");
+    }finally{
+      setLoading(false);
+    }
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:80,background:"rgba(2,6,17,.82)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}
+      onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="glass" style={{width:"100%",maxWidth:360,borderRadius:24,padding:24,boxShadow:"0 24px 64px rgba(0,0,0,.5)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+          <div style={{color:"#e0f2fe",fontWeight:800,fontSize:17}}>Recuperar senha 🔑</div>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex"}}>
+            <Icon name="XCircle" size={18} color="rgba(186,230,253,.6)"/>
+          </button>
+        </div>
+        {!enviado?(
+          <>
+            <div style={{color:"rgba(186,230,253,.6)",fontSize:13,marginBottom:18,lineHeight:1.45}}>
+              Informe o e-mail da sua conta e enviaremos um link para criar uma nova senha.
+            </div>
+            <div style={{marginBottom:14}}>
+              <label className="lbl">E-mail</label>
+              <input className="glass-input" type="email" value={em} autoFocus
+                onChange={e=>{setEm(e.target.value);setErr("");}}
+                onKeyDown={e=>e.key==="Enter"&&enviar()}
+                placeholder="seu@email.com" autoCapitalize="none"/>
+            </div>
+            {err&&<div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+              <Icon name="XCircle" size={15} color="#f87171"/>
+              <span style={{color:"#f87171",fontSize:13,fontWeight:600}}>{err}</span>
+            </div>}
+            <button className="btn-glow" onClick={enviar} disabled={loading}>
+              {loading?<div className="spinner spin"/>:"Enviar link de recuperação →"}
+            </button>
+          </>
+        ):(
+          <>
+            <div style={{background:"rgba(74,222,128,.1)",border:"1px solid rgba(74,222,128,.28)",borderRadius:12,padding:"12px 14px",margin:"14px 0",display:"flex",gap:9,alignItems:"flex-start"}}>
+              <Icon name="CheckCircle" size={16} color="#4ade80" style={{marginTop:1,flexShrink:0}}/>
+              <span style={{color:"#86efac",fontSize:13,fontWeight:600,lineHeight:1.45}}>
+                Se o e-mail existir, um link de recuperação foi enviado. Verifique a caixa de entrada e o spam.
+              </span>
+            </div>
+            <div style={{color:"rgba(186,230,253,.55)",fontSize:12,lineHeight:1.5,marginBottom:16}}>
+              Abra o link no <b>mesmo navegador/dispositivo</b> em que fez este pedido.
+            </div>
+            <button onClick={enviar} disabled={cooldown>0||loading}
+              style={{width:"100%",padding:"11px",background:"transparent",border:"1px solid rgba(125,211,252,.25)",borderRadius:12,color:"rgba(186,230,253,.7)",fontSize:13,fontWeight:600,cursor:cooldown>0?"default":"pointer",opacity:cooldown>0?.5:1,marginBottom:10}}>
+              {cooldown>0?`Reenviar em ${cooldown}s`:"Reenviar link"}
+            </button>
+            <button className="btn-glow" onClick={onClose}>Fechar</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── ResetPasswordScreen — definição da nova senha ─────────────────────────
+   Exibida quando o link de e-mail abre uma sessão de recuperação
+   (evento PASSWORD_RECOVERY → App.recoveryMode). Não é uma rota: o app é um
+   HTML único, então a tela é um estado do App com prioridade sobre os guards.
+   Sem sessão válida (link expirado / acesso direto), mostra aviso e volta ao
+   login, sem quebrar.
+─────────────────────────────────────────────────────────────────────────── */
+function ResetPasswordScreen({onConcluir,onCancelar}){
+  const [pwd,setPwd]=useState("");
+  const [pwd2,setPwd2]=useState("");
+  const [show,setShow]=useState(false);
+  const [err,setErr]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [checando,setChecando]=useState(true);
+  const [semSessao,setSemSessao]=useState(false);
+
+  // getSession() aguarda o término da troca do código PKCE antes de responder
+  useEffect(()=>{
+    let vivo=true;
+    sb.auth.getSession()
+      .then(({data:{session}})=>{if(vivo){setSemSessao(!session);setChecando(false);}})
+      .catch(()=>{if(vivo){setSemSessao(true);setChecando(false);}});
+    return()=>{vivo=false;};
+  },[]);
+
+  const submit=async()=>{
+    if(pwd.length<6){setErr("A senha deve ter pelo menos 6 caracteres.");return;}
+    if(pwd!==pwd2){setErr("As senhas não coincidem.");return;}
+    setLoading(true);setErr("");
+    try{
+      const{error}=await sb.auth.updateUser({password:pwd});
+      if(error)throw error;
+      await onConcluir(); // sucesso: o App assume (toast + entrada no app)
+    }catch(e){
+      const m=String(e?.message||"");
+      if(/same password|different from the old/i.test(m))
+        setErr("A nova senha precisa ser diferente da senha atual.");
+      else if(/weak|at least|characters|password should/i.test(m))
+        setErr("Senha fraca demais. Use uma senha mais forte (letras e números).");
+      else if(/session|missing|jwt|expired|not authenticated/i.test(m))
+        setSemSessao(true);
+      else if(e?.name==="AuthRetryableFetchError"||/fetch|network/i.test(m))
+        setErr("Sem conexão. Verifique a internet e tente novamente.");
+      else
+        setErr("Não foi possível atualizar a senha. Tente novamente.");
+      setLoading(false);
+    }
+  };
+
+  const cardStyle={borderRadius:28,padding:28,boxShadow:"0 24px 64px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.1)"};
+  return(
+    <div style={{height:"var(--app-height)",width:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,position:"relative",overflow:"hidden"}}>
+      <AquaBg/>
+      <div className="login-card" style={{width:"100%",maxWidth:360,position:"relative",zIndex:1}}>
+        <div className="glass" style={cardStyle}>
+          {checando?(
+            <div style={{textAlign:"center",padding:"24px 0"}}>
+              <div className="spinner spin" style={{margin:"0 auto",width:28,height:28,borderWidth:3}}/>
+              <div style={{color:"rgba(186,230,253,.5)",fontSize:13,marginTop:14,fontWeight:600}}>Validando link...</div>
+            </div>
+          ):semSessao?(
+            <>
+              <div style={{color:"#e0f2fe",fontWeight:800,fontSize:18,marginBottom:8}}>Link inválido ou expirado</div>
+              <div style={{color:"rgba(186,230,253,.6)",fontSize:13,lineHeight:1.5,marginBottom:20}}>
+                Não foi possível validar este link de recuperação. Volte ao login e toque em "Esqueci minha senha" para solicitar um novo.
+              </div>
+              <button className="btn-glow" onClick={onCancelar}>Voltar ao login</button>
+            </>
+          ):(
+            <>
+              <div style={{color:"#e0f2fe",fontWeight:800,fontSize:18,marginBottom:4}}>Nova senha 🔐</div>
+              <div style={{color:"rgba(186,230,253,.6)",fontSize:13,marginBottom:22}}>Defina uma nova senha para acessar sua conta.</div>
+              <div style={{marginBottom:14}}>
+                <label className="lbl">Nova senha</label>
+                <div style={{position:"relative"}}>
+                  <input className="glass-input" type={show?"text":"password"} value={pwd}
+                    onChange={e=>{setPwd(e.target.value);setErr("");}}
+                    onKeyDown={e=>e.key==="Enter"&&submit()}
+                    placeholder="Mínimo 6 caracteres" autoComplete="new-password" style={{paddingRight:44}}/>
+                  <button type="button" onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",padding:4,display:"flex"}}>
+                    <Icon name={show?"EyeOff":"Eye"} size={16} color="rgba(186,230,253,.5)"/>
+                  </button>
+                </div>
+              </div>
+              <div style={{marginBottom:18}}>
+                <label className="lbl">Confirmar nova senha</label>
+                <input className="glass-input" type={show?"text":"password"} value={pwd2}
+                  onChange={e=>{setPwd2(e.target.value);setErr("");}}
+                  onKeyDown={e=>e.key==="Enter"&&submit()}
+                  placeholder="Repita a nova senha" autoComplete="new-password"/>
+              </div>
+              {err&&<div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+                <Icon name="XCircle" size={15} color="#f87171"/>
+                <span style={{color:"#f87171",fontSize:13,fontWeight:600}}>{err}</span>
+              </div>}
+              <button className="btn-glow" onClick={submit} disabled={loading}>
+                {loading?<div className="spinner spin"/>:"Salvar nova senha →"}
+              </button>
+              <button onClick={onCancelar} disabled={loading} style={{width:"100%",marginTop:14,padding:"10px",background:"transparent",border:"1px solid rgba(125,211,252,.2)",borderRadius:12,color:"rgba(186,230,253,.6)",fontSize:13,cursor:"pointer"}}>
+                Cancelar
+              </button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -6146,6 +6385,11 @@ function App(){
   const [showWeeklyPopup,setShowWeeklyPopup]=useState(false);
   const [showSupport,setShowSupport]=useState(false);
   const [crmBadge,setCrmBadge]=useState(0);
+  // Recuperação de senha: modo com prioridade sobre TODOS os guards de render.
+  // Inicial vem do ouvinte precoce (script simples), que captura o evento
+  // PASSWORD_RECOVERY antes de o React montar.
+  const [recoveryMode,setRecoveryMode]=useState(()=>!!window.__recoveryDetected);
+  const [avisoLogin,setAvisoLogin]=useState("");
   // G1 — visited deve estar no topo (Regras dos Hooks: nunca após early return)
   const [visited,setVisited]=useState({home:true});
 
@@ -6210,6 +6454,13 @@ function App(){
     });
 
     const{data:{subscription}}=sb.auth.onAuthStateChange((event,s)=>{
+      // PASSWORD_RECOVERY: o link de e-mail abriu uma sessão de recuperação.
+      // Liga o modo de redefinição e NÃO trata isto como login comum — assim
+      // o usuário não cai direto no Dashboard sem definir a nova senha.
+      if(event==="PASSWORD_RECOVERY"){
+        setRecoveryMode(true);
+        return;
+      }
       // TOKEN_REFRESHED: JWT renovado — sessão continua válida, NÃO limpa profile/empresa
       if(event==="TOKEN_REFRESHED"&&s){
         setSession(s);
@@ -6237,6 +6488,40 @@ function App(){
       }
     });
     return()=>subscription.unsubscribe();
+  },[]);
+
+  // Recuperação de senha — sinal do ouvinte precoce (evento ocorrido antes/depois do mount)
+  useEffect(()=>{
+    const onRec=()=>setRecoveryMode(true);
+    window.addEventListener("lr-recovery",onRec);
+    if(window.__recoveryDetected)setRecoveryMode(true);
+    return()=>window.removeEventListener("lr-recovery",onRec);
+  },[]);
+
+  // Recuperação de senha — link inválido/expirado ou aberto em outro navegador
+  useEffect(()=>{
+    const info=window.__authUrl||{};
+    const limparUrl=()=>{try{window.history.replaceState(null,"",window.location.pathname);}catch(_){}};
+    if(info.error||info.errorCode){
+      const expirado=info.errorCode==="otp_expired"||/expired|invalid/i.test(info.errorDesc||"");
+      setAvisoLogin(expirado
+        ?"Link inválido ou expirado. Toque em \"Esqueci minha senha\" para solicitar um novo."
+        :"Não foi possível validar o link. Solicite um novo e tente novamente.");
+      limparUrl();
+      return;
+    }
+    if(info.hadCode){
+      // Com ?code= mas sem sessão/recuperação após a troca: o link foi aberto
+      // fora do navegador que fez o pedido (o verificador PKCE não existe aqui).
+      const t=setTimeout(async()=>{
+        if(!window.__recoveryDetected){
+          const{data:{session:s}}=await sb.auth.getSession();
+          if(!s)setAvisoLogin("Não foi possível validar o link neste navegador. Para recuperar a senha, abra o link no mesmo navegador/dispositivo em que fez o pedido (ou solicite um novo). Se era a confirmação de cadastro, basta fazer login.");
+        }
+        limparUrl();
+      },4000);
+      return()=>clearTimeout(t);
+    }
   },[]);
 
   // Ressincronização automática ao retornar de background (mobile)
@@ -6400,6 +6685,42 @@ function App(){
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),2500);};
   const logout=async()=>{await sb.auth.signOut();setTab("home");};
 
+  // Encerra o modo de recuperação (sucesso ou cancelamento): limpa a flag e a URL
+  const sairRecovery=()=>{
+    try{sessionStorage.removeItem("lr_recovery");}catch(_){}
+    window.__recoveryDetected=false;
+    try{window.history.replaceState(null,"",window.location.pathname);}catch(_){}
+  };
+  const finalizarRecuperacao=async()=>{
+    // Segurança: encerra as sessões dos OUTROS dispositivos (mantém a atual)
+    try{await sb.auth.signOut({scope:"others"});}catch(_){}
+    sairRecovery();
+    const{data:{session:s}}=await sb.auth.getSession();
+    if(s){
+      if(!profileRef.current)setInitializing(true); // garante o guard enquanto o profile carrega
+      setSession(s);
+      setRecoveryMode(false);
+      showToast("✅ Senha atualizada com sucesso!");
+    }else{
+      setRecoveryMode(false);
+      setInitializing(false);
+    }
+  };
+  const cancelarRecuperacao=async()=>{
+    sairRecovery();
+    // signOut ANTES de sair do modo: evita piscar o Dashboard com a sessão de recuperação
+    try{await sb.auth.signOut();}catch(_){}
+    setRecoveryMode(false);
+  };
+
+  // ── Modo de recuperação de senha ──────────────────────────────────────────
+  // Prioridade sobre TODOS os guards (initializing/session): o link de e-mail
+  // cria uma sessão real; sem isto o usuário cairia direto no Dashboard sem
+  // definir a nova senha. Fica APÓS todos os hooks (Regras dos Hooks).
+  if(recoveryMode){
+    return <ResetPasswordScreen onConcluir={finalizarRecuperacao} onCancelar={cancelarRecuperacao}/>;
+  }
+
   // ── Trava de inicialização ────────────────────────────────────────────────
   // initializing=true até auth+profile estarem 100% resolvidos.
   // Garante que CadastroEmpresaScreen NUNCA apareça por race condition.
@@ -6420,7 +6741,8 @@ function App(){
 
   // Sem sessão → login. onLoginStart/onLoginError controlam isLoggingIn ref
   if(!session) return <LoginScreen
-    onLoginStart={()=>{isLoggingIn.current=true;setInitializing(true);}}
+    aviso={avisoLogin}
+    onLoginStart={()=>{isLoggingIn.current=true;setAvisoLogin("");setInitializing(true);}}
     onLoginError={()=>{isLoggingIn.current=false;setInitializing(false);}}
   />;
 
