@@ -1,6 +1,6 @@
 # Regras da Casa — Arquitetura Lava Rápido Pro
 
-**Última atualização:** 06 de julho de 2026
+**Última atualização:** 28 de setembro de 2026
 
 Este arquivo lista as **decisões técnicas irreversíveis** do projeto. Cada regra existe porque uma violação já causou um bug real em produção. Antes de alterar qualquer área abaixo, leia a regra correspondente.
 
@@ -50,6 +50,19 @@ Faturamento (Relatórios, via `historico`) e extrato de caixa (Caixa Manual, via
 
 ---
 
+## 7. Recuperação de senha: `recoveryMode` tem prioridade sobre TODOS os guards de render
+
+O link de e-mail abre uma **sessão real**. Se o `App` tratasse isso como login comum, o usuário cairia no Dashboard sem definir a nova senha.
+
+**Regras:**
+- O guard `if(recoveryMode) return <ResetPasswordScreen/>` deve ficar **depois de todos os hooks** e **antes** de `initializing`/`!session`. Nunca mover para depois deles.
+- O evento `PASSWORD_RECOVERY` é emitido durante a inicialização do cliente, **antes do React montar**. Por isso existe o ouvinte precoce no script simples (`window.__recoveryDetected` + `sessionStorage('lr_recovery')`). Não remover nem mover para dentro do React.
+- No `onAuthStateChange`, o ramo `PASSWORD_RECOVERY` retorna **antes** de qualquer lógica de `SIGNED_IN`, sem tocar em `TOKEN_REFRESHED` nem no guard do `profileRef`.
+- `flowType:'pkce'` no `createClient` é parte do fluxo. O `redirectTo` (`origin + pathname`) precisa estar em **Redirect URLs** no Supabase, senão o link não funciona.
+- Limitação conhecida: o link só funciona no mesmo navegador/dispositivo do pedido (verificador PKCE no `localStorage`).
+
+---
+
 ## Checklist rápido antes de qualquer PR que toque em Auth, Realtime, Lazy-Mount ou fluxo financeiro
 
 - [ ] Testei login normal (email+senha)?
@@ -61,3 +74,4 @@ Faturamento (Relatórios, via `historico`) e extrato de caixa (Caixa Manual, via
 - [ ] Se adicionei função nova a uma tela, confirmei com `grep` que está no escopo correto?
 - [ ] Se redeployei uma Edge Function com secret próprio, confirmei que "Verify JWT" continua desligado?
 - [ ] Se toquei em cálculo de faturamento, usei `dataEfetiva` (data_pagamento || completed_at) em vez de `completed_at` puro?
+- [ ] Se toquei no `App`/auth, o link de recuperação de senha ainda abre a tela "Nova senha" (e não o Dashboard)?

@@ -1,5 +1,27 @@
 # Changelog — Lava Rápido Pro
 
+## [28/09/2026] — Recuperação de Senha por Link de E-mail (PKCE)
+
+### 🟢 Adicionado — Fluxo "Esqueci minha senha"
+
+- **Solicitação:** botão "Esqueci minha senha" no login abre o `RecuperarSenhaModal`, que chama `resetPasswordForEmail` com `redirectTo = origin + pathname`. Resposta neutra (anti-enumeração: "Se o e-mail existir, um link foi enviado"), contagem de 60s para reenvio e tratamento de limite de taxa e de falta de conexão.
+- **Redefinição:** nova tela `ResetPasswordScreen` (nova senha + confirmação, mínimo 6 caracteres, `updateUser`). Não é uma rota — o app é um HTML único no GitHub Pages —, é um estado do `App` (`recoveryMode`) com prioridade sobre todos os guards de render, para o link não abrir o Dashboard sem o usuário definir a nova senha.
+- **PKCE:** o cliente Supabase passou a usar `flowType:'pkce'`.
+- **Ouvinte precoce de `PASSWORD_RECOVERY`** no script simples, antes do React: o Babel standalone só monta o React depois da inicialização do cliente, então o `App` perdia o evento. O ouvinte sinaliza via `window.__recoveryDetected` + `sessionStorage('lr_recovery')` (sobrevive a reload na mesma aba).
+- **Erros tratados:** link expirado/já usado (`otp_expired`) e link aberto fora do navegador que fez o pedido (verificador PKCE ausente) mostram aviso no login; acesso direto ou sem sessão mostra "Link inválido ou expirado"; senha curta, divergente, igual à anterior ou fraca.
+- **Ao concluir:** encerra as sessões dos outros dispositivos (`signOut({scope:'others'})`), limpa flag e URL e entra no app com toast. "Cancelar" faz signOut.
+- `TOKEN_REFRESHED` e o guard do `profileRef` no `onAuthStateChange` permanecem intactos; nenhuma migration.
+
+### 📝 Configuração necessária no Supabase
+
+Authentication → URL Configuration → **Redirect URLs**: adicionar a URL exata do app publicado. Conferir também o tamanho mínimo de senha (Providers → Email) e considerar SMTP próprio (o padrão limita e-mails por hora).
+
+### ⚠️ Limitação conhecida
+
+No PKCE o link só funciona no **mesmo navegador/dispositivo** onde foi solicitado (o verificador fica no `localStorage`). No iPhone com o PWA instalado (armazenamento separado do Safari) pode falhar; a interface avisa e permite pedir novo link. O mesmo vale para o link de confirmação de cadastro em outro dispositivo: o e-mail é confirmado, mas o login é manual. Alternativa mais robusta, se necessário: código OTP de 6 dígitos por e-mail (`verifyOtp`).
+
+---
+
 ## [06/07/2026] — Fila Inteligente, CRM, Mensalistas, Consistência Financeira e Auto-fill
 
 ### 🟢 Adicionado — Fila Inteligente com Prioridades e Arraste

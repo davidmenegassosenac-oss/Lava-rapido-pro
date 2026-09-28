@@ -1,6 +1,6 @@
 # Arquitetura — Lava Rápido Pro
 
-**Última atualização:** 06 de julho de 2026
+**Última atualização:** 28 de setembro de 2026
 **Escopo:** `index.html` (painel administrativo) + Edge Functions (Supabase)
 
 Este documento registra decisões arquiteturais críticas que **não podem ser revertidas ou contornadas** sem análise cuidadosa. Cada regra abaixo existe porque uma violação anterior já causou um bug real em produção. O objetivo é que qualquer pessoa (humana ou IA) trabalhando neste código consulte este arquivo antes de mexer nas áreas listadas.
@@ -252,6 +252,28 @@ Implementado em 06/07/2026. `buscarClienteExato` no `NewWashScreen`.
 - **Gatilho:** `onChange` do telefone, com guard `phone.length === 11`. A busca só consulta o banco quando o telefone está completo (11 dígitos BR); antes disso o guard retorna sem custo. Se algum dia precisar aceitar telefone fixo (10 dígitos), ajustar o guard para `>= 10`.
 - **Anti-race-condition:** `buscaClienteRef` (token incremental) garante que só o resultado da busca mais recente é aplicado.
 - Isolamento por `empresa_id` na query do `historico`.
+
+---
+
+## 🔒 Recuperação de senha (PKCE)
+
+Implementado em 28/09/2026. Só `index.html`, sem migration.
+
+| Peça | Onde | Função |
+|---|---|---|
+| Cliente PKCE | `createClient(..., {auth:{flowType:'pkce'}})` | Link de e-mail chega com `?code=` (não tokens na URL) |
+| Captura de URL | `window.__authUrl` (script simples) | Guarda erro/`?code=` antes de o cliente ou o React alterarem a URL |
+| Ouvinte precoce | script simples | Detecta `PASSWORD_RECOVERY` antes do React montar |
+| `RecuperarSenhaModal` | `LoginScreen` | Pede o link (resposta neutra, cooldown 60s) |
+| `ResetPasswordScreen` | `App` (`recoveryMode`) | Define a nova senha (`updateUser`), mín. 6 |
+
+**Não há rota:** o app é HTML único no GitHub Pages, então a tela de redefinição é um estado do `App`, não uma URL.
+
+**Fluxo:** login → "Esqueci minha senha" → e-mail → link (`?code=`) → cliente troca o código → `PASSWORD_RECOVERY` → `recoveryMode` → nova senha → `signOut({scope:'others'})` → app.
+
+**Erros:** `otp_expired`/link usado e link aberto em outro navegador mostram aviso no login (`avisoLogin`); sem sessão válida a tela mostra "Link inválido ou expirado".
+
+**Configuração externa:** URL do app em Supabase → Authentication → URL Configuration → Redirect URLs; SMTP próprio recomendado em produção.
 
 ---
 
