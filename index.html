@@ -6742,8 +6742,8 @@ function App(){
   // Sem sessão → login. onLoginStart/onLoginError controlam isLoggingIn ref
   if(!session) return <LoginScreen
     aviso={avisoLogin}
-    onLoginStart={()=>{isLoggingIn.current=true;setAvisoLogin("");setInitializing(true);}}
-    onLoginError={()=>{isLoggingIn.current=false;setInitializing(false);}}
+    onLoginStart={()=>{isLoggingIn.current=true;setAvisoLogin("");}}
+    onLoginError={()=>{isLoggingIn.current=false;}}
   />;
 
   // Master → painel da plataforma
