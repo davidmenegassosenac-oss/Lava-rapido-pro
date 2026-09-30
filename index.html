@@ -6598,6 +6598,10 @@ function App(){
         if(!uid){
           console.error('ERRO CRÍTICO DE LOGIN: session.user.id ausente',session);
           alert('Erro detectado: sessão inválida (sem user.id). Faça login novamente.');
+          // Nunca deixa profile null com sessão presente — evita crash em profile.role
+          setProfile(prev=>prev||{_fetchError:true,id:null,
+            name:session.user?.email?.split('@')[0]||'Usuário',
+            role:'owner',empresa_id:null});
           setInitializing(false);
           return;
         }
@@ -6677,6 +6681,11 @@ function App(){
         // exato em vez de silenciosamente cair na tela de cadastro de empresa
         console.error('ERRO CRÍTICO DE LOGIN:',e);
         alert('Erro detectado: '+e.message);
+        // Nunca deixa profile null com sessão presente — evita crash em profile.role.
+        // Só preenche se ainda não houver profile válido (não sobrescreve sucesso parcial).
+        setProfile(prev=>prev||{_fetchError:true,id:session.user?.id||null,
+          name:session.user?.email?.split('@')[0]||'Usuário',
+          role:'owner',empresa_id:null});
         setInitializing(false);
       }
     })();
@@ -6724,20 +6733,20 @@ function App(){
   // ── Trava de inicialização ────────────────────────────────────────────────
   // initializing=true até auth+profile estarem 100% resolvidos.
   // Garante que CadastroEmpresaScreen NUNCA apareça por race condition.
-  if(initializing){
-    return(
-      <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
-        <AquaBg/>
-        <div style={{position:"relative",zIndex:1,textAlign:"center"}}>
-          <div style={{width:72,height:72,borderRadius:24,background:"rgba(14,165,233,.2)",border:"2px solid rgba(56,189,248,.4)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}>
-            <Icon name="Droplets" size={36} color="#38bdf8"/>
-          </div>
-          <div className="spinner spin" style={{margin:"0 auto",width:28,height:28,borderWidth:3}}/>
-          <div style={{color:"rgba(186,230,253,.45)",fontSize:13,marginTop:16,fontWeight:600}}>Carregando...</div>
+  // Tela de carregamento — reaproveitada também como rede de segurança abaixo.
+  const TelaCarregando=(
+    <div style={{height:"var(--app-height)",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
+      <AquaBg/>
+      <div style={{position:"relative",zIndex:1,textAlign:"center"}}>
+        <div style={{width:72,height:72,borderRadius:24,background:"rgba(14,165,233,.2)",border:"2px solid rgba(56,189,248,.4)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}>
+          <Icon name="Droplets" size={36} color="#38bdf8"/>
         </div>
+        <div className="spinner spin" style={{margin:"0 auto",width:28,height:28,borderWidth:3}}/>
+        <div style={{color:"rgba(186,230,253,.45)",fontSize:13,marginTop:16,fontWeight:600}}>Carregando...</div>
       </div>
-    );
-  }
+    </div>
+  );
+  if(initializing)return TelaCarregando;
 
   // Sem sessão → login. onLoginStart/onLoginError controlam isLoggingIn ref
   if(!session) return <LoginScreen
@@ -6745,6 +6754,12 @@ function App(){
     onLoginStart={()=>{isLoggingIn.current=true;setAvisoLogin("");}}
     onLoginError={()=>{isLoggingIn.current=false;}}
   />;
+
+  // Rede de segurança final: sessão existe mas profile ainda não foi resolvido.
+  // Os dois gaps que causavam isso (session sem user.id / exceção no fetch) já
+  // preenchem um profile de fallback, mas esta trava cobre qualquer caso futuro
+  // não previsto — nunca deixa profile.role ser lido com profile null.
+  if(!profile)return TelaCarregando;
 
   // Master → painel da plataforma
   if(profile.role==="master"){

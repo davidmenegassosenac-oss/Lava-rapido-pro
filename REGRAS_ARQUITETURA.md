@@ -20,6 +20,14 @@ O Supabase pode reemitir `SIGNED_IN` (não apenas `TOKEN_REFRESHED`) ao revalida
 
 **Regra:** antes de resetar qualquer estado no handler de `SIGNED_IN`, comparar `profileRef.current?.id` com `s.user.id`. Se forem iguais, é revalidação — apenas atualizar a sessão, sem tocar em profile/empresa/assinatura.
 
+**Armadilha irmã (28/09/2026):** `isLoggingIn.current=true` já é suficiente para bloquear o `SIGNED_OUT` temporário durante o login (o branch correspondente no `onAuthStateChange` retorna cedo, independente de `initializing`). **Nunca** forçar `setInitializing(true)` em `onLoginStart` — isso troca `<LoginScreen>` pelo spinner de tela cheia do `App`, desmontando o formulário; se o login falhar, o `LoginScreen` remonta do zero e apaga e-mail, senha e a mensagem de erro antes do usuário ver. O `useEffect([session])` já liga `initializing` sozinho quando a sessão realmente chega — não precisa disso no clique do botão.
+
+## 2b. Toda saída do efeito de carregamento do profile deve deixar `profile` não-nulo (ou a trava final cobre)
+
+`initializing=false` com `session` verdadeira e `profile` ainda `null` é o gatilho de `Cannot read properties of null (reading 'role')` — a única linha entre `if(!session)` e o resto do `App` é `if(profile.role===...)`, sem guard.
+
+**Regra:** qualquer `catch`/early-return dentro do efeito `useEffect([session])` que chama `setInitializing(false)` deve também garantir um `profile` válido (usar o mesmo fallback `{_fetchError:true, role:'owner', ...}` já usado no caminho `fetchFailed`, com `setProfile(prev=>prev||fallback)` para não sobrescrever um profile real obtido antes do erro). Além disso, `if(!profile)return TelaCarregando;` logo após `if(!session)` no `App()` é a rede de segurança final — **nunca remover**, mesmo que pareça redundante com os fallbacks acima.
+
 ## 3. Transições financeiras são SÍNCRONAS por padrão
 
 Qualquer operação que envolva dinheiro (ex: marcar uma ordem como "Pago", mover para o histórico de faturamento) **nunca** usa UI otimista nem fila offline. O operador aguarda a confirmação real do servidor antes de ver a tela mudar. Uma duplicação ou perda de registro financeiro é sempre pior do que meio segundo de espera percebida.

@@ -1,6 +1,26 @@
 # Changelog — Lava Rápido Pro
 
-## [28/09/2026] — Recuperação de Senha por Link de E-mail (PKCE)
+## [28/09/2026] — Recuperação de Senha (PKCE), Login Invisível e `profile.role` Nulo
+
+### 🔴 Corrigido — Crash `Cannot read properties of null (reading 'role')` pós-login
+
+- **Sintoma:** ocasionalmente, após o login, a tela quebrava com esse erro; recarregar (F5) resolvia.
+- **Causa raiz — dois gaps no efeito de carregamento do profile:** (1) `if(!uid)` (sessão sem `user.id`) e (2) o `catch(e)` externo (exceção real durante o fetch — ex: queda de rede no celular, diferente dos erros "macios" que o retry de 3 tentativas já tratava) ambos chamavam `setInitializing(false)` sem nunca popular `profile`. Como não havia nenhuma trava entre `if(!session)` e `if(profile.role==="master")`, a renderização prosseguia com `profile===null` e quebrava na primeira leitura de `.role`.
+- **Correção (3 pontos, só em `App()`):** (1) os dois gaps agora preenchem o mesmo `profile` de fallback (`{_fetchError:true, role:'owner', ...}`) que o caminho `fetchFailed` já usava — nunca sobrescrevendo um profile válido obtido antes da exceção (`setProfile(prev=>prev||fallback)`); (2) a tela de carregamento foi extraída para `TelaCarregando` (mesmo visual, sem duplicar JSX); (3) nova trava `if(!profile)return TelaCarregando;` logo após `if(!session)`, como rede de segurança final contra qualquer causa futura não prevista.
+- Cobre de uma vez as 3 outras leituras de `profile.role` na mesma árvore (`isOwner`, filtro de `TABS`) — não foi necessário tocar em cada uma.
+- Sem relação com router/Context/TypeScript (o projeto não usa nenhum dos três); `profileRef`, `TOKEN_REFRESHED` e RLS não foram tocados.
+
+
+
+### 🔴 Corrigido — Erro de login incorreto não aparecia na tela
+
+- **Sintoma:** ao digitar e-mail/senha errados, a tela "atualizava" e os campos digitados somiam, sem mostrar a mensagem de erro.
+- **Causa raiz:** `onLoginStart` (disparado ao clicar em "Entrar") chamava `setInitializing(true)`, trocando `<LoginScreen>` pelo spinner de tela cheia do `App` — um componente diferente, então o React **desmonta** o `LoginScreen`. Quando a senha falhava, `onLoginError` desligava `initializing`, e o `App` **remontava** um `LoginScreen` novo — com `email`, `pwd` e `err` todos zerados, apagando o erro que tinha acabado de ser definido na instância antiga.
+- **Por que era seguro remover:** a proteção real contra o `SIGNED_OUT` temporário durante o login já vem do `isLoggingIn.current=true` (branch de `SIGNED_OUT` no `onAuthStateChange` já retorna cedo com esse guard, independente de `initializing`). O `setInitializing(true)` em `onLoginStart` era redundante para essa finalidade e o único responsável pelo bug.
+- **Correção:** removidos os dois `setInitializing` de `onLoginStart`/`onLoginError` (linhas 6745-6746). No login bem-sucedido nada muda — o `useEffect([session])` já liga `initializing=true` sozinho assim que a sessão chega. Efeito colateral positivo: corrige também a mesma falha na mensagem "Verifique seu e-mail para confirmar o cadastro" no fluxo de registro, que sofria do mesmo problema.
+- Nenhuma outra regra de auth tocada (`profileRef`, `TOKEN_REFRESHED`, `isLoggingIn` timing).
+
+
 
 ### 🟢 Adicionado — Fluxo "Esqueci minha senha"
 
